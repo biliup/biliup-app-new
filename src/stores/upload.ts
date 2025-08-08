@@ -1,0 +1,155 @@
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
+
+interface UploadTask {
+    id: string
+    user: any
+    video: any
+    status: string
+    progress: number
+    upload_so_far: number
+    speed: number
+    total_size: number
+    error_message?: string
+    created_at: number
+    started_at?: number
+    finished_at?: number
+    retry_count: number
+}
+
+export const useUploadStore = defineStore('upload', () => {
+    const uploadQueue = ref<UploadTask[]>([])
+
+    // 创建上传任务
+    const createUploadTask = async (uid: number, videoFiles: any[]) => {
+        try {
+            var count = 0
+            // 遍历videoFiles, 将所有id不存在uploadQueue中的任务添加到uploadQueue
+            for (const video of videoFiles) {
+                console.log(video)
+                if (video.complete !== undefined && video.complete) {
+                    console.log('跳过已完成视频文件:', video)
+                    continue
+                }
+                if (!uploadQueue.value.some(task => task.id === video.id)) {
+                    try {
+                        await invoke('create_upload_task', { uid, video })
+                        count++
+                    } catch (error) {
+                        console.error('创建上传任务失败:', error)
+                        throw error
+                    }
+                }
+            }
+
+            await getUploadQueue() // 刷新队列
+            return count
+        } catch (error) {
+            console.error('创建上传任务失败:', error)
+            throw error
+        }
+    }
+
+    // 开始上传
+    const startUpload = async (taskId: string) => {
+        try {
+            const success = await invoke('start_upload', { taskId })
+            await getUploadQueue()
+
+            return success ? 1 : 0
+        } catch (error) {
+            console.error('开始上传失败:', error)
+            throw error
+        }
+    }
+
+    // 暂停上传
+    const pauseUpload = async (taskId: string) => {
+        try {
+            const paused = await invoke('pause_upload', { taskId })
+            await getUploadQueue()
+
+            return paused ? 1 : 0
+        } catch (error) {
+            console.error('暂停上传失败:', error)
+            throw error
+        }
+    }
+
+    // 取消上传
+    const cancelUpload = async (taskId: string) => {
+        try {
+            const canceled = await invoke('cancel_upload', { taskId })
+            await getUploadQueue()
+
+            return canceled ? 1 : 0
+        } catch (error) {
+            console.error('取消上传失败:', error)
+            throw error
+        }
+    }
+
+    // 获取上传队列
+    const getUploadQueue = async () => {
+        try {
+            const queue: UploadTask[] = await invoke('get_upload_queue')
+            uploadQueue.value = queue
+            // 更新速率
+            let now = Date.now()
+            for (const task of queue) {
+                if (!task.started_at) continue
+                if (task.status !== 'Running') continue
+                const elapsed = now - task.started_at!
+                task.speed = elapsed > 0 ? (task.upload_so_far * 1000) / elapsed : 0
+            }
+            return queue
+        } catch (error) {
+            console.error('获取上传队列失败:', error)
+            throw error
+        }
+    }
+
+    // 重试上传
+    const retryUpload = async (taskId: string[]) => {
+        try {
+            await invoke('retry_upload', { taskId })
+            await getUploadQueue()
+        } catch (error) {
+            console.error('重试上传失败:', error)
+            throw error
+        }
+    }
+
+    // 提交视频
+    const submitTemplate = async (uid: number, upload: any) => {
+        try {
+            const result = await invoke('submit', { uid, form: upload })
+            return result
+        } catch (error) {
+            console.error('提交视频失败:', error)
+            throw error
+        }
+    }
+
+    const getUploadTask = (taskId: string) => {
+        const task = uploadQueue.value.find(t => t.id === taskId)
+        if (task) {
+            return task
+        } else {
+            return null
+        }
+    }
+
+    return {
+        uploadQueue,
+        createUploadTask,
+        startUpload,
+        pauseUpload,
+        cancelUpload,
+        getUploadQueue,
+        retryUpload,
+        submitTemplate,
+        getUploadTask
+    }
+})

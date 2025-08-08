@@ -1,0 +1,46 @@
+[package]
+name = "biliup-app"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "biliup_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+biliup = { git = "https://github.com/HsuJv/biliup-rs.git", rev = "5b62bf9c084109a7b00eb8c5844470641955fdfe" }
+
+tauri = { version = "2", features = ["devtools"] }
+tauri-plugin-opener = "2"
+tauri-plugin-fs = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-http = "2"
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+futures = "0.3.30"
+reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
+anyhow = "1.0"
+dirs = "6.0.0"
+base64 = "0.22"
+url = "2.5"
+qrcode = "0.14"
+image = "0.25"
+chrono = "0.4.41"
+serde_yaml = "0.9"
+tracing = { version = "0.1", features = ["release_max_level_off"] }
+tracing-subscriber = "0.3.18"
+indexmap = "2"
+bytes="1"
+debug-ignore = "1.0"
