@@ -6,6 +6,7 @@ export const useUtilsStore = defineStore('template', () => {
     const typelist = ref<any[]>([])
     const topiclist = ref<any[]>([])
     const seasonlist = ref<any[]>([])
+    let hasSeason = false
 
     const downloadCover = async (uid: number, url: string) => {
         if (!url) {
@@ -51,14 +52,16 @@ export const useUtilsStore = defineStore('template', () => {
     }
 
     const getSeasonList = async (uid: number) => {
+        hasSeason = false
+
         try {
             seasonlist.value = ((await invoke('get_season_list', { uid })) as any).seasons
             // {"seasons": [{season_id: 1, section_id: 2, title: '合集1'}, {season_id: 2, section_id: 2, title: '合集2'}]}
-            return seasonlist
+            hasSeason = true
         } catch (error) {
             console.error('获取合集列表失败:', error)
-            throw error
         }
+        return hasSeason
     }
 
     const uploadCover = async (uid: number, file: string) => {
@@ -87,6 +90,10 @@ export const useUtilsStore = defineStore('template', () => {
     }
 
     const getVideoSeason = async (uid: number, aid: number) => {
+        if (!hasSeason) {
+            return 0
+        }
+
         try {
             const season = (await invoke('get_video_season', { uid, aid })) as number
             return season
@@ -104,6 +111,10 @@ export const useUtilsStore = defineStore('template', () => {
         title: string,
         add: boolean
     ) => {
+        if (!hasSeason) {
+            return
+        }
+
         try {
             await invoke('switch_season', { uid, aid, seasonId, sectionId, title, add })
         } catch (error) {
@@ -121,8 +132,9 @@ export const useUtilsStore = defineStore('template', () => {
         initTypeList,
         initTopicList,
         searchTopics,
-        getSeasonList,
         getVideoDetail,
+        hasSeason,
+        getSeasonList,
         getVideoSeason,
         switchSeason
     }

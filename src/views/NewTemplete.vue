@@ -218,8 +218,7 @@ const createTemplateFromBV = async (
             newTemplate.aid = undefined
         }
 
-        if (newForm.aid) {
-            await utilsStore.getSeasonList(userUid)
+        if (newForm.aid && (await utilsStore.getSeasonList(userUid))) {
             const season_id = await utilsStore.getVideoSeason(userUid, newForm.aid)
 
             if (season_id !== 0) {

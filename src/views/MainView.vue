@@ -1965,7 +1965,7 @@ const submitTemplate = async (from_timeout: boolean) => {
         lastSubmit.value = new Date().toLocaleString()
         ElMessage.success(`视频${resp.bvid}提交成功`)
 
-        if (resp && resp.aid) {
+        if (resp && resp.aid && utilsStore.hasSeason) {
             try {
                 const old_season_id = await utilsStore.getVideoSeason(
                     selectedUser.value.uid,

@@ -101,7 +101,9 @@ const loadSeasons = async () => {
 
     try {
         isSearching.value = true
-        await utilsStore.getSeasonList(props.userUid)
+        if (!(await utilsStore.getSeasonList(props.userUid))) {
+            throw new Error('未获取到合集列表')
+        }
 
         if (utilsStore.seasonlist && utilsStore.seasonlist.length > 0) {
             allSeasons.value = utilsStore.seasonlist.map((season: any) => ({
