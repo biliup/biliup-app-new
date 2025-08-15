@@ -22,7 +22,7 @@ pub struct UploadTask {
     pub retry_count: u32,
     pub progress: f64,
     pub total_size: u64,
-    pub upload_so_far: u64,
+    pub total_transmit_bytes: u64,
     #[serde(skip)]
     pub config: Arc<Mutex<ConfigRoot>>,
     #[serde(skip)]
@@ -59,7 +59,7 @@ impl UploadTask {
             retry_count: 0,
             progress: 0.0,
             total_size: get_file_size(Path::new(&video.path)).unwrap_or(0),
-            upload_so_far: 0,
+            total_transmit_bytes: 0,
             config,
             clients: DebugIgnore(clients),
         }
@@ -71,7 +71,7 @@ impl UploadTask {
 
     pub fn start(&mut self) {
         self.status = TaskStatus::Running;
-        self.upload_so_far = 0;
+        self.total_transmit_bytes = 0;
         self.started_at = Some(chrono::Utc::now().timestamp_millis() as usize);
     }
 
@@ -96,6 +96,8 @@ impl UploadTask {
     // }
 
     pub fn cancel(&mut self) {
+        self.total_transmit_bytes = 0;
+        self.progress = 0.0;
         self.status = TaskStatus::Cancelled;
         self.finished_at = Some(chrono::Utc::now().timestamp_millis() as usize);
     }
@@ -113,8 +115,8 @@ impl UploadTask {
         self.progress = progress.clamp(0.0, 100.0);
     }
 
-    pub fn update_upload_so_far(&mut self, upload_so_far: u64) {
-        self.upload_so_far += upload_so_far;
+    pub fn update_total_transmit_bytes(&mut self, total_transmit_bytes: u64) {
+        self.total_transmit_bytes += total_transmit_bytes;
     }
 
     pub fn is_waiting(&self) -> bool {

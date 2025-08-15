@@ -86,7 +86,7 @@ pub async fn run() {
     #[cfg(debug_assertions)]
     {
         let subscriber = FmtSubscriber::builder()
-            .with_max_level(Level::TRACE)
+            .with_max_level(Level::INFO)
             .finish();
 
         tracing::subscriber::set_global_default(subscriber)

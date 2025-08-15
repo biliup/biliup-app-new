@@ -44,3 +44,16 @@ tracing-subscriber = "0.3.18"
 indexmap = "2"
 bytes="1"
 debug-ignore = "1.0"
+
+
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full", "tracing"] }
+console-subscriber = "0.4"
+
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level = 3

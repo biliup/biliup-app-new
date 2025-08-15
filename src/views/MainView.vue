@@ -237,7 +237,7 @@
                                 />
                             </div>
                             <div class="header-actions">
-                                <el-button @click="loadTemplateToForm">重置</el-button>
+                                <el-button @click="loadTemplateToForm">放弃更改</el-button>
                                 <el-button type="primary" @click="saveTemplate">保存</el-button>
                                 <el-button
                                     @click="
@@ -254,7 +254,7 @@
                             </div>
                         </div>
 
-                        <el-form :model="currentForm" label-width="120px" class="upload-form">
+                        <el-form :model="currentForm" label-width="80px" class="upload-form">
                             <!-- 基本信息 -->
                             <el-card
                                 class="form-section"
@@ -553,191 +553,15 @@
 
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.videos" class="card-content">
-                                        <!-- 已上传文件列表 -->
-                                        <div
-                                            v-if="currentForm.videos && currentForm.videos.length > 0"
-                                            class="uploaded-videos-section"
-                                        >
-                                            <div class="uploaded-videos-list">
-                                                <div
-                                                    v-for="video in updateVideo(currentForm.videos)"
-                                                    :key="video.id"
-                                                    class="uploaded-video-item"
-                                                >
-                                                    <div class="video-status-icon">
-                                                        <!-- 上传完成 -->
-                                                        <el-icon
-                                                            v-if="video.complete"
-                                                            class="status-complete"
-                                                        >
-                                                            <circle-check />
-                                                        </el-icon>
-                                                        <!-- 上传中 -->
-                                                        <el-icon
-                                                            v-else-if="
-                                                                !video.complete &&
-                                                                video.progress > 0
-                                                            "
-                                                            class="status-uploading"
-                                                        >
-                                                            <loading />
-                                                        </el-icon>
-                                                        <!-- 待上传 -->
-                                                        <el-icon v-else class="status-pending">
-                                                            <cloudy />
-                                                        </el-icon>
-                                                    </div>
-                                                    <div class="video-info">
-                                                        <!-- 文件名和状态在同一行 -->
-                                                        <div class="video-title-row">
-                                                            <div class="video-title-container">
-                                                                <div
-                                                                    v-if="
-                                                                        editingFileId === video.id
-                                                                    "
-                                                                    class="video-title-edit"
-                                                                >
-                                                                    <el-input
-                                                                        v-model="editingFileName"
-                                                                        size="small"
-                                                                        @keyup.enter="
-                                                                            saveFileName(video.id)
-                                                                        "
-                                                                        @blur="
-                                                                            saveFileName(video.id)
-                                                                        "
-                                                                        @keyup.esc="
-                                                                            cancelEditFileName
-                                                                        "
-                                                                        ref="videoNameInput"
-                                                                    />
-                                                                </div>
-                                                                <div
-                                                                    v-else
-                                                                    class="video-title"
-                                                                    @click="
-                                                                        startEditFileName(
-                                                                            video.id,
-                                                                            video.title ||
-                                                                                video.videoname
-                                                                        )
-                                                                    "
-                                                                >
-                                                                    {{
-                                                                        video.title ||
-                                                                        video.videoname
-                                                                    }}
-                                                                    <el-icon class="edit-icon"
-                                                                        ><edit
-                                                                    /></el-icon>
-                                                                </div>
-                                                            </div>
-
-                                                            <!-- 状态标签移动到文件名右侧 -->
-                                                            <div class="video-status">
-                                                                <span
-                                                                    v-if="video.complete"
-                                                                    class="status-text complete"
-                                                                    >上传完成</span
-                                                                >
-                                                                <span
-                                                                    v-else-if="video.progress > 0"
-                                                                    class="status-text uploading"
-                                                                >
-                                                                    上传中
-                                                                </span>
-                                                                <span
-                                                                    v-else
-                                                                    class="status-text pending"
-                                                                    >待上传</span
-                                                                >
-                                                            </div>
-                                                        </div>
-
-                                                        <!-- 进度条区域 -->
-                                                        <div class="progress-section">
-                                                            <div class="progress-bar-container">
-                                                                <el-progress
-                                                                    :percentage="video.progress"
-                                                                    :show-text="false"
-                                                                    size="small"
-                                                                    :stroke-width="3"
-                                                                    :color="
-                                                                        video.complete
-                                                                            ? '#67c23a'
-                                                                            : '#409eff'
-                                                                    "
-                                                                />
-                                                                <span class="progress-text"
-                                                                    >{{
-                                                                        formatUploadProgress(video)
-                                                                    }}%</span
-                                                                >
-                                                            </div>
-                                                            <div
-                                                                class="upload-speed"
-                                                                v-if="
-                                                                    !video.complete &&
-                                                                    video.speed > 0
-                                                                "
-                                                            >
-                                                                {{ formatUploadSpeed(video) }}
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <!-- 文件操作按钮 -->
-                                                    <div class="video-actions">
-                                                        <el-button
-                                                            type="danger"
-                                                            size="small"
-                                                            text
-                                                            @click="removeUploadedFile(video.id)"
-                                                        >
-                                                            <el-icon><delete /></el-icon>
-                                                        </el-button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <el-form-item label="">
-                                            <div class="video-buttons-group">
-                                                <el-button
-                                                    type="primary"
-                                                    @click="selectVideoWithTauri"
-                                                >
-                                                    <el-icon><upload-filled /></el-icon>
-                                                    选择视频文件
-                                                </el-button>
-                                                <el-button
-                                                    type="danger"
-                                                    plain
-                                                    @click="clearAllVideos"
-                                                    :disabled="
-                                                        !currentForm.videos ||
-                                                        currentForm.videos.length === 0
-                                                    "
-                                                >
-                                                    <el-icon><delete /></el-icon>
-                                                    清空{{
-                                                        currentForm.videos &&
-                                                        currentForm.videos.length > 0
-                                                            ? `(${currentForm.videos.length})`
-                                                            : ''
-                                                    }}
-                                                </el-button>
-                                            </div>
-                                            <div class="upload-tip">
-                                                <span v-if="!isDragOver">
-                                                    支持 MP4、AVI、MOV、MKV、WMV、FLV、M4V、WEBM
-                                                    等格式
-                                                </span>
-                                                <span v-else class="drag-active-tip">
-                                                    💡 松开鼠标即可添加文件到当前模板
-                                                </span>
-                                            </div>
-                                        </el-form-item>
+                                        <VideoList 
+                                            v-model:videos="currentForm.videos"
+                                            :is-drag-over="isDragOver"
+                                            :uploading="uploading"
+                                            @select-video="selectVideoWithTauri"
+                                            @clear-all-videos="clearAllVideos"
+                                            @remove-file="removeUploadedFile"
+                                            @create-upload="createUpload"
+                                        />
                                     </div>
                                 </el-collapse-transition>
                             </el-card>
@@ -879,7 +703,7 @@
                                             </div>
                                         </el-form-item>
 
-                                        <el-form-item label="可见性设置">
+                                        <el-form-item label="可见性">
                                             <el-checkbox
                                                 v-model="currentForm.is_only_self"
                                                 :true-value="1"
@@ -894,16 +718,6 @@
 
                             <!-- 上传操作区域 -->
                             <div class="upload-actions">
-                                <el-button
-                                    type="success"
-                                    size="large"
-                                    :loading="uploading"
-                                    @click="createUpload"
-                                >
-                                    <el-icon><upload-filled /></el-icon>
-                                    加入上传队列
-                                </el-button>
-
                                 <el-button
                                     type="primary"
                                     size="large"
@@ -935,7 +749,7 @@
 
         <!-- 创建模板对话框 -->
         <el-dialog v-model="showCreateTemplateDialog" title="新建模板" width="500px">
-            <el-form :model="newTemplateForm" label-width="100px">
+            <el-form :model="newTemplateForm" label-width="50px">
                 <el-form-item label="选择用户">
                     <el-select v-model="newTemplateForm.userUid" placeholder="请选择用户">
                         <el-option
@@ -1061,12 +875,8 @@ import {
     MoreFilled,
     UploadFilled,
     User,
-    CircleCheck,
-    Loading,
-    Cloudy,
     Check,
     Edit,
-    Delete,
     Setting,
     Close
 } from '@element-plus/icons-vue'
@@ -1078,6 +888,7 @@ import SeasonView from './SeasonView.vue'
 import UploadQueue from './UploadQueue.vue'
 import UserConfig from './UserConfig.vue'
 import GlobalConfigView from './GlobalConfigView.vue'
+import VideoList from './VideoList.vue'
 
 const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
@@ -1124,10 +935,6 @@ const templateNameInputRef = ref()
 
 // 拖拽状态
 const isDragOver = ref(false)
-
-// 文件编辑状态
-const editingFileId = ref<string | null>(null)
-const editingFileName = ref('')
 
 // 内容容器引用
 const contentWrapperRef = ref<HTMLElement | null>(null)
@@ -2059,8 +1866,6 @@ const saveTemplate = async () => {
 
         // 更新基础模板状态
         baseTemplate.value = JSON.parse(JSON.stringify(templateConfig))
-
-        ElMessage.success('模板保存成功')
     } catch (error) {
         console.error('保存模板失败: ', error)
         ElMessage.error(`'保存模板失败: ${error}'`)
@@ -2251,35 +2056,7 @@ const clearAllVideos = async () => {
     }
 }
 
-// 文件管理相关
-const startEditFileName = (videoId: string, currentTitle: string) => {
-    editingFileId.value = videoId
-    editingFileName.value = currentTitle
-}
-
-const saveFileName = (videoId: string) => {
-    const newTitle = editingFileName.value.trim()
-    if (!newTitle) {
-        ElMessage.error('文件名不能为空')
-        return
-    }
-
-    // 更新currentForm.videos中的标题
-    const videoIndex = currentForm.value.videos.findIndex(f => f.id === videoId)
-    if (videoIndex > -1) {
-        currentForm.value.videos[videoIndex].title = newTitle
-    }
-
-    // 清空编辑状态
-    editingFileId.value = null
-    editingFileName.value = ''
-}
-
-const cancelEditFileName = () => {
-    editingFileId.value = null
-    editingFileName.value = ''
-}
-
+// 调整视频顺序
 const removeUploadedFile = async (videoId: string) => {
     const videoIndex = currentForm.value.videos.findIndex(f => f.id === videoId)
     if (videoIndex > -1) {
@@ -2396,7 +2173,7 @@ const allFilesUploaded = computed(() => {
     if (!currentForm.value.videos || currentForm.value.videos.length === 0) {
         return false
     }
-    return currentForm.value.videos.every(video => video.complete)
+    return currentForm.value.videos.every(video => (video.complete && video.path === ''))
 })
 
 // 提交视频
@@ -2432,15 +2209,6 @@ const submitTemplate = async (from_timeout: boolean) => {
         return
     }
 
-    for (const video of currentForm.value.videos) {
-        if (video.path !== '') {
-            autoSubmitTimeout.value = setTimeout(async () => {
-                await submitTemplate(true)
-            }, 1000)
-            return
-        }
-    }
-
     submitting.value = true
     try {
         await uploadStore.submitTemplate(selectedUser.value.uid, currentForm.value)
@@ -2457,52 +2225,6 @@ const submitTemplate = async (from_timeout: boolean) => {
             autoSubmitTimeout.value = null
         }
     }
-}
-
-const updateVideo = (videos: any[]) => {
-    for (let i = 0; i < videos.length; i++) {
-        if (videos[i].id == videos[i].filename || !videos[i].path) {
-            videos[i].complete = true
-        } else {
-            const task = uploadStore.getUploadTask(videos[i].id)
-            if (task) {
-                videos[i].complete = task.status === 'Completed'
-                videos[i].totalSize = task.total_size || 0
-                videos[i].speed = task.speed || 0
-                videos[i].progress = task.progress || 0
-            } else {
-                videos[i].complete = false
-                videos[i].totalSize = 0
-                videos[i].speed = 0
-                videos[i].progress = 0
-            }
-        }
-    }
-    return videos
-}
-
-const formatUploadProgress = (video: any): string => {
-    if (video.complete) return '100'
-    if (!video || video.progress === undefined) return '0'
-    if (video.progress >= 100) return '100'
-
-    return `${video.progress.toFixed(2)}`
-}
-
-// 格式化上传速率
-const formatUploadSpeed = (video: any): string => {
-    if (!video || video.speed === undefined) return '0 B/s'
-
-    const units = ['B/s', 'KB/s', 'MB/s', 'GB/s']
-    let size = video.speed
-    let unitIndex = 0
-
-    while (size >= 1024 && unitIndex < units.length - 1) {
-        size /= 1024
-        unitIndex++
-    }
-
-    return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
 }
 
 // 模板名编辑相关函数
@@ -3006,6 +2728,7 @@ const refreshAllData = async () => {
     cursor: pointer;
     user-select: none;
     transition: all 0.3s ease;
+    height: 10px;
 }
 
 .card-header:hover {
@@ -3401,228 +3124,6 @@ const refreshAllData = async () => {
     min-width: 140px;
 }
 
-/* 已上传文件列表样式 */
-.uploaded-videos-section {
-    --video-item-height: 35px; /* 定义CSS变量 */
-    margin-bottom: 20px;
-    padding-bottom: 20px;
-    border-bottom: 1px solid #f0f2f5;
-}
-
-.uploaded-videos-section h4 {
-    margin: 0 0 16px 0;
-    font-size: 14px;
-    font-weight: 500;
-    color: #303133;
-}
-
-.uploaded-videos-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-height: 250px;
-    overflow-y: auto;
-    scrollbar-width: thin;
-    scrollbar-color: #c1c1c1 transparent;
-    border-radius: 6px;
-    border: 1px solid #e9ecef;
-    padding: 8px;
-    background: #fafbfc;
-}
-
-.uploaded-videos-list::-webkit-scrollbar {
-    width: 6px;
-}
-
-.uploaded-videos-list::-webkit-scrollbar-track {
-    background: transparent;
-}
-
-.uploaded-videos-list::-webkit-scrollbar-thumb {
-    background-color: #c1c1c1;
-    border-radius: 3px;
-}
-
-.uploaded-videos-list::-webkit-scrollbar-thumb:hover {
-    background-color: #a8a8a8;
-}
-
-.uploaded-video-item {
-    display: flex;
-    align-items: center;
-    padding: 4px 8px;
-    background: #fff;
-    border-radius: 4px;
-    border: 1px solid #e9ecef;
-    transition: all 0.3s;
-    min-height: var(--video-item-height);
-    flex-shrink: 0;
-}
-
-.uploaded-video-item:hover {
-    background: #f0f9ff;
-    border-color: #b3d8ff;
-}
-
-.uploaded-video-item:hover .video-actions {
-    opacity: 1;
-}
-
-.video-status-icon {
-    margin-right: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-}
-
-.status-complete {
-    color: #67c23a;
-    font-size: 14px;
-}
-
-.status-uploading {
-    color: #409eff;
-    font-size: 12px;
-    animation: rotate 1s linear infinite;
-}
-
-.status-pending {
-    color: #909399;
-    font-size: 12px;
-}
-
-@keyframes rotate {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-.video-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-}
-
-.video-title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-}
-
-.video-title-container {
-    flex: 1;
-    min-width: 0;
-}
-
-.video-title {
-    font-size: 12px;
-    font-weight: 500;
-    color: #303133;
-    line-height: 1.2;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    padding: 1px 3px;
-    border-radius: 2px;
-    transition: all 0.3s;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.video-title:hover {
-    background: #ecf5ff;
-    color: #409eff;
-}
-
-.video-title:hover .edit-icon {
-    opacity: 1;
-}
-
-.edit-icon {
-    opacity: 0;
-    font-size: 10px;
-    transition: opacity 0.3s;
-}
-
-.video-status {
-    flex-shrink: 0;
-}
-
-.video-status .status-text {
-    padding: 1px 4px;
-    border-radius: 2px;
-    font-size: 9px;
-    font-weight: 500;
-    line-height: 1.2;
-}
-
-.video-status .status-text.complete {
-    background: #f0f9ff;
-    color: #67c23a;
-}
-
-.video-status .status-text.uploading {
-    background: #ecf5ff;
-    color: #409eff;
-}
-
-.video-status .status-text.pending {
-    background: #f4f4f5;
-    color: #909399;
-}
-
-.video-title-edit {
-    width: 150px;
-}
-
-.video-actions {
-    margin-left: 6px;
-    opacity: 0;
-    transition: opacity 0.3s;
-    display: flex;
-    gap: 2px;
-}
-
-.status-text.pending {
-    background: #f4f4f5;
-    color: #909399;
-}
-
-.progress-section {
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    margin-top: 1px;
-}
-
-.progress-bar-container {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-}
-
-.progress-bar-container .el-progress {
-    flex: 1;
-    min-width: 60px;
-}
-
-.progress-text {
-    font-size: 9px;
-    font-weight: 500;
-    color: #606266;
-    min-width: 25px;
-    text-align: right;
-}
-
 /* 拖拽覆盖层样式 */
 .drag-overlay {
     position: fixed;
@@ -3686,14 +3187,6 @@ const refreshAllData = async () => {
     color: #ffd700;
     font-weight: 500;
     margin-top: 15px;
-}
-
-.upload-speed {
-    font-size: 9px;
-    color: #909399;
-    text-align: right;
-    font-family: 'Courier New', monospace;
-    line-height: 1.2;
 }
 </style>
 

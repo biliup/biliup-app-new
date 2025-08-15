@@ -55,36 +55,52 @@
                                 {{ getTaskDisplayName(task) }}
                             </div>
                             <div class="task-status">
-                                <span class="status-text">{{ getStatusText(task.status) }}</span>
-                                <span class="progress-text" v-if="task.status === 'Running'">
-                                    {{ formatUploadProgress(task) }}%
-                                </span>
-                                <el-button
-                                    link
-                                    size="small"
-                                    class="start-button"
-                                    @click="startUpload(task.id)"
-                                    v-if="canStart(task.status)"
+                                <div class="status-info">
+                                    <span class="status-text">{{ getStatusText(task.status) }}</span>
+                                    <span class="progress-text" v-if="task.status === 'Running'">
+                                        {{ formatUploadProgress(task) }}%
+                                    </span>
+                                </div>
+                                <div 
+                                    class="action-buttons"
                                 >
-                                    <el-icon><video-play /></el-icon>
-                                </el-button>
-                                <el-button
-                                    link
-                                    size="small"
-                                    class="pause-button"
-                                    @click="pauseUpload(task.id)"
-                                    v-if="canPause(task.status)"
-                                >
-                                    <el-icon><video-pause /></el-icon>
-                                </el-button>
-                                <el-button
-                                    link
-                                    size="small"
-                                    class="cancel-button"
-                                    @click="cancelUpload(task.id)"
-                                >
-                                    <el-icon><close /></el-icon>
-                                </el-button>
+                                    <el-button
+                                        link
+                                        size="small"
+                                        class="start-button"
+                                        @click="startUpload(task.id)"
+                                        v-if="canStart(task.status)"
+                                    >
+                                        <el-icon><video-play /></el-icon>
+                                    </el-button>
+                                    <el-button
+                                        link
+                                        size="small"
+                                        class="pause-button"
+                                        @click="pauseUpload(task.id)"
+                                        v-if="canPause(task.status)"
+                                    >
+                                        <el-icon><video-pause /></el-icon>
+                                    </el-button>
+                                    <el-button
+                                        link
+                                        size="small"
+                                        class="cancel-button"
+                                        @click="cancelUpload(task.id)"
+                                        v-if="canCancel(task.status)"
+                                    >
+                                        <el-icon><close /></el-icon>
+                                    </el-button>
+                                    <el-button
+                                        link
+                                        size="small"
+                                        class="retry-button"
+                                        @click="retryUpload(task.id)"
+                                        v-if="canRetry(task.status)"
+                                    >
+                                        <el-icon><refresh-right /></el-icon>
+                                    </el-button>
+                                </div>
                             </div>
                         </div>
                         <el-progress
@@ -110,7 +126,7 @@
 import { computed } from 'vue'
 import { useUploadStore } from '../stores/upload'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, List, Close, VideoPause } from '@element-plus/icons-vue'
+import { ArrowDown, List, Close, VideoPause, RefreshRight, VideoPlay } from '@element-plus/icons-vue'
 
 const uploadStore = useUploadStore()
 
@@ -151,7 +167,12 @@ const canPause = (status: string) => {
 }
 
 const canCancel = (status: string) => {
-    return status !== 'Complete'
+    return status !== 'Completed'
+}
+
+
+const canRetry = (status: string) => {
+    return status !== 'Completed' && status !== 'Waiting'
 }
 
 const startAll = async () => {
@@ -285,6 +306,17 @@ const cancelUpload = async (taskId: string) => {
             console.error('取消上传失败:', error)
             ElMessage.error(`取消上传失败: ${error}`)
         }
+    }
+}
+
+
+const retryUpload = async (taskId: string) => {
+    try {
+        await uploadStore.retryUpload(taskId)
+        ElMessage.success('任务已重试')
+    } catch (error) {
+        console.error('重试上传失败:', error)
+        ElMessage.error(`重试上传失败: ${error}`)
     }
 }
 
@@ -441,12 +473,6 @@ const formatUploadSpeed = (video: any): string => {
     position: relative;
 }
 
-.queue-item:hover .start-button,
-.queue-item:hover .pause-button,
-.queue-item:hover .cancel-button {
-    opacity: 1;
-}
-
 .queue-item:last-child {
     border-bottom: none;
 }
@@ -471,15 +497,25 @@ const formatUploadSpeed = (video: any): string => {
 .task-status {
     display: flex;
     align-items: center;
-    gap: 10px;
     font-size: 12px;
-    transition: padding-right 0.3s;
     margin-left: auto;
+    flex-shrink: 0;
+    gap: 8px;
+    min-width: 0;
+    justify-content: space-between;
+}
+
+.status-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex-shrink: 0;
 }
 
-.queue-item:hover .task-status {
-    padding-right: 100px;
+.action-buttons {
+    display: flex;
+    align-items: center;
+    gap: 2px;
 }
 
 .task-pending .status-text {
@@ -499,17 +535,10 @@ const formatUploadSpeed = (video: any): string => {
 }
 
 .cancel-button {
-    position: absolute;
-    right: 10px;
-    top: 50%;
-    transform: translateY(-50%);
-    opacity: 0;
-    transition: opacity 0.3s;
     color: #909399 !important;
     font-size: 12px;
     padding: 2px !important;
-    margin: 0;
-    z-index: 1;
+    margin: 0 2px;
 }
 
 .cancel-button:hover {
@@ -517,17 +546,10 @@ const formatUploadSpeed = (video: any): string => {
 }
 
 .pause-button {
-    position: absolute;
-    right: 40px;
-    top: 50%;
-    transform: translateY(-50%);
-    opacity: 0;
-    transition: opacity 0.3s;
     color: #e6a23c !important;
     font-size: 12px;
     padding: 2px !important;
-    margin: 0;
-    z-index: 1;
+    margin: 0 2px;
 }
 
 .pause-button:hover {
@@ -535,21 +557,25 @@ const formatUploadSpeed = (video: any): string => {
 }
 
 .start-button {
-    position: absolute;
-    right: 70px;
-    top: 50%;
-    transform: translateY(-50%);
-    opacity: 0;
-    transition: opacity 0.3s;
     color: #67c23a !important;
     font-size: 12px;
     padding: 2px !important;
-    margin: 0;
-    z-index: 1;
+    margin: 0 2px;
 }
 
 .start-button:hover {
     color: #529b2e !important;
+}
+
+.retry-button {
+    color: #409eff !important;
+    font-size: 12px;
+    padding: 2px !important;
+    margin: 0 2px;
+}
+
+.retry-button:hover {
+    color: #337ecc !important;
 }
 
 .upload-speed {

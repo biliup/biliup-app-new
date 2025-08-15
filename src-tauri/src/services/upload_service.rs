@@ -169,6 +169,23 @@ impl UploadService {
             Err(anyhow::anyhow!("任务ID不存在: {}", task_id))
         }
     }
+
+    pub async  fn retry_upload(&self, task_id: &str) -> Result<bool> {
+        if let Some(task_mutex) = self.upload_queue.lock().await.get(task_id) {
+            task_mutex.lock().await.cancel();
+
+            let handle = self.upload_handle.lock().await.remove(task_id);
+            if let Some(handle) = handle {
+                handle.abort();
+                info!("结束后台任务: {}", task_title!(task_mutex));
+            }
+            task_mutex.lock().await.pending();
+            info!("任务切换至pending: {}", task_title!(task_mutex));
+            Ok(true)
+        } else {
+            Err(anyhow::anyhow!("任务ID不存在: {}", task_id))
+        }
+    }
 }
 
 impl Drop for UploadService {
@@ -383,9 +400,9 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
         }
 
         select! {
-            Some(real_uploaded) = net_send_rx.recv() => {
+            Some(total_transmit) = net_send_rx.recv() => {
                 // 处理分片
-                task_mutex.lock().await.update_upload_so_far(real_uploaded);
+                task_mutex.lock().await.update_total_transmit_bytes(total_transmit);
             }
             Some(process_so_far) = file_read_rx.recv() => {
                 // 处理上传进度

@@ -8,7 +8,7 @@ interface UploadTask {
     video: any
     status: string
     progress: number
-    upload_so_far: number
+    total_transmit_bytes: number
     speed: number
     total_size: number
     error_message?: string
@@ -101,7 +101,7 @@ export const useUploadStore = defineStore('upload', () => {
                 if (!task.started_at) continue
                 if (task.status !== 'Running') continue
                 const elapsed = now - task.started_at!
-                task.speed = elapsed > 0 ? (task.upload_so_far * 1000) / elapsed : 0
+                task.speed = elapsed > 0 ? (task.total_transmit_bytes * 1000) / elapsed : 0
             }
             return queue
         } catch (error) {
@@ -111,7 +111,7 @@ export const useUploadStore = defineStore('upload', () => {
     }
 
     // 重试上传
-    const retryUpload = async (taskId: string[]) => {
+    const retryUpload = async (taskId: string) => {
         try {
             await invoke('retry_upload', { taskId })
             await getUploadQueue()
