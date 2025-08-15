@@ -107,7 +107,7 @@ pub async fn get_upload_progress(task_id: String) -> Result<UploadProgress, Stri
 /// 重新上传失败的任务
 #[tauri::command]
 pub async fn retry_upload(app: AppHandle, task_id: String) -> Result<bool, String> {
-        let app_lock = app.state::<Mutex<AppData>>();
+    let app_lock = app.state::<Mutex<AppData>>();
     let mut app_data = app_lock.lock().await;
     let upload_service = &mut app_data.upload_service;
 
@@ -118,11 +118,7 @@ pub async fn retry_upload(app: AppHandle, task_id: String) -> Result<bool, Strin
 }
 
 #[tauri::command]
-pub async fn submit(
-    app: AppHandle,
-    uid: u64,
-    form: UploadForm,
-) -> Result<String, String> {
+pub async fn submit(app: AppHandle, uid: u64, form: UploadForm) -> Result<String, String> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 

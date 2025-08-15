@@ -56,14 +56,14 @@
                             </div>
                             <div class="task-status">
                                 <div class="status-info">
-                                    <span class="status-text">{{ getStatusText(task.status) }}</span>
+                                    <span class="status-text">{{
+                                        getStatusText(task.status)
+                                    }}</span>
                                     <span class="progress-text" v-if="task.status === 'Running'">
                                         {{ formatUploadProgress(task) }}%
                                     </span>
                                 </div>
-                                <div 
-                                    class="action-buttons"
-                                >
+                                <div class="action-buttons">
                                     <el-button
                                         link
                                         size="small"
@@ -126,7 +126,14 @@
 import { computed } from 'vue'
 import { useUploadStore } from '../stores/upload'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, List, Close, VideoPause, RefreshRight, VideoPlay } from '@element-plus/icons-vue'
+import {
+    ArrowDown,
+    List,
+    Close,
+    VideoPause,
+    RefreshRight,
+    VideoPlay
+} from '@element-plus/icons-vue'
 
 const uploadStore = useUploadStore()
 
@@ -169,7 +176,6 @@ const canPause = (status: string) => {
 const canCancel = (status: string) => {
     return status !== 'Completed'
 }
-
 
 const canRetry = (status: string) => {
     return status !== 'Completed' && status !== 'Waiting'
@@ -308,7 +314,6 @@ const cancelUpload = async (taskId: string) => {
         }
     }
 }
-
 
 const retryUpload = async (taskId: string) => {
     try {

@@ -56,7 +56,7 @@
                         <el-button
                             type="primary"
                             size="small"
-                            @click="showCreateTemplateDialog = true"
+                            @click="showNewTemplateDialog = true"
                             :disabled="!loginUsers.length"
                         >
                             <el-icon><plus /></el-icon>
@@ -207,7 +207,7 @@
 
                     <div v-else-if="!currentTemplateName" class="no-template">
                         <el-empty description="请选择模板或创建新模板">
-                            <el-button type="primary" @click="showCreateTemplateDialog = true">
+                            <el-button type="primary" @click="showNewTemplateDialog = true">
                                 新建模板
                             </el-button>
                         </el-empty>
@@ -553,7 +553,7 @@
 
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.videos" class="card-content">
-                                        <VideoList 
+                                        <VideoList
                                             v-model:videos="currentForm.videos"
                                             :is-drag-over="isDragOver"
                                             :uploading="uploading"
@@ -723,7 +723,9 @@
                                     size="large"
                                     :loading="submitting"
                                     @click="submitTemplate(false)"
-                                    :disabled="!currentForm.videos || currentForm.videos.length === 0"
+                                    :disabled="
+                                        !currentForm.videos || currentForm.videos.length === 0
+                                    "
                                 >
                                     <el-icon v-if="!allFilesUploaded && !submitting"
                                         ><loading
@@ -747,89 +749,8 @@
             </el-main>
         </el-container>
 
-        <!-- 创建模板对话框 -->
-        <el-dialog v-model="showCreateTemplateDialog" title="新建模板" width="500px">
-            <el-form :model="newTemplateForm" label-width="50px">
-                <el-form-item label="选择用户">
-                    <el-select v-model="newTemplateForm.userUid" placeholder="请选择用户">
-                        <el-option
-                            v-for="user in loginUsers"
-                            :key="user.uid"
-                            :label="user.username"
-                            :value="user.uid"
-                        >
-                            <div class="user-option">
-                                <el-avatar
-                                    :src="`data:image/jpeg;base64,${user.avatar}`"
-                                    :size="20"
-                                >
-                                    {{ user.username.charAt(0) }}
-                                </el-avatar>
-                                <span class="user-option-name">{{ user.username }}</span>
-                            </div>
-                        </el-option>
-                    </el-select>
-                </el-form-item>
-
-                <el-form-item label="模板类型">
-                    <el-radio-group v-model="newTemplateForm.templateType">
-                        <el-radio value="blank">空白模板</el-radio>
-                        <el-radio value="bv">BV/AV号</el-radio>
-                    </el-radio-group>
-                </el-form-item>
-
-                <el-form-item
-                    label="模板名称"
-                    required
-                    v-if="newTemplateForm.templateType === 'blank'"
-                >
-                    <el-input
-                        v-model="newTemplateForm.name"
-                        placeholder="请输入模板名称"
-                        maxlength="50"
-                    />
-                </el-form-item>
-
-                <el-form-item label="BV/AV号" required v-if="newTemplateForm.templateType === 'bv'">
-                    <el-input
-                        v-model="newTemplateForm.bvNumber"
-                        placeholder="请输入BV号或AV号，如: BV1xx4y1z7xx 或 av12345"
-                        maxlength="20"
-                    />
-                </el-form-item>
-
-                <el-form-item label="操作类型" v-if="newTemplateForm.templateType === 'bv'">
-                    <el-radio-group v-model="newTemplateForm.actionType">
-                        <el-radio value="edit">编辑</el-radio>
-                        <el-radio value="copy">复制</el-radio>
-                    </el-radio-group>
-                    <div class="form-tip">
-                        <div>编辑：直接修改现有稿件</div>
-                        <div>复制：基于现有稿件创建新模板</div>
-                    </div>
-                </el-form-item>
-                <el-form-item
-                    label="模板名称"
-                    required
-                    v-if="
-                        newTemplateForm.templateType === 'bv' &&
-                        newTemplateForm.actionType === 'copy'
-                    "
-                >
-                    <el-input
-                        v-model="newTemplateForm.name"
-                        placeholder="请输入模板名称"
-                        maxlength="50"
-                    />
-                </el-form-item>
-            </el-form>
-            <template #footer>
-                <span class="dialog-footer">
-                    <el-button @click="showCreateTemplateDialog = false">取消</el-button>
-                    <el-button type="primary" @click="createNewTemplate">确定</el-button>
-                </span>
-            </template>
-        </el-dialog>
+        <!-- 新建模板组件 -->
+        <NewTemplete v-model="showNewTemplateDialog" @template-created="handleTemplateCreated" />
 
         <!-- 登录对话框 -->
         <el-dialog
@@ -865,7 +786,7 @@
 import { ref, onMounted, computed, nextTick, watch, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useAuthStore } from '../stores/auth'
-import { useUserConfigStore } from '../stores/user_config'
+import { uploadForm, useUserConfigStore } from '../stores/user_config'
 import { useUtilsStore } from '../stores/utils'
 import { useUploadStore } from '../stores/upload'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -887,7 +808,8 @@ import TopicView from './TopicView.vue'
 import SeasonView from './SeasonView.vue'
 import UploadQueue from './UploadQueue.vue'
 import UserConfig from './UserConfig.vue'
-import GlobalConfigView from './GlobalConfigView.vue'
+import GlobalConfigView from './GlobalConfig.vue'
+import NewTemplete from './NewTemplete.vue'
 import VideoList from './VideoList.vue'
 
 const authStore = useAuthStore()
@@ -906,7 +828,7 @@ const coverDisplayUrl = ref<string>('')
 // 响应式数据
 const selectedUser = ref<any>(null)
 const currentTemplateName = ref<string>('')
-const showCreateTemplateDialog = ref(false)
+const showNewTemplateDialog = ref(false)
 const showLoginDialog = ref(false)
 const showGlobalConfigDialog = ref(false)
 const loginLoading = ref(false)
@@ -949,34 +871,6 @@ const selectedSubCategory = ref<any>(null)
 const categoryPopoverVisible = ref(false)
 
 // 表单数据
-interface uploadForm {
-    title: string,
-    cover: string,
-    copyright: number,
-    source: string,
-    aid?: number,
-    tid: number,
-    tag: string,
-    desc: string,
-    dynamic: string,
-    videos:  any[],
-    dtime?: number,
-    open_subtitle: boolean,
-    interactive: number,
-    mission_id?: number,
-    topic_id?: number,
-    season_id?: number,
-    section_id?: number,
-    dolby: number,
-    lossless_music: number,
-    no_reprint: number,
-    open_elec: number,
-    up_selection_reply: number,
-    up_close_reply: number,
-    up_close_danmu: number,
-    is_only_self: number
-}
-
 const currentForm = ref<uploadForm>({
     title: '',
     cover: '',
@@ -1005,15 +899,6 @@ const currentForm = ref<uploadForm>({
     is_only_self: 0
 })
 
-const newTemplateForm = ref({
-    userUid: null,
-    name: '',
-    templateType: 'blank', // 'blank' | 'bv'
-    bvNumber: '',
-    actionType: 'copy' // 'edit' | 'copy'
-})
-
-// 标签数据
 const tags = ref<string[]>([])
 
 // 当前模板配置
@@ -1694,158 +1579,23 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
     }
 }
 
-// 创建新模板
-const createNewTemplate = async () => {
-    const targetUserUid = newTemplateForm.value.userUid || selectedUser.value?.uid
-    if (!targetUserUid) {
-        ElMessage.error('请选择用户')
-        return
+// 处理模板创建成功事件
+const handleTemplateCreated = async (userUid: number, templateName: string) => {
+    // 自动选择新创建的模板
+    const targetUser = loginUsers.value.find(user => user.uid === userUid)
+    if (targetUser) {
+        selectedUser.value = targetUser
+        currentTemplateName.value = templateName
+
+        // 滚动到顶部
+        nextTick(() => {
+            if (contentWrapperRef.value) {
+                contentWrapperRef.value.scrollTop = 0
+            }
+        })
+
+        await loadTemplateToForm()
     }
-
-    try {
-        if (newTemplateForm.value.templateType === 'blank') {
-            // 空白模板
-            if (!newTemplateForm.value.name.trim()) {
-                ElMessage.error('请输入模板名称')
-                return
-            }
-
-            const templateName = newTemplateForm.value.name.trim()
-            await userConfigStore.addUserTemplate(targetUserUid, templateName)
-
-            // 自动选择新创建的模板
-            const targetUser = loginUsers.value.find(user => user.uid === targetUserUid)
-            if (targetUser) {
-                selectedUser.value = targetUser
-                currentTemplateName.value = templateName
-
-                // 滚动到顶部
-                nextTick(() => {
-                    if (contentWrapperRef.value) {
-                        contentWrapperRef.value.scrollTop = 0
-                    }
-                })
-
-                await loadTemplateToForm()
-            }
-
-            ElMessage.success('空白模板创建成功')
-        } else if (newTemplateForm.value.templateType === 'bv') {
-            // BV/AV号模板
-            if (!newTemplateForm.value.bvNumber.trim()) {
-                ElMessage.error('请输入BV号或AV号')
-                return
-            }
-
-            const bvNumber = newTemplateForm.value.bvNumber.trim()
-            const actionType = newTemplateForm.value.actionType
-            const templateName = newTemplateForm.value.name.trim() || `编辑_${bvNumber}`
-
-            const isEdit = actionType === 'edit'
-            await createTemplateFromBV(targetUserUid, bvNumber, templateName, isEdit)
-
-            // 自动选择新创建的模板
-            const targetUser = loginUsers.value.find(user => user.uid === targetUserUid)
-            if (targetUser) {
-                selectedUser.value = targetUser
-                currentTemplateName.value = templateName
-
-                // 滚动到顶部
-                nextTick(() => {
-                    if (contentWrapperRef.value) {
-                        contentWrapperRef.value.scrollTop = 0
-                    }
-                })
-
-                await loadTemplateToForm()
-            }
-
-            ElMessage.success('基于稿件创建模板成功')
-        }
-
-        showCreateTemplateDialog.value = false
-        newTemplateForm.value = {
-            userUid: null,
-            name: '',
-            templateType: 'blank',
-            bvNumber: '',
-            actionType: 'copy'
-        }
-    } catch (error) {
-        console.error('创建模板失败:', error)
-        // 提供更详细的错误信息
-        let errorMessage = '创建模板失败'
-        if (error instanceof Error) {
-            errorMessage = `创建模板失败: ${error.message}`
-        } else if (typeof error === 'string') {
-            errorMessage = `创建模板失败: ${error}`
-        }
-        ElMessage.error(errorMessage)
-    }
-}
-
-// 根据BV号创建模板
-const createTemplateFromBV = async (
-    userUid: number,
-    bvNumber: string,
-    templateName: string,
-    isEdit: boolean
-) => {
-    try {
-        console.log(`从BV号 ${bvNumber} 创建模板: ${templateName}`)
-
-        const newForm = await utilsStore.getVideoDetail(userUid, bvNumber) as uploadForm
-
-        for (const video of newForm.videos) {
-            video.id = video.filename
-            video.path = ''
-        }
-
-        const newTemplate = buildTemplateFromUploadFrom(newForm)
-
-        if (!isEdit) {
-            newTemplate.aid = undefined
-        }
-
-        await userConfigStore.addUserTemplate(userUid, templateName, newTemplate)
-    } catch (error) {
-        console.error('从BV号创建模板失败: ', error)
-        ElMessage.error(`'从BV号创建模板失败: ${error}'`)
-        throw error
-    }
-}
-
-const buildTemplateFromUploadFrom = (form: uploadForm) => {
-    return {
-            ...userConfigStore.createDefaultTemplate(),
-            ...currentTemplate.value,
-            title: form.title,
-            cover: form.cover,
-            copyright: form.copyright,
-            source: form.source,
-            aid: form.aid,
-            tid: form.tid,
-            desc: form.desc,
-            dynamic: form.dynamic,
-            tag: form.tag,
-            videos: form.videos,
-            dtime: form.dtime || undefined,
-            open_subtitle: form.open_subtitle,
-            interactive: form.interactive,
-            mission_id: form.mission_id,
-            topic_id: form.topic_id,
-            season_id: form.season_id,
-            section_id: form.section_id,
-            dolby: form.dolby,
-            lossless_music: form.lossless_music,
-            no_reprint: form.no_reprint,
-            open_elec: form.open_elec,
-            up_selection_reply: form.up_selection_reply,
-            up_close_reply: form.up_close_reply,
-            up_close_danmu: form.up_close_danmu,
-            is_only_self: form.is_only_self
-        }
-
 }
 
 // 保存模板
@@ -1856,7 +1606,7 @@ const saveTemplate = async () => {
     }
 
     try {
-        const templateConfig = buildTemplateFromUploadFrom(currentForm.value)
+        const templateConfig = userConfigStore.buildTemplateFromUploadForm(currentForm.value)
 
         await userConfigStore.updateUserTemplate(
             selectedUser.value.uid,
@@ -2173,7 +1923,7 @@ const allFilesUploaded = computed(() => {
     if (!currentForm.value.videos || currentForm.value.videos.length === 0) {
         return false
     }
-    return currentForm.value.videos.every(video => (video.complete && video.path === ''))
+    return currentForm.value.videos.every(video => video.complete && video.path === '')
 })
 
 // 提交视频
@@ -2848,16 +2598,6 @@ const refreshAllData = async () => {
     100% {
         opacity: 1;
     }
-}
-
-.user-option {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-.user-option-name {
-    font-size: 14px;
 }
 
 .empty-users {

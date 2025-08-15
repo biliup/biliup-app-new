@@ -170,7 +170,7 @@ impl UploadService {
         }
     }
 
-    pub async  fn retry_upload(&self, task_id: &str) -> Result<bool> {
+    pub async fn retry_upload(&self, task_id: &str) -> Result<bool> {
         if let Some(task_mutex) = self.upload_queue.lock().await.get(task_id) {
             task_mutex.lock().await.cancel();
 

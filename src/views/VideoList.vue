@@ -1,10 +1,7 @@
 <template>
     <div class="video-list-container">
         <!-- 已上传文件列表 -->
-        <div
-            v-if="videos && videos.length > 0"
-            class="uploaded-videos-section"
-        >
+        <div v-if="videos && videos.length > 0" class="uploaded-videos-section">
             <div class="uploaded-videos-list">
                 <div
                     v-for="(video, index) in updateVideo(videos)"
@@ -24,21 +21,15 @@
                             class="order-input"
                         />
                     </div>
-                    
+
                     <div class="video-status-icon">
                         <!-- 上传完成 -->
-                        <el-icon
-                            v-if="video.complete"
-                            class="status-complete"
-                        >
+                        <el-icon v-if="video.complete" class="status-complete">
                             <circle-check />
                         </el-icon>
                         <!-- 上传中 -->
                         <el-icon
-                            v-else-if="
-                                !video.complete &&
-                                video.progress > 0
-                            "
+                            v-else-if="!video.complete && video.progress > 0"
                             class="status-uploading"
                         >
                             <loading />
@@ -52,10 +43,7 @@
                         <!-- 文件名和状态在同一行 -->
                         <div class="video-title-row">
                             <div class="video-title-container">
-                                <div
-                                    v-if="editingFileId === video.id"
-                                    class="video-title-edit"
-                                >
+                                <div v-if="editingFileId === video.id" class="video-title-edit">
                                     <el-input
                                         v-model="editingFileName"
                                         size="small"
@@ -68,7 +56,9 @@
                                 <div
                                     v-else
                                     class="video-title"
-                                    @click="startEditFileName(video.id, video.title || video.videoname)"
+                                    @click="
+                                        startEditFileName(video.id, video.title || video.videoname)
+                                    "
                                 >
                                     {{ video.title || video.videoname }}
                                     <el-icon class="edit-icon"><edit /></el-icon>
@@ -77,22 +67,13 @@
 
                             <!-- 状态标签移动到文件名右侧 -->
                             <div class="video-status">
-                                <span
-                                    v-if="video.complete"
-                                    class="status-text complete"
+                                <span v-if="video.complete" class="status-text complete"
                                     >上传完成</span
                                 >
-                                <span
-                                    v-else-if="video.progress > 0"
-                                    class="status-text uploading"
-                                >
+                                <span v-else-if="video.progress > 0" class="status-text uploading">
                                     上传中
                                 </span>
-                                <span
-                                    v-else
-                                    class="status-text pending"
-                                    >待上传</span
-                                >
+                                <span v-else class="status-text pending">待上传</span>
                             </div>
                         </div>
 
@@ -106,12 +87,11 @@
                                     :stroke-width="3"
                                     :color="video.complete ? '#67c23a' : '#409eff'"
                                 />
-                                <span class="progress-text">{{ formatUploadProgress(video) }}%</span>
+                                <span class="progress-text"
+                                    >{{ formatUploadProgress(video) }}%</span
+                                >
                             </div>
-                            <div
-                                class="upload-speed"
-                                v-if="!video.complete && video.speed > 0"
-                            >
+                            <div class="upload-speed" v-if="!video.complete && video.speed > 0">
                                 {{ formatUploadSpeed(video) }}
                             </div>
                         </div>
@@ -134,10 +114,7 @@
 
         <!-- 视频操作按钮组 -->
         <div class="video-buttons-group">
-            <el-button
-                type="primary"
-                @click="$emit('selectVideo')"
-            >
+            <el-button type="primary" @click="$emit('selectVideo')">
                 <el-icon><upload-filled /></el-icon>
                 选择视频文件
             </el-button>
@@ -160,28 +137,17 @@
                 清空{{ videos && videos.length > 0 ? `(${videos.length})` : '' }}
             </el-button>
         </div>
-        
+
         <div class="upload-tip">
-            <span v-if="!isDragOver">
-                支持 MP4、AVI、MOV、MKV、WMV、FLV、M4V、WEBM 等格式
-            </span>
-            <span v-else class="drag-active-tip">
-                💡 松开鼠标即可添加文件到当前模板
-            </span>
+            <span v-if="!isDragOver"> 支持 MP4、AVI、MOV、MKV、WMV、FLV、M4V、WEBM 等格式 </span>
+            <span v-else class="drag-active-tip"> 💡 松开鼠标即可添加文件到当前模板 </span>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
 import { ref, nextTick } from 'vue'
-import { 
-    CircleCheck, 
-    Loading, 
-    Cloudy, 
-    Edit, 
-    Delete, 
-    UploadFilled 
-} from '@element-plus/icons-vue'
+import { CircleCheck, Loading, Cloudy, Edit, Delete, UploadFilled } from '@element-plus/icons-vue'
 import { useUploadStore } from '../stores/upload'
 
 // Props
@@ -199,10 +165,10 @@ const props = withDefaults(defineProps<Props>(), {
 // Emits
 const emit = defineEmits<{
     'update:videos': [videos: any[]]
-    'selectVideo': []
-    'clearAllVideos': []
-    'removeFile': [id: string]
-    'createUpload': []
+    selectVideo: []
+    clearAllVideos: []
+    removeFile: [id: string]
+    createUpload: []
 }>()
 
 // 文件编辑状态
@@ -239,11 +205,11 @@ const handleReorderVideo = (currentIndex: number, newIndex: number) => {
     if (currentIndex === newIndex || newIndex < 0 || newIndex >= props.videos.length) {
         return
     }
-    
+
     const newVideos = [...props.videos]
     const [movedItem] = newVideos.splice(currentIndex, 1)
     newVideos.splice(newIndex, 0, movedItem)
-    
+
     emit('update:videos', newVideos)
 }
 
@@ -265,7 +231,7 @@ const saveFileName = (id: string) => {
         cancelEditFileName()
         return
     }
-    
+
     const newVideos = props.videos.map(video => {
         if (video.id === id) {
             return {
@@ -275,7 +241,7 @@ const saveFileName = (id: string) => {
         }
         return video
     })
-    
+
     emit('update:videos', newVideos)
     cancelEditFileName()
 }
