@@ -123,7 +123,7 @@ const loadSeasons = async () => {
             updateSelectedKey()
         }
     } catch (error) {
-        console.error('加载合集列表失败:', error)
+        console.warn('加载合集列表失败:', error)
     } finally {
         isSearching.value = false
     }

@@ -59,7 +59,8 @@ export const useUtilsStore = defineStore('template', () => {
             // {"seasons": [{season_id: 1, section_id: 2, title: '合集1'}, {season_id: 2, section_id: 2, title: '合集2'}]}
             hasSeason = true
         } catch (error) {
-            console.error('获取合集列表失败:', error)
+            console.warn('获取合集列表失败:', error)
+            seasonlist.value = []
         }
         return hasSeason
     }
