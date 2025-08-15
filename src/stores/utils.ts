@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { throwError } from 'element-plus/es/utils/error.mjs'
 
 export const useUtilsStore = defineStore('template', () => {
     const typelist = ref<any[]>([])
