@@ -1,4 +1,5 @@
-use serde_json::Value;
+use biliup::bilibili::BiliBili;
+use serde_json::{Value, json};
 use std::str::FromStr;
 use std::{fs::File, io::Read};
 use tauri::Manager;
@@ -153,12 +154,12 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, S
                 let seasons = res["data"]["seasons"].as_array()
                     .ok_or("获取合集列表失败")?
                     .to_owned();
-                let mut seasion_vec = Vec::new();
+                let mut season_vec = Vec::new();
                 for season in &seasons {
-                    let season_id = season["seasion"]["id"].as_u64().unwrap_or(0);
-                    let section_id = season["sections"][0]["id"].as_u64().unwrap_or(0);
-                    let season_title = season["seasion"]["title"].as_str().unwrap_or("").to_string();
-                    seasion_vec.push(serde_json::json!({
+                    let season_id = season["season"]["id"].as_u64().unwrap_or(0);
+                    let section_id = season["sections"]["sections"][0]["id"].as_u64().unwrap_or(0);
+                    let season_title = season["season"]["title"].as_str().unwrap_or("").to_string();
+                    season_vec.push(serde_json::json!({
                         "season_id": if season_id != 0 { Some(season_id) } else { None },
                         "section_id": if section_id != 0 { Some(section_id) } else { None },
                         "title": season_title,
@@ -166,7 +167,7 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, S
                 }
 
                 Ok(serde_json::json!({
-                    "seasons": seasion_vec,
+                    "seasons": season_vec,
                 }))
             },
             Err(e) => Err(e.to_string()),
@@ -205,5 +206,141 @@ pub async fn get_video_detail(
     {
         Ok(res) => Ok(UploadForm::from_bilibili_res(res).map_err(|e| e.to_string())?),
         Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Result<u64, String> {
+    let app_lock = app.state::<Mutex<AppData>>();
+    let app_data = app_lock.lock().await;
+
+    match app_data
+        .clients
+        .lock()
+        .await
+        .get(&uid)
+        .ok_or("用户未登录或不存在")?
+        .bilibili
+        .client
+        .get(format!(
+            "https://member.bilibili.com/x2/creative/web/season/aid?id={}&t={}",
+            aid,
+            chrono::Utc::now().timestamp()
+        ))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<Value>()
+        .await
+    {
+        Ok(res) => Ok(res["data"]["id"].as_u64().unwrap_or(0)),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+#[tauri::command]
+pub async fn switch_season(
+    app: tauri::AppHandle,
+    uid: u64,
+    aid: u64,
+    season_id: u64,
+    section_id: u64,
+    title: String,
+    add: bool,
+) -> Result<bool, String> {
+    let app_lock = app.state::<Mutex<AppData>>();
+    let app_data = app_lock.lock().await;
+
+    fn get_csrf(bilibili: &BiliBili) -> Result<String, String> {
+        let csrf = bilibili
+            .login_info
+            .cookie_info
+            .get("cookies")
+            .and_then(|c| c.as_array())
+            .ok_or("cookie error")?
+            .iter()
+            .filter_map(|c| c.as_object())
+            .find(|c| c["name"] == "bili_jct")
+            .ok_or("jct error")?
+            .get("value")
+            .and_then(|v| v.as_str())
+            .ok_or("csrf error")?;
+        Ok(csrf.to_string())
+    }
+
+    let csrf = get_csrf(
+        &app_data
+            .clients
+            .lock()
+            .await
+            .get(&uid)
+            .ok_or("用户未登录或不存在")?
+            .bilibili,
+    )
+    .map_err(|e| e.to_string())?;
+
+    if add {
+        match app_data
+        .clients
+        .lock()
+        .await
+        .get(&uid)
+        .ok_or("用户未登录或不存在")?
+        .bilibili
+        .client
+        .post(format!(
+            "https://member.bilibili.com/x2/creative/web/season/section/episodes/add?t={}&csrf={}",
+            chrono::Utc::now().timestamp(),
+            csrf
+        ))
+        .json(&json!({
+            "episodes": [
+                {
+                    "title": title,
+                    "aid": aid
+                }
+            ],
+            "sectionId": section_id,
+            "csrf": csrf
+        }))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<Value>()
+        .await
+        {
+            Ok(_) => Ok(true),
+            Err(e) => Err(e.to_string()),
+        }
+    } else {
+        match app_data
+            .clients
+            .lock()
+            .await
+            .get(&uid)
+            .ok_or("用户未登录或不存在")?
+            .bilibili
+            .client
+            .post(format!(
+                "https://member.bilibili.com/x2/creative/web/season/switch?t={}&csrf={}",
+                chrono::Utc::now().timestamp(),
+                csrf
+            ))
+            .json(&json!({
+                "season_id": if season_id != 0 { Some(season_id) } else { None },
+                "section_id": if section_id != 0 { Some(section_id) } else { None },
+                "title": title,
+                "aid": aid,
+                "csrf": csrf
+            }))
+            .send()
+            .await
+            .map_err(|e| e.to_string())?
+            .json::<Value>()
+            .await
+        {
+            Ok(_) => Ok(true),
+            Err(e) => Err(e.to_string()),
+        }
     }
 }

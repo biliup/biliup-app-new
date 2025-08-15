@@ -623,19 +623,11 @@
                                             />
                                         </el-form-item>
 
-                                        <el-form-item
-                                            label="加入合集"
-                                            v-if="
-                                                currentTemplate &&
-                                                currentTemplate.aid &&
-                                                currentTemplate.aid !== 0
-                                            "
-                                        >
+                                        <el-form-item label="加入合集">
                                             <SeasonView
                                                 v-model="currentForm.season_id"
                                                 v-model:section-id="currentForm.section_id"
                                                 :user-uid="selectedUser?.uid"
-                                                :aid="currentTemplate.aid"
                                             />
                                         </el-form-item>
 
@@ -1303,6 +1295,11 @@ const toggleUserExpanded = (userUid: number) => {
 
 // 选择模板
 const selectTemplate = async (user: any, templateName: string) => {
+    if (selectedUser.value === user && currentTemplateName.value === templateName) {
+        // 如果已经选择了相同的用户和模板，则不需要切换
+        return
+    }
+
     if (autoSubmitTimeout.value) {
         try {
             await ElMessageBox.confirm(
@@ -1961,9 +1958,45 @@ const submitTemplate = async (from_timeout: boolean) => {
 
     submitting.value = true
     try {
-        await uploadStore.submitTemplate(selectedUser.value.uid, currentForm.value)
+        const resp = (await uploadStore.submitTemplate(
+            selectedUser.value.uid,
+            currentForm.value
+        )) as any
         lastSubmit.value = new Date().toLocaleString()
-        ElMessage.success('视频提交成功')
+        ElMessage.success(`视频${resp.bvid}提交成功`)
+
+        if (resp && resp.aid) {
+            try {
+                const old_season_id = await utilsStore.getVideoSeason(
+                    selectedUser.value.uid,
+                    resp.aid
+                )
+                let add = old_season_id && old_season_id !== 0 ? false : true
+
+                if (old_season_id !== currentForm.value.season_id) {
+                    const new_season_id = currentForm.value.season_id || 0
+                    const new_section_id = currentForm.value.section_id || 0
+                    await utilsStore.switchSeason(
+                        selectedUser.value.uid,
+                        resp.aid,
+                        new_season_id,
+                        new_section_id,
+                        currentForm.value.title,
+                        add
+                    )
+
+                    const season_title =
+                        utilsStore.seasonlist.find(
+                            (s: any) => s.season_id === currentForm.value.season_id
+                        )?.title || currentForm.value.season_id
+                    ElMessage.success(`视频${resp.bvid}加入合集${season_title}`)
+                }
+            } catch (error) {
+                console.error('设置合集失败: ', error)
+                ElMessage.error(`设置合集失败: ${error}`)
+            }
+        }
+        saveTemplate()
     } catch (error) {
         console.error('视频提交失败: ', error)
         ElMessage.error(`视频提交失败: ${error}`)

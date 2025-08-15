@@ -5,6 +5,7 @@ use crate::{
     models::{UploadForm, UploadTask, VideoInfo},
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{Value, json};
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
 
@@ -118,7 +119,7 @@ pub async fn retry_upload(app: AppHandle, task_id: String) -> Result<bool, Strin
 }
 
 #[tauri::command]
-pub async fn submit(app: AppHandle, uid: u64, form: UploadForm) -> Result<String, String> {
+pub async fn submit(app: AppHandle, uid: u64, form: UploadForm) -> Result<Value, String> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
@@ -153,10 +154,7 @@ pub async fn submit(app: AppHandle, uid: u64, form: UploadForm) -> Result<String
             .submit_by_app(&studio, proxy.as_deref())
             .await
         {
-            Ok(resp) => Ok(serde_json::to_string_pretty(
-                &resp.data.ok_or("返回值错误").map_err(|e| e.to_string())?,
-            )
-            .map_err(|e| e.to_string())?),
+            Ok(resp) => Ok(resp.data.ok_or("返回值错误").map_err(|e| e.to_string())?),
             Err(e) => Err(e.to_string()),
         }
     } else {
@@ -172,7 +170,7 @@ pub async fn submit(app: AppHandle, uid: u64, form: UploadForm) -> Result<String
             .edit_by_web(&studio)
             .await
         {
-            Ok(resp) => Ok(serde_json::to_string_pretty(&resp).map_err(|e| e.to_string())?),
+            Ok(resp) => Ok(resp["data"].clone()),
             Err(e) => Err(e.to_string()),
         }
     }

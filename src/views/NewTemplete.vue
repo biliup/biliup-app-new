@@ -218,6 +218,19 @@ const createTemplateFromBV = async (
             newTemplate.aid = undefined
         }
 
+        if (newForm.aid) {
+            await utilsStore.getSeasonList(userUid)
+            const season_id = await utilsStore.getVideoSeason(userUid, newForm.aid)
+
+            if (season_id !== 0) {
+                const section_id = await utilsStore.seasonlist.find(
+                    item => item.season_id === season_id
+                )?.section_id
+                newTemplate.season_id = season_id
+                newTemplate.section_id = section_id
+            }
+        }
+
         await userConfigStore.addUserTemplate(userUid, templateName, newTemplate)
     } catch (error) {
         console.error('从BV号创建模板失败: ', error)

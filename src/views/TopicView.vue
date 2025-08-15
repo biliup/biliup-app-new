@@ -173,7 +173,7 @@ const selectedTopic = computed(() => {
 const formatPlayCount = (count: number): string => {
     if (count === 0) return '0'
     if (count < 1000) return count.toString()
-    if (count < 10000) return (count / 1000).toFixed(1) + 'K'
+    if (count < 10000) return (count / 1000).toFixed(1) + '千'
     if (count < 100000000) return (count / 10000).toFixed(1) + '万'
     return (count / 100000000).toFixed(1) + '亿'
 }

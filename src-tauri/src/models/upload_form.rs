@@ -4,7 +4,7 @@ use anyhow::Result;
 use biliup::bilibili;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::info;
+use tracing::{debug, info};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UploadForm {
@@ -128,11 +128,12 @@ pub struct BilibiliForm {
 impl UploadForm {
     pub fn from_bilibili_res(value: Value) -> Result<Self> {
         let archive = value["archive"].clone();
-        info!("{}", serde_json::to_string(&archive)?);
+        debug!("{}", serde_json::to_string(&archive)?);
         let mut upload_form: Self = serde_json::from_value(archive)?;
 
         let videos = value["videos"].clone();
-        info!("{}", serde_json::to_string(&videos)?);
+        debug!("{}", serde_json::to_string(&videos)?);
+
         upload_form.videos = videos
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("videos should be an array"))?

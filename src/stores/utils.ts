@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 export const useUtilsStore = defineStore('template', () => {
     const typelist = ref<any[]>([])
     const topiclist = ref<any[]>([])
+    const seasonlist = ref<any[]>([])
 
     const downloadCover = async (uid: number, url: string) => {
         if (!url) {
@@ -51,9 +52,9 @@ export const useUtilsStore = defineStore('template', () => {
 
     const getSeasonList = async (uid: number) => {
         try {
-            const seasons = await invoke('get_season_list', { uid })
-            // {"seasions": [{season_id: 1, section_id: 2, title: '合集1'}, {season_id: 2, section_id: 2, title: '合集2'}]}
-            return seasons
+            seasonlist.value = ((await invoke('get_season_list', { uid })) as any).seasons
+            // {"seasons": [{season_id: 1, section_id: 2, title: '合集1'}, {season_id: 2, section_id: 2, title: '合集2'}]}
+            return seasonlist
         } catch (error) {
             console.error('获取合集列表失败:', error)
             throw error
@@ -85,15 +86,44 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
+    const getVideoSeason = async (uid: number, aid: number) => {
+        try {
+            const season = (await invoke('get_video_season', { uid, aid })) as number
+            return season
+        } catch (error) {
+            console.error('获取视频合集失败:', error)
+            throw error
+        }
+    }
+
+    const switchSeason = async (
+        uid: number,
+        aid: number,
+        seasonId: number,
+        sectionId: number,
+        title: string,
+        add: boolean
+    ) => {
+        try {
+            await invoke('switch_season', { uid, aid, seasonId, sectionId, title, add })
+        } catch (error) {
+            console.error('设置合集失败:', error)
+            throw error
+        }
+    }
+
     return {
         typelist: computed(() => typelist.value),
         topiclist: computed(() => topiclist.value),
+        seasonlist: computed(() => seasonlist.value),
         uploadCover,
         downloadCover,
         initTypeList,
         initTopicList,
         searchTopics,
         getSeasonList,
-        getVideoDetail
+        getVideoDetail,
+        getVideoSeason,
+        switchSeason
     }
 })

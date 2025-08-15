@@ -173,6 +173,8 @@ pub async fn run() {
             search_topics,
             get_season_list,
             get_video_detail,
+            get_video_season,
+            switch_season,
         ])
         .setup(|app: &mut tauri::App| {
             app.manage(Mutex::new(appdata));
