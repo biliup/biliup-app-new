@@ -1,5 +1,37 @@
 <template>
     <div class="video-list-container">
+        <!-- 视频操作按钮组 -->
+        <div class="video-buttons-group">
+            <el-button type="primary" @click="$emit('selectVideo')" size="small">
+                <el-icon><upload-filled /></el-icon>
+                选择视频文件
+            </el-button>
+            <el-button
+                type="success"
+                size="small"
+                :loading="props.uploading"
+                @click="$emit('createUpload')"
+                :disabled="!videos || videos.length === 0"
+            >
+                <el-icon><upload-filled /></el-icon>
+                加入上传队列
+            </el-button>
+            <el-button
+                type="danger"
+                plain
+                @click="$emit('clearAllVideos')"
+                size="small"
+                :disabled="!videos || videos.length === 0"
+            >
+                <el-icon><delete /></el-icon>
+                清空{{ videos && videos.length > 0 ? `(${videos.length})` : '' }}
+            </el-button>
+        </div>
+        <div class="upload-tip">
+            <span v-if="!isDragOver"> 支持 MP4、AVI、MOV、MKV、WMV、FLV、M4V、WEBM 等格式 </span>
+            <span v-else class="drag-active-tip"> 💡 松开鼠标即可添加文件到当前模板 </span>
+        </div>
+
         <!-- 已上传文件列表 -->
         <div v-if="videos && videos.length > 0" class="uploaded-videos-section">
             <div class="uploaded-videos-list">
@@ -110,37 +142,6 @@
                     </div>
                 </div>
             </div>
-        </div>
-
-        <!-- 视频操作按钮组 -->
-        <div class="video-buttons-group">
-            <el-button type="primary" @click="$emit('selectVideo')">
-                <el-icon><upload-filled /></el-icon>
-                选择视频文件
-            </el-button>
-            <el-button
-                type="success"
-                :loading="props.uploading"
-                @click="$emit('createUpload')"
-                :disabled="!videos || videos.length === 0"
-            >
-                <el-icon><upload-filled /></el-icon>
-                加入上传队列
-            </el-button>
-            <el-button
-                type="danger"
-                plain
-                @click="$emit('clearAllVideos')"
-                :disabled="!videos || videos.length === 0"
-            >
-                <el-icon><delete /></el-icon>
-                清空{{ videos && videos.length > 0 ? `(${videos.length})` : '' }}
-            </el-button>
-        </div>
-
-        <div class="upload-tip">
-            <span v-if="!isDragOver"> 支持 MP4、AVI、MOV、MKV、WMV、FLV、M4V、WEBM 等格式 </span>
-            <span v-else class="drag-active-tip"> 💡 松开鼠标即可添加文件到当前模板 </span>
         </div>
     </div>
 </template>
@@ -282,7 +283,7 @@ const handleRemoveFile = (id: string) => {
 
 .uploaded-videos-section {
     --video-item-height: 35px; /* 定义CSS变量 */
-    margin-bottom: 20px;
+    padding-top: 10px;
     padding-bottom: 20px;
     border-bottom: 1px solid #f0f2f5;
 }
@@ -523,12 +524,12 @@ const handleRemoveFile = (id: string) => {
 .video-buttons-group {
     display: flex;
     justify-content: center;
-    gap: 12px;
-    margin-bottom: 12px;
+    gap: 25px;
+    margin-bottom: 5px;
 }
 
 .upload-tip {
-    font-size: 13px;
+    font-size: 10px;
     color: #909399;
     text-align: center;
 }

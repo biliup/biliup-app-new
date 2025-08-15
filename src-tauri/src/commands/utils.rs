@@ -8,6 +8,11 @@ use tokio::sync::Mutex;
 use crate::utils::crypto::encode_base64;
 use crate::{AppData, models::UploadForm};
 
+#[tauri::command]
+pub async fn get_current_version() -> Result<String, String> {
+    Ok(env!("CARGO_PKG_VERSION").to_string())
+}
+
 /// 上传封面并进行返回url
 #[tauri::command]
 pub async fn upload_cover(app: tauri::AppHandle, uid: u64, file: String) -> Result<String, String> {

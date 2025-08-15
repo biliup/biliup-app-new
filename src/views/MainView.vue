@@ -17,6 +17,7 @@
             <div class="header-content">
                 <div class="header-left">
                     <h2 class="app-title">Biliup APP</h2>
+                    <div class="app-version">(v{{ currentVer }})</div>
                 </div>
                 <div class="header-right">
                     <!-- 上传队列下拉框 -->
@@ -429,6 +430,44 @@
                                 </el-collapse-transition>
                             </el-card>
 
+                            <!-- 视频文件 -->
+                            <el-card
+                                class="form-section"
+                                :class="{
+                                    'drag-target': isDragOver,
+                                    collapsed: cardCollapsed.videos
+                                }"
+                            >
+                                <template #header>
+                                    <div class="card-header" @click="toggleCardCollapsed('videos')">
+                                        <span>视频文件</span>
+                                        <span v-if="isDragOver" class="drag-hint"
+                                            >拖拽文件到此处添加</span
+                                        >
+                                        <el-icon
+                                            class="collapse-icon"
+                                            :class="{ collapsed: cardCollapsed.videos }"
+                                        >
+                                            <arrow-down />
+                                        </el-icon>
+                                    </div>
+                                </template>
+
+                                <el-collapse-transition>
+                                    <div v-show="!cardCollapsed.videos" class="card-content">
+                                        <VideoList
+                                            v-model:videos="currentForm.videos"
+                                            :is-drag-over="isDragOver"
+                                            :uploading="uploading"
+                                            @select-video="selectVideoWithTauri"
+                                            @clear-all-videos="clearAllVideos"
+                                            @remove-file="removeUploadedFile"
+                                            @create-upload="createUpload"
+                                        />
+                                    </div>
+                                </el-collapse-transition>
+                            </el-card>
+
                             <!-- 标签设置 -->
                             <el-card
                                 class="form-section"
@@ -524,44 +563,6 @@
                                                 show-word-limit
                                             />
                                         </el-form-item>
-                                    </div>
-                                </el-collapse-transition>
-                            </el-card>
-
-                            <!-- 视频文件 -->
-                            <el-card
-                                class="form-section"
-                                :class="{
-                                    'drag-target': isDragOver,
-                                    collapsed: cardCollapsed.videos
-                                }"
-                            >
-                                <template #header>
-                                    <div class="card-header" @click="toggleCardCollapsed('videos')">
-                                        <span>视频文件</span>
-                                        <span v-if="isDragOver" class="drag-hint"
-                                            >拖拽文件到此处添加</span
-                                        >
-                                        <el-icon
-                                            class="collapse-icon"
-                                            :class="{ collapsed: cardCollapsed.videos }"
-                                        >
-                                            <arrow-down />
-                                        </el-icon>
-                                    </div>
-                                </template>
-
-                                <el-collapse-transition>
-                                    <div v-show="!cardCollapsed.videos" class="card-content">
-                                        <VideoList
-                                            v-model:videos="currentForm.videos"
-                                            :is-drag-over="isDragOver"
-                                            :uploading="uploading"
-                                            @select-video="selectVideoWithTauri"
-                                            @clear-all-videos="clearAllVideos"
-                                            @remove-file="removeUploadedFile"
-                                            @create-upload="createUpload"
-                                        />
                                     </div>
                                 </el-collapse-transition>
                             </el-card>
@@ -813,6 +814,8 @@ const utilsStore = useUtilsStore()
 const loginUsers = computed(() => authStore.loginUsers)
 const userTemplates = computed(() => userConfigStore.userTemplates)
 const typeList = computed(() => utilsStore.typelist)
+
+const currentVer = ref<string>('')
 
 // 封面显示URL
 const coverDisplayUrl = ref<string>('')
@@ -1073,6 +1076,7 @@ onUnmounted(() => {
 // 初始化数据
 const initializeData = async () => {
     try {
+        currentVer.value = (await utilsStore.getCurrentVersion()) as string
         // 获取登录用户
         await authStore.getLoginUsers()
 
@@ -2174,6 +2178,11 @@ const refreshAllData = async () => {
 .app-title {
     margin: 0;
     color: #303133;
+    display: inline-block;
+}
+
+.app-version {
+    display: inline-block;
 }
 
 .header-right {

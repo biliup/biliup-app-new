@@ -166,6 +166,7 @@ pub async fn run() {
             update_user_template,
             delete_user_template,
             // 其他命令
+            get_current_version,
             upload_cover,
             download_cover,
             get_type_list,

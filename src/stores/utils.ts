@@ -8,6 +8,16 @@ export const useUtilsStore = defineStore('template', () => {
     const seasonlist = ref<any[]>([])
     let hasSeason = false
 
+    const getCurrentVersion = async () => {
+        try {
+            const version = await invoke('get_current_version')
+            return version
+        } catch (error) {
+            console.error('获取当前版本失败:', error)
+            return 'unknown' as string
+        }
+    }
+
     const downloadCover = async (uid: number, url: string) => {
         if (!url) {
             return undefined
@@ -129,6 +139,7 @@ export const useUtilsStore = defineStore('template', () => {
         typelist: computed(() => typelist.value),
         topiclist: computed(() => topiclist.value),
         seasonlist: computed(() => seasonlist.value),
+        getCurrentVersion,
         uploadCover,
         downloadCover,
         initTypeList,
