@@ -349,7 +349,7 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
             "bda2" => line::bda2(),
             "ws" => line::ws(),
             "qn" => line::qn(),
-            "bldsa" => line::bldsa() ,
+            "bldsa" => line::bldsa(),
             "tx" => line::tx(),
             "txa" => line::txa(),
             "bda" => line::bda(),

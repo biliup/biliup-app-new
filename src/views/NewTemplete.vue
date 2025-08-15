@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { uploadForm, useUserConfigStore } from '../stores/user_config'
 import { useUtilsStore } from '../stores/utils'
@@ -126,6 +126,64 @@ const newTemplateForm = ref({
     actionType: 'copy' // 'edit' | 'copy'
 })
 
+// localStorage key for storing user preferences
+const STORAGE_KEY = 'new-template-preferences'
+
+// 加载用户上次的选择
+const loadUserPreferences = () => {
+    try {
+        const saved = localStorage.getItem(STORAGE_KEY)
+        if (saved) {
+            const preferences = JSON.parse(saved)
+            // 只加载有效的用户UID（确保用户仍然登录）
+            if (
+                preferences.userUid &&
+                loginUsers.value.some(user => user.uid === preferences.userUid)
+            ) {
+                newTemplateForm.value.userUid = preferences.userUid
+            }
+            // 加载其他设置
+            if (preferences.templateType) {
+                newTemplateForm.value.templateType = preferences.templateType
+            }
+            if (preferences.actionType) {
+                newTemplateForm.value.actionType = preferences.actionType
+            }
+        }
+    } catch (error) {
+        console.error('加载用户偏好设置失败:', error)
+    }
+}
+
+// 保存用户选择
+const saveUserPreferences = () => {
+    try {
+        const preferences = {
+            userUid: newTemplateForm.value.userUid,
+            templateType: newTemplateForm.value.templateType,
+            actionType: newTemplateForm.value.actionType
+        }
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
+    } catch (error) {
+        console.error('保存用户偏好设置失败:', error)
+    }
+}
+
+// 监听表单变化，自动保存用户偏好
+watch(() => newTemplateForm.value.userUid, saveUserPreferences)
+watch(() => newTemplateForm.value.templateType, saveUserPreferences)
+watch(() => newTemplateForm.value.actionType, saveUserPreferences)
+
+// 当对话框打开时加载用户偏好
+watch(
+    () => props.modelValue,
+    newValue => {
+        if (newValue) {
+            loadUserPreferences()
+        }
+    }
+)
+
 // 方法
 const closeDialog = () => {
     showDialog.value = false
@@ -133,13 +191,10 @@ const closeDialog = () => {
 }
 
 const resetForm = () => {
-    newTemplateForm.value = {
-        userUid: null,
-        name: '',
-        templateType: 'blank',
-        bvNumber: '',
-        actionType: 'copy'
-    }
+    // 只重置输入字段，保留用户偏好设置
+    newTemplateForm.value.name = ''
+    newTemplateForm.value.bvNumber = ''
+    // 不重置 userUid, templateType, actionType，保持用户上次的选择
 }
 
 // 创建新模板
