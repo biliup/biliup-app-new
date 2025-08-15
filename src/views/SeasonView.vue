@@ -30,6 +30,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useUtilsStore } from '../stores/utils'
+import { ElMessage } from 'element-plus'
 
 // 定义组件props
 interface Props {
@@ -101,11 +102,9 @@ const loadSeasons = async () => {
 
     try {
         isSearching.value = true
-        if (!(await utilsStore.getSeasonList(props.userUid))) {
-            throw new Error('未获取到合集列表')
-        }
+        await utilsStore.getSeasonList(props.userUid)
 
-        if (utilsStore.seasonlist && utilsStore.seasonlist.length > 0) {
+        if (utilsStore.seasonlist) {
             allSeasons.value = utilsStore.seasonlist.map((season: any) => ({
                 season_id: season.season_id,
                 section_id: season.section_id,
@@ -123,7 +122,8 @@ const loadSeasons = async () => {
             updateSelectedKey()
         }
     } catch (error) {
-        console.warn('加载合集列表失败:', error)
+        console.error('加载合集列表失败:', error)
+        ElMessage.error(`加载合集列表失败: ${error}`)
     } finally {
         isSearching.value = false
     }

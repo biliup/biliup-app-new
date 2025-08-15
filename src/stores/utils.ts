@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { throwError } from 'element-plus/es/utils/error.mjs'
 
 export const useUtilsStore = defineStore('template', () => {
     const typelist = ref<any[]>([])
@@ -57,10 +58,11 @@ export const useUtilsStore = defineStore('template', () => {
         try {
             seasonlist.value = ((await invoke('get_season_list', { uid })) as any).seasons
             // {"seasons": [{season_id: 1, section_id: 2, title: '合集1'}, {season_id: 2, section_id: 2, title: '合集2'}]}
-            hasSeason = true
+            hasSeason = seasonlist.value.length > 0
         } catch (error) {
-            console.warn('获取合集列表失败:', error)
+            console.error('获取合集列表失败:', error)
             seasonlist.value = []
+            throw error
         }
         return hasSeason
     }

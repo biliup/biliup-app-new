@@ -151,10 +151,10 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, S
             .await
         {
             Ok(res) => {
-                let seasons = res["data"]["seasons"].as_array()
-                    .ok_or("获取合集列表失败")?
-                    .to_owned();
                 let mut season_vec = Vec::new();
+
+                let seasons = res["data"]["seasons"].as_array()
+                    .ok_or("用户没有创建合集").unwrap_or_else(|_| &season_vec).to_owned();
                 for season in &seasons {
                     let season_id = season["season"]["id"].as_u64().unwrap_or(0);
                     let section_id = season["sections"]["sections"][0]["id"].as_u64().unwrap_or(0);
