@@ -5,7 +5,7 @@ use crate::{
     models::{UploadForm, UploadTask, VideoInfo},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::{Value, json};
+use serde_json::Value;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
 

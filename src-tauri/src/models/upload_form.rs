@@ -4,7 +4,7 @@ use anyhow::Result;
 use biliup::bilibili;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::{debug, info};
+use tracing::debug;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UploadForm {
