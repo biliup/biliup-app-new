@@ -14,6 +14,11 @@
                     <el-option label="BDA2" value="bda2" />
                     <el-option label="WS" value="ws" />
                     <el-option label="QN" value="qn" />
+                    <el-option label="BLDSA" value="bldsa" />
+                    <el-option label="TX" value="tx" />
+                    <el-option label="TXA" value="txa" />
+                    <el-option label="BDA" value="bda" />
+                    <el-option label="ALIA" value="alia" />
                 </el-select>
                 <div class="form-tip">自动选择将根据网络环境自动选择最优线路</div>
             </el-form-item>

@@ -349,7 +349,12 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
             "bda2" => line::bda2(),
             "ws" => line::ws(),
             "qn" => line::qn(),
-            _ => unreachable!(),
+            "bldsa" => line::bldsa() ,
+            "tx" => line::tx(),
+            "txa" => line::txa(),
+            "bda" => line::bda(),
+            "alia" => line::alia(),
+            _ => line::Probe::probe(&client.client).await?,
         }
     } else {
         line::Probe::probe(&client.client).await?
