@@ -86,7 +86,7 @@
                     </div>
                 </div>
 
-                <div class="form-tip">留空表示不使用代理，修改代理设置需要重启应用后生效</div>
+                <div class="form-tip">修改代理设置需要重启应用后生效</div>
             </el-form-item>
 
             <!-- 并发数设置 -->

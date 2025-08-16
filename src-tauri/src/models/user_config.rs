@@ -160,9 +160,14 @@ impl ConfigRoot {
         auto_start: bool,
         auto_upload: bool,
     ) -> &Self {
+        info!(
+            "Updated global config: max_curr={}, auto_start={}, auto_upload={}",
+            max_curr, auto_start, auto_upload
+        );
         self.max_curr = max_curr;
         self.auto_start = auto_start;
         self.auto_upload = auto_upload;
+
         self
     }
 
