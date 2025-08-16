@@ -4,7 +4,7 @@
             <el-icon><list /></el-icon>
             上传队列
             <el-badge
-                :value="uploadQueue.length"
+                :value="uploadQueue.filter(task => task.status !== 'Completed').length"
                 :hidden="uploadQueue.length === 0"
                 class="queue-badge"
             />
@@ -44,6 +44,14 @@
                         class="queue-item"
                         :class="getTaskStatusClass(task.status)"
                     >
+                        <!-- 已完成任务分割线 -->
+                        <div 
+                            v-if="task.status === 'Completed' && isFirstCompletedTask(task, uploadQueue)"
+                            class="completed-divider"
+                        >
+                            <span>已完成任务</span>
+                        </div>
+                        
                         <div class="task-info">
                             <div class="task-avatar">
                                 <el-avatar
@@ -61,6 +69,9 @@
                                     }}</span>
                                     <span class="progress-text" v-if="task.status === 'Running'">
                                         {{ formatUploadProgress(task) }}%
+                                    </span>
+                                    <span class="completed-time" v-if="task.status === 'Completed' && task.finished_at">
+                                        {{ formatFinishedTime(task.finished_at) }}
                                     </span>
                                 </div>
                                 <div class="action-buttons">
@@ -138,7 +149,26 @@ import {
 const uploadStore = useUploadStore()
 
 // 计算属性
-const uploadQueue = computed(() => uploadStore.uploadQueue)
+const uploadQueue = computed(() => {
+    const queue = uploadStore.uploadQueue
+    
+    // 分离已完成和未完成的任务
+    const completedTasks = queue.filter(task => task.status === 'Completed')
+    const activeTasks = queue.filter(task => task.status !== 'Completed')
+    
+    // 对已完成的任务按完成时间排序（最新完成的在前）
+    const sortedCompletedTasks = completedTasks.sort((a, b) => {
+        // 如果有finished_at字段，按该字段排序
+        if (a.finished_at && b.finished_at) {
+            return new Date(b.finished_at).getTime() - new Date(a.finished_at).getTime()
+        }
+        // 如果没有finished_at，按任务ID或创建时间排序
+        return b.id.localeCompare(a.id)
+    })
+    
+    // 返回：活动任务在前，已完成任务在后
+    return [...activeTasks, ...sortedCompletedTasks]
+})
 
 // 上传队列相关方法
 const clearCompleted = async () => {
@@ -371,6 +401,45 @@ const formatUploadSpeed = (video: any): string => {
 
     return `${size.toFixed(unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
 }
+
+// 判断是否为第一个已完成的任务（用于显示分割线）
+const isFirstCompletedTask = (currentTask: any, taskList: any[]): boolean => {
+    if (currentTask.status !== 'Completed') return false
+    
+    const currentIndex = taskList.findIndex(task => task.id === currentTask.id)
+    if (currentIndex === 0) return true
+    
+    // 检查前一个任务是否不是已完成状态
+    const previousTask = taskList[currentIndex - 1]
+    return previousTask.status !== 'Completed'
+}
+
+// 格式化完成时间
+const formatFinishedTime = (timestamp: number | string): string => {
+    try {
+        const date = new Date(timestamp)
+        const now = new Date()
+        const diffMs = now.getTime() - date.getTime()
+        const diffMins = Math.floor(diffMs / (1000 * 60))
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+        
+        if (diffMins < 1) return '刚刚完成'
+        if (diffMins < 60) return `${diffMins}分钟前`
+        if (diffHours < 24) return `${diffHours}小时前`
+        if (diffDays < 7) return `${diffDays}天前`
+        
+        // 超过7天显示具体日期
+        return date.toLocaleDateString('zh-CN', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+    } catch {
+        return '未知时间'
+    }
+}
 </script>
 
 <style scoped>
@@ -590,5 +659,53 @@ const formatUploadSpeed = (video: any): string => {
     font-family: 'Courier New', monospace;
     line-height: 1.2;
     margin-top: 2px;
+}
+
+/* 已完成任务分割线 */
+.completed-divider {
+    display: flex;
+    align-items: center;
+    margin: 10px 0 5px 0;
+    font-size: 12px;
+    color: #909399;
+}
+
+.completed-divider::before,
+.completed-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: #e4e7ed;
+}
+
+.completed-divider::before {
+    margin-right: 10px;
+}
+
+.completed-divider::after {
+    margin-left: 10px;
+}
+
+.completed-divider span {
+    white-space: nowrap;
+    padding: 0 4px;
+    background: #fff;
+    font-weight: 500;
+}
+
+/* 已完成任务样式优化 */
+.task-completed {
+    opacity: 0.8;
+    background: #fafbfc;
+}
+
+.task-completed .task-name {
+    color: #909399;
+}
+
+.completed-time {
+    font-size: 11px;
+    color: #67c23a;
+    font-weight: 500;
 }
 </style>
