@@ -35,11 +35,11 @@
                         <el-icon><setting /></el-icon>
                     </el-button>
 
-                    <!-- 用户信息显示 - 显示所有登录用户数量 -->
-                    <div class="user-info">
-                        <el-icon><user /></el-icon>
-                        <span>{{ loginUsers.length }} 个用户已登录</span>
-                    </div>
+                    <!-- 用户列表下拉框 -->
+                    <UserList
+                        @show-login="showLoginDialog = true"
+                        @user-logout="handleLogoutUser"
+                    />
                 </div>
             </div>
         </el-header>
@@ -94,16 +94,6 @@
                                     "
                                     placement="top"
                                 >
-                                    <el-icon
-                                        class="logout-icon"
-                                        :class="{
-                                            disabled: isUserHasUploadTasks(userTemplate.user.uid)
-                                        }"
-                                        @click.stop="handleLogoutUser(userTemplate.user.uid)"
-                                        title="登出用户"
-                                    >
-                                        <close />
-                                    </el-icon>
                                 </el-tooltip>
                                 <el-icon
                                     class="config-icon"
@@ -794,8 +784,7 @@ import {
     User,
     Check,
     Edit,
-    Setting,
-    Close
+    Setting
 } from '@element-plus/icons-vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
@@ -807,6 +796,7 @@ import UserConfig from './UserConfig.vue'
 import GlobalConfigView from './GlobalConfig.vue'
 import NewTemplete from './NewTemplete.vue'
 import VideoList from './VideoList.vue'
+import UserList from './UserList.vue'
 
 const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
@@ -1090,7 +1080,9 @@ const initializeData = async () => {
             await userConfigStore.buildUserTemplates(loginUsers.value)
             await uploadStore.getUploadQueue()
             setInterval(() => {
-                uploadStore.getUploadQueue()
+                if (authStore.loginUsers.length > 0) {
+                    uploadStore.getUploadQueue()
+                }
                 for (const task of uploadStore.uploadQueue) {
                     if (task.status === 'Completed') {
                         const video = currentForm.value.videos.find(v => v.id === task.video?.id)
@@ -2092,17 +2084,11 @@ const isUserHasUploadTasks = (uid: number) => {
 const handleLogoutUser = async (uid: number) => {
     // 如果用户有上传任务，不允许登出
     if (isUserHasUploadTasks(uid)) {
+        ElMessage.success('用户有未完成的上传任务，无法登出')
         return
     }
 
     try {
-        // 添加确认提示框
-        await ElMessageBox.confirm('确定要退出该用户吗？退出后会删除所有本地数据。', '退出确认', {
-            confirmButtonText: '确认退出',
-            cancelButtonText: '取消',
-            type: 'warning'
-        })
-
         const success = await authStore.logoutUser(uid)
         if (success) {
             ElMessage.success('用户已登出')
@@ -2176,14 +2162,6 @@ const refreshAllData = async () => {
     display: flex;
     align-items: center;
     gap: 20px;
-}
-
-.user-info {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    color: #606266;
-    font-size: 14px;
 }
 
 .global-config-btn {
