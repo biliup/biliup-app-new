@@ -1321,32 +1321,16 @@ const selectTemplate = async (user: any, templateName: string) => {
         }
     }
 
-    // 检查是否有未保存的修改（但只在真正有已选择模板的情况下检查）
     if (hasUnsavedChanges.value && selectedUser.value && currentTemplateName.value) {
-        try {
-            await ElMessageBox.confirm('当前模板有未保存的修改，是否保存？', '确认切换模板', {
-                confirmButtonText: '保存并切换',
-                cancelButtonText: '不保存',
-                distinguishCancelAndClose: true,
-                type: 'warning'
-            })
-
-            // 用户选择保存
-            await saveTemplate()
-        } catch (action) {
-            if (action === 'cancel') {
-                // 用户选择不保存，继续切换
-            } else {
-                // 用户取消操作，不切换模板
-                return
-            }
-        }
+        // 用户选择保存
+        await saveTemplate()
+        ElMessage.success('已切换模板，旧模板自动保存')
     }
 
     // 立即清空基础模板
     baseTemplate.value = null
 
-    // 清理自动提交状态
+    // 清理自动提交状态s
     if (autoSubmitTimeout.value) {
         clearTimeout(autoSubmitTimeout.value)
         autoSubmitTimeout.value = null
