@@ -217,6 +217,9 @@
                     <div v-else class="upload-form-container">
                         <div class="form-header">
                             <div class="template-name-container">
+                                <h3 class="edit-bv-template-disaplay" v-if="currentTemplate?.aid">
+                                    编辑稿件：
+                                </h3>
                                 <h3
                                     v-if="!isEditingTemplateName"
                                     @click="startEditTemplateName"
@@ -2442,6 +2445,10 @@ const refreshAllData = async () => {
 .template-name-container {
     flex: 1;
     margin-right: 20px;
+}
+
+.edit-bv-template-disaplay {
+    display: inline-block;
 }
 
 .template-name-display {

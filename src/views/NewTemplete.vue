@@ -227,7 +227,7 @@ const createNewTemplate = async () => {
 
             const bvNumber = newTemplateForm.value.bvNumber.trim()
             const actionType = newTemplateForm.value.actionType
-            const templateName = newTemplateForm.value.name.trim() || `编辑_${bvNumber}`
+            const templateName = newTemplateForm.value.name.trim() || `${bvNumber}`
 
             const isEdit = actionType === 'edit'
             await createTemplateFromBV(targetUserUid, bvNumber, templateName, isEdit)
