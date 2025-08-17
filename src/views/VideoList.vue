@@ -6,6 +6,10 @@
                 <el-icon><upload-filled /></el-icon>
                 选择视频文件
             </el-button>
+            <el-button type="info" @click="showFolderWatchDialog = true" size="small">
+                <el-icon><folder-opened /></el-icon>
+                文件夹监控
+            </el-button>
             <el-button
                 type="success"
                 size="small"
@@ -149,13 +153,30 @@
                 </div>
             </div>
         </div>
+
+        <!-- 文件夹监控对话框 -->
+        <FloderWatch
+            v-model="showFolderWatchDialog"
+            :current-videos="updatedVideos"
+            @add-videos="handleAddVideos"
+            @submit-videos="handleSubmitVideos"
+        />
     </div>
 </template>
 
 <script setup lang="ts">
 import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
-import { CircleCheck, Loading, Cloudy, Edit, Delete, UploadFilled } from '@element-plus/icons-vue'
+import {
+    CircleCheck,
+    Loading,
+    Cloudy,
+    Edit,
+    Delete,
+    UploadFilled,
+    FolderOpened
+} from '@element-plus/icons-vue'
 import { useUploadStore } from '../stores/upload'
+import FloderWatch from './FloderWatch.vue'
 
 // Props
 interface Props {
@@ -176,6 +197,8 @@ const emit = defineEmits<{
     clearAllVideos: []
     removeFile: [id: string]
     createUpload: []
+    addVideosToForm: [videos: any[]]
+    submitTemplate: []
 }>()
 
 // 文件编辑状态
@@ -183,6 +206,9 @@ const editingFileId = ref<string | null>(null)
 const editingFileName = ref('')
 const videoNameInput = ref()
 const uploadStore = useUploadStore()
+
+// 文件夹监控对话框状态
+const showFolderWatchDialog = ref(false)
 
 // 用于触发时间更新的响应式变量
 const currentTime = ref(Date.now())
@@ -381,6 +407,18 @@ const getVideoWarningTooltip = (video: any): string => {
 // 处理删除文件
 const handleRemoveFile = (id: string) => {
     emit('removeFile', id)
+}
+
+// 处理文件夹监控添加视频
+const handleAddVideos = (newVideos: any[]) => {
+    // 发出添加视频事件到MainView，让它调用addVideoToCurrentForm处理每个视频
+    emit('addVideosToForm', newVideos)
+}
+
+// 处理文件夹监控提交稿件
+const handleSubmitVideos = () => {
+    // 发出提交稿件事件到MainView，让它调用submitTemplate
+    emit('submitTemplate')
 }
 </script>
 
@@ -632,7 +670,7 @@ const handleRemoveFile = (id: string) => {
 .video-buttons-group {
     display: flex;
     justify-content: center;
-    gap: 25px;
+    gap: 3px;
     margin-bottom: 5px;
 }
 

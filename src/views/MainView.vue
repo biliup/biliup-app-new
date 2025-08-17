@@ -456,6 +456,8 @@
                                             @clear-all-videos="clearAllVideos"
                                             @remove-file="removeUploadedFile"
                                             @create-upload="createUpload"
+                                            @add-videos-to-form="handleAddVideosToForm"
+                                            @submit-template="handleSubmitTemplate"
                                         />
                                     </div>
                                 </el-collapse-transition>
@@ -1874,6 +1876,22 @@ const createUpload = async () => {
     } finally {
         uploading.value = false
     }
+}
+
+// 处理文件夹监控添加视频事件
+const handleAddVideosToForm = async (newVideos: any[]) => {
+    for (const videoPath of newVideos) {
+        try {
+            await addVideoToCurrentForm(videoPath)
+        } catch (error) {
+            console.error(`添加视频失败: ${videoPath}`, error)
+        }
+    }
+}
+
+// 处理文件夹监控提交稿件事件
+const handleSubmitTemplate = async () => {
+    await submitTemplate(false)
 }
 
 // 自动开始待处理的任务
