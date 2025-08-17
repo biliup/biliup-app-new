@@ -24,6 +24,8 @@ pub struct VideoInfo {
     pub filename: String,
     pub desc: String,
     pub path: String,
+    #[serde(default)]
+    pub finished_at: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -21,7 +21,7 @@ interface TemplateConfig {
     dynamic: string // 粉丝动态
     subtitle: { open: number; lan: string }
     tag: string // 逗号分隔的标签
-    videos: Array<{ title: string; name: string; desc: string; path: string }>
+    videos: Array<{ title: string; name: string; desc: string; path: string; finished_at: number }>
     dtime?: number // 定时发布时间, 10位时间戳
     open_subtitle: boolean
     interactive: number

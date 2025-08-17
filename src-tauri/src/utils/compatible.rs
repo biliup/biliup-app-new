@@ -145,6 +145,7 @@ impl CompatibilityConverter {
                             filename: v.filename,
                             desc: v.desc,
                             path: String::new(), // 旧版配置没有path字段，留空
+                            finished_at: 0,      // 旧版配置没有finished_at字段，默认0
                         });
                     }
                     vids
