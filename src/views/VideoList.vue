@@ -245,13 +245,13 @@ const updatedVideos = computed(() => {
                 updatedVideo.totalSize = task.total_size || 0
                 updatedVideo.speed = task.speed || 0
                 updatedVideo.progress = task.progress || 0
-                updatedVideo.finished_at = task.finished_at || null
+                updatedVideo.finished_at = task.finished_at || 0
             } else {
                 updatedVideo.complete = false
                 updatedVideo.totalSize = 0
                 updatedVideo.speed = 0
                 updatedVideo.progress = 0
-                updatedVideo.finished_at = null
+                updatedVideo.finished_at = 0
             }
         }
 
