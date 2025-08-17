@@ -39,6 +39,8 @@
                     v-for="(video, index) in updateVideo(videos)"
                     :key="video.id"
                     class="uploaded-video-item"
+                    :class="getVideoWarningClass(video)"
+                    :title="getVideoWarningTooltip(video)"
                 >
                     <!-- 序号输入框 -->
                     <div class="video-order">
@@ -106,6 +108,14 @@
                                     上传中
                                 </span>
                                 <span v-else class="status-text pending">待上传</span>
+
+                                <!-- 完成时间显示 -->
+                                <span
+                                    class="completed-time"
+                                    v-if="video.complete && video.finished_at"
+                                >
+                                    {{ formatFinishedTime(video.finished_at) }}
+                                </span>
                             </div>
                         </div>
 
@@ -190,11 +200,13 @@ const updateVideo = (videos: any[]) => {
                 videos[i].totalSize = task.total_size || 0
                 videos[i].speed = task.speed || 0
                 videos[i].progress = task.progress || 0
+                videos[i].finished_at = task.finished_at || null
             } else {
                 videos[i].complete = false
                 videos[i].totalSize = 0
                 videos[i].speed = 0
                 videos[i].progress = 0
+                videos[i].finished_at = null
             }
         }
     }
@@ -268,6 +280,90 @@ const formatUploadSpeed = (video: any) => {
     } else {
         return `${(speed / 1024 / 1024).toFixed(1)} MB/s`
     }
+}
+
+// 格式化完成时间
+const formatFinishedTime = (timestamp: number | string): string => {
+    try {
+        const date = new Date(timestamp)
+        const now = new Date()
+        const diffMs = now.getTime() - date.getTime()
+        const diffMins = Math.floor(diffMs / (1000 * 60))
+        const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+
+        if (diffMins < 1) return '刚刚完成'
+        if (diffMins < 60) return `${diffMins}分钟前`
+        if (diffHours < 24) return `${diffHours}小时前`
+        if (diffDays < 7) return `${diffDays}天前`
+
+        // 超过7天显示具体日期
+        return date.toLocaleDateString('zh-CN', {
+            month: 'short',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        })
+    } catch {
+        return '未知时间'
+    }
+}
+
+// 检查视频是否超过8小时（需要警告）
+const isVideoExpiredSoon = (video: any): boolean => {
+    if (!video.complete || !video.finished_at) return false
+
+    try {
+        const finishedDate = new Date(video.finished_at)
+        const now = new Date()
+        const diffHours = Math.floor((now.getTime() - finishedDate.getTime()) / (1000 * 60 * 60))
+
+        return diffHours >= 8
+    } catch {
+        return false
+    }
+}
+
+// 获取视频警告样式类
+const getVideoWarningClass = (video: any): string => {
+    if (isVideoExpiredSoon(video)) {
+        try {
+            const finishedDate = new Date(video.finished_at)
+            const now = new Date()
+            const diffHours = (now.getTime() - finishedDate.getTime()) / (1000 * 60 * 60)
+
+            if (diffHours >= 8) {
+                return 'video-warning video-expired'
+            } else {
+                return 'video-warning'
+            }
+        } catch {
+            return 'video-warning'
+        }
+    }
+    return ''
+}
+
+// 获取视频警告提示文本
+const getVideoWarningTooltip = (video: any): string => {
+    if (isVideoExpiredSoon(video)) {
+        try {
+            const finishedDate = new Date(video.finished_at)
+            const now = new Date()
+            const diffHours = Math.floor(
+                (now.getTime() - finishedDate.getTime()) / (1000 * 60 * 60)
+            )
+
+            if (diffHours >= 10) {
+                return '此视频完成超过10小时，服务器可能已删除相关文件'
+            } else {
+                return `此视频完成已${diffHours}小时，服务器将在10小时后删除相关文件`
+            }
+        } catch {
+            return '视频完成时间较长，可能无法上传'
+        }
+    }
+    return ''
 }
 
 // 处理删除文件
@@ -537,5 +633,90 @@ const handleRemoveFile = (id: string) => {
 .drag-active-tip {
     color: #409eff;
     font-weight: 500;
+}
+
+/* 完成时间样式 */
+.completed-time {
+    font-size: 11px;
+    color: #67c23a;
+    font-weight: 500;
+    margin-left: 8px;
+}
+
+/* 警告视频样式 */
+.video-warning {
+    border: 2px solid #e6a23c;
+    border-radius: 6px;
+    background: linear-gradient(to right, rgba(230, 162, 60, 0.05), rgba(230, 162, 60, 0.02));
+    cursor: help;
+    position: relative;
+}
+
+.video-warning::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(to bottom, #e6a23c, #f39c12);
+    border-radius: 2px 0 0 2px;
+}
+
+.video-warning:hover {
+    border-color: #f39c12;
+    background: linear-gradient(to right, rgba(230, 162, 60, 0.1), rgba(230, 162, 60, 0.05));
+    box-shadow: 0 2px 8px rgba(230, 162, 60, 0.3);
+    transform: translateY(-1px);
+    transition: all 0.3s ease;
+}
+
+.video-warning .completed-time {
+    color: #e6a23c;
+    font-weight: 600;
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* 超过10小时的视频使用更强烈的警告颜色 */
+.video-warning.video-expired {
+    border-color: #f56c6c;
+    background: linear-gradient(to right, rgba(245, 108, 108, 0.05), rgba(245, 108, 108, 0.02));
+}
+
+.video-warning.video-expired::before {
+    background: linear-gradient(to bottom, #f56c6c, #e74c3c);
+}
+
+.video-warning.video-expired:hover {
+    border-color: #e74c3c;
+    background: linear-gradient(to right, rgba(245, 108, 108, 0.1), rgba(245, 108, 108, 0.05));
+    box-shadow: 0 2px 8px rgba(245, 108, 108, 0.3);
+}
+
+.video-warning.video-expired .completed-time {
+    color: #f56c6c;
+    animation: pulse-danger 1.5s infinite;
+}
+
+@keyframes pulse-danger {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
 }
 </style>
