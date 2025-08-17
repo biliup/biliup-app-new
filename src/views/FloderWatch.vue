@@ -15,7 +15,8 @@
                     <p>📁 <strong>文件夹监控功能：</strong></p>
                     <ul>
                         <li>选择监控文件夹，每分钟自动检测新增视频文件</li>
-                        <li>自动将大于1KB的视频文件添加到当前模板</li>
+                        <li>文件需连续3次检测大小无变化才会被添加（确保文件完整）</li>
+                        <li>自动将大于1KB且稳定的视频文件添加到当前模板</li>
                         <li>
                             连续{{ settings.maxEmptyChecks }}次检测无小文件（≤1KB）后自动提交稿件
                         </li>
@@ -79,7 +80,15 @@
                         <h4>最近检测结果：</h4>
                         <ul>
                             <li v-if="lastCheckResult.newFiles.length > 0">
-                                新增大文件：{{ lastCheckResult.newFiles.join(', ') }}
+                                已添加稳定文件：{{ lastCheckResult.stableFiles.join(', ') }}
+                            </li>
+                            <li
+                                v-if="
+                                    lastCheckResult.stableFiles.length === 0 &&
+                                    lastCheckResult.newFiles.length === 0
+                                "
+                            >
+                                本次检测无新增稳定文件
                             </li>
                             <li>小文件数量：{{ lastCheckResult.smallFilesCount }}</li>
                         </ul>
@@ -151,7 +160,11 @@ const addedFilesCount = ref(0)
 const lastCheckResult = ref<{
     newFiles: string[]
     smallFilesCount: number
+    stableFiles: string[]
 } | null>(null)
+
+// 文件大小跟踪：存储每个文件最近3次的大小记录
+const fileSizeHistory = ref<Map<string, number[]>>(new Map())
 
 // 定时器
 let monitorTimer: number | null = null
@@ -214,13 +227,41 @@ const getCurrentVideoTitles = (): string[] => {
     return props.currentVideos.map(video => video.title || '').filter(Boolean)
 }
 
+// 检查文件大小是否稳定（连续3次大小相同）
+const isFileSizeStable = (filename: string, currentSize: number): boolean => {
+    const history = fileSizeHistory.value.get(filename) || []
+
+    // 更新文件大小历史记录
+    history.push(currentSize)
+
+    // 只保留最近3次记录
+    if (history.length > 3) {
+        history.shift()
+    }
+
+    fileSizeHistory.value.set(filename, history)
+
+    // 检查是否有连续3次相同的大小记录
+    if (history.length >= 3) {
+        const allSame = history.every(size => size === history[0])
+        return allSame
+    }
+
+    return false
+}
+
 // 执行一次文件夹检测
-const performCheck = async (): Promise<{ newFiles: string[]; smallFilesCount: number }> => {
+const performCheck = async (): Promise<{
+    newFiles: string[]
+    smallFilesCount: number
+    stableFiles: string[]
+}> => {
     try {
         const entries = await readDir(settings.value.folderPath)
         const currentVideoNames = getCurrentVideoNames()
         const currentVideoTitles = getCurrentVideoTitles()
         const newFiles: string[] = []
+        const stableFiles: string[] = []
         let smallFilesCount = 0
 
         // 按文件名排序
@@ -248,11 +289,19 @@ const performCheck = async (): Promise<{ newFiles: string[]; smallFilesCount: nu
                         smallFilesCount++
                     } else {
                         // 检查文件是否已在当前视频列表中
-                        if (
-                            !currentVideoNames.includes(filePath) &&
-                            !currentVideoTitles.includes(entry.name.replace(/\.[^/.]+$/, ''))
-                        ) {
-                            newFiles.push(filePath)
+                        const fileAlreadyExists =
+                            currentVideoNames.includes(entry.name) ||
+                            currentVideoTitles.includes(entry.name.replace(/\.[^/.]+$/, ''))
+
+                        if (!fileAlreadyExists) {
+                            // 检查文件大小是否稳定
+                            const isStable = isFileSizeStable(entry.name, fileSize)
+
+                            if (isStable) {
+                                // 文件大小稳定，可以添加
+                                newFiles.push(filePath)
+                                stableFiles.push(entry.name)
+                            }
                         }
                     }
                 }
@@ -263,7 +312,7 @@ const performCheck = async (): Promise<{ newFiles: string[]; smallFilesCount: nu
             }
         }
 
-        return { newFiles, smallFilesCount }
+        return { newFiles, smallFilesCount, stableFiles }
     } catch (error) {
         console.error('检测文件夹失败:', error)
         throw error
@@ -332,6 +381,9 @@ const startMonitoring = async () => {
     monitoring.value = true
     currentCheckRound.value = 0
     addedFilesCount.value = 0
+
+    // 清空文件大小历史记录
+    fileSizeHistory.value.clear()
 
     // 立即执行第一次检测
     await performMonitoringCycle()
