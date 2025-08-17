@@ -18,7 +18,9 @@
                         <li>文件需连续3次检测大小无变化才会被添加（确保文件完整）</li>
                         <li>自动将大于1KB且稳定的视频文件添加到当前模板</li>
                         <li>
-                            连续{{ settings.maxEmptyChecks }}次检测无小文件（≤1KB）后自动提交稿件
+                            连续{{
+                                settings.maxEmptyChecks
+                            }}次检测无小文件（≤1KB），且无大小持续改变的文件后自动提交稿件
                         </li>
                     </ul>
                 </div>
@@ -90,7 +92,6 @@
                             >
                                 本次检测无新增稳定文件
                             </li>
-                            <li>小文件数量：{{ lastCheckResult.smallFilesCount }}</li>
                         </ul>
                     </div>
                 </div>
@@ -159,7 +160,7 @@ const nextCheckTime = ref('')
 const addedFilesCount = ref(0)
 const lastCheckResult = ref<{
     newFiles: string[]
-    smallFilesCount: number
+    resetCounter: boolean
     stableFiles: string[]
 } | null>(null)
 
@@ -253,7 +254,7 @@ const isFileSizeStable = (filename: string, currentSize: number): boolean => {
 // 执行一次文件夹检测
 const performCheck = async (): Promise<{
     newFiles: string[]
-    smallFilesCount: number
+    resetCounter: boolean
     stableFiles: string[]
 }> => {
     try {
@@ -262,7 +263,7 @@ const performCheck = async (): Promise<{
         const currentVideoTitles = getCurrentVideoTitles()
         const newFiles: string[] = []
         const stableFiles: string[] = []
-        let smallFilesCount = 0
+        let resetCounter = false
 
         // 按文件名排序
         const sortedEntries = entries
@@ -286,7 +287,7 @@ const performCheck = async (): Promise<{
                 if (isVideoFile) {
                     // 检查文件大小
                     if (fileSize <= 1024) {
-                        smallFilesCount++
+                        resetCounter = true
                     } else {
                         // 检查文件是否已在当前视频列表中
                         const fileAlreadyExists =
@@ -301,6 +302,8 @@ const performCheck = async (): Promise<{
                                 // 文件大小稳定，可以添加
                                 newFiles.push(filePath)
                                 stableFiles.push(entry.name)
+                            } else {
+                                resetCounter = true
                             }
                         }
                     }
@@ -312,7 +315,7 @@ const performCheck = async (): Promise<{
             }
         }
 
-        return { newFiles, smallFilesCount, stableFiles }
+        return { newFiles, resetCounter, stableFiles }
     } catch (error) {
         console.error('检测文件夹失败:', error)
         throw error
@@ -345,12 +348,9 @@ const performMonitoringCycle = async () => {
             await addNewFiles(result.newFiles)
         }
 
-        // 检查是否有小文件
-        if (result.smallFilesCount > 0) {
-            // 有小文件，重置计数器
+        if (result.resetCounter) {
             currentCheckRound.value = 0
         } else {
-            // 无小文件，增加计数器
             currentCheckRound.value++
         }
 
