@@ -38,95 +38,104 @@
                 </div>
                 <div class="queue-content">
                     <div v-if="uploadQueue.length === 0" class="empty-queue">暂无上传任务</div>
-                    <div
-                        v-for="task in uploadQueue"
-                        :key="task.id"
-                        class="queue-item"
-                        :class="getTaskStatusClass(task.status)"
-                    >
+                    <template v-for="task in uploadQueue" :key="task.id">
                         <!-- 已完成任务分割线 -->
-                        <div 
-                            v-if="task.status === 'Completed' && isFirstCompletedTask(task, uploadQueue)"
+                        <div
+                            v-if="
+                                task.status === 'Completed' &&
+                                isFirstCompletedTask(task, uploadQueue)
+                            "
                             class="completed-divider"
                         >
                             <span>已完成任务</span>
                         </div>
-                        
-                        <div class="task-info">
-                            <div class="task-avatar">
-                                <el-avatar
-                                    :src="`data:image/jpeg;base64,${task.user.avatar}`"
-                                    :size="24"
-                                ></el-avatar>
-                            </div>
-                            <div class="task-name">
-                                {{ getTaskDisplayName(task) }}
-                            </div>
-                            <div class="task-status">
-                                <div class="status-info">
-                                    <span class="status-text">{{
-                                        getStatusText(task.status)
-                                    }}</span>
-                                    <span class="progress-text" v-if="task.status === 'Running'">
-                                        {{ formatUploadProgress(task) }}%
-                                    </span>
-                                    <span class="completed-time" v-if="task.status === 'Completed' && task.finished_at">
-                                        {{ formatFinishedTime(task.finished_at) }}
-                                    </span>
-                                </div>
-                                <div class="action-buttons">
-                                    <el-button
-                                        link
-                                        size="small"
-                                        class="start-button"
-                                        @click="startUpload(task.id)"
-                                        v-if="canStart(task.status)"
-                                    >
-                                        <el-icon><video-play /></el-icon>
-                                    </el-button>
-                                    <el-button
-                                        link
-                                        size="small"
-                                        class="pause-button"
-                                        @click="pauseUpload(task.id)"
-                                        v-if="canPause(task.status)"
-                                    >
-                                        <el-icon><video-pause /></el-icon>
-                                    </el-button>
-                                    <el-button
-                                        link
-                                        size="small"
-                                        class="cancel-button"
-                                        @click="cancelUpload(task.id)"
-                                        v-if="canCancel(task.status)"
-                                    >
-                                        <el-icon><close /></el-icon>
-                                    </el-button>
-                                    <el-button
-                                        link
-                                        size="small"
-                                        class="retry-button"
-                                        @click="retryUpload(task.id)"
-                                        v-if="canRetry(task.status)"
-                                    >
-                                        <el-icon><refresh-right /></el-icon>
-                                    </el-button>
-                                </div>
-                            </div>
-                        </div>
-                        <el-progress
-                            v-if="task.status === 'Running'"
-                            :percentage="task.progress"
-                            :show-text="false"
-                            size="small"
-                        />
                         <div
-                            class="upload-speed"
-                            v-if="task.status === 'Running' && task.speed > 0"
+                            class="queue-item"
+                            :class="[getTaskStatusClass(task.status), getTaskWarningClass(task)]"
+                            :title="getTaskWarningTooltip(task)"
                         >
-                            {{ formatUploadSpeed(task) }}
+                            <div class="task-info">
+                                <div class="task-avatar">
+                                    <el-avatar
+                                        :src="`data:image/jpeg;base64,${task.user.avatar}`"
+                                        :size="24"
+                                    ></el-avatar>
+                                </div>
+                                <div class="task-name">
+                                    {{ getTaskDisplayName(task) }}
+                                </div>
+                                <div class="task-status">
+                                    <div class="status-info">
+                                        <span class="status-text">{{
+                                            getStatusText(task.status)
+                                        }}</span>
+                                        <span
+                                            class="progress-text"
+                                            v-if="task.status === 'Running'"
+                                        >
+                                            {{ formatUploadProgress(task) }}%
+                                        </span>
+                                        <span
+                                            class="completed-time"
+                                            v-if="task.status === 'Completed' && task.finished_at"
+                                        >
+                                            {{ formatFinishedTime(task.finished_at) }}
+                                        </span>
+                                    </div>
+                                    <div class="action-buttons">
+                                        <el-button
+                                            link
+                                            size="small"
+                                            class="start-button"
+                                            @click="startUpload(task.id)"
+                                            v-if="canStart(task.status)"
+                                        >
+                                            <el-icon><video-play /></el-icon>
+                                        </el-button>
+                                        <el-button
+                                            link
+                                            size="small"
+                                            class="pause-button"
+                                            @click="pauseUpload(task.id)"
+                                            v-if="canPause(task.status)"
+                                        >
+                                            <el-icon><video-pause /></el-icon>
+                                        </el-button>
+                                        <el-button
+                                            link
+                                            size="small"
+                                            class="cancel-button"
+                                            @click="cancelUpload(task.id)"
+                                            v-if="canCancel(task.status)"
+                                        >
+                                            <el-icon><close /></el-icon>
+                                        </el-button>
+                                        <el-button
+                                            link
+                                            size="small"
+                                            class="retry-button"
+                                            @click="retryUpload(task.id)"
+                                            v-if="canRetry(task.status)"
+                                        >
+                                            <el-icon><refresh-right /></el-icon>
+                                        </el-button>
+                                    </div>
+                                </div>
+                            </div>
+                            <el-progress
+                                v-if="task.status === 'Running'"
+                                :percentage="task.progress"
+                                :show-text="false"
+                                size="small"
+                            />
+                            <div
+                                class="upload-speed"
+                                v-if="task.status === 'Running' && task.speed > 0"
+                            >
+                                {{ formatUploadSpeed(task) }}
+                            </div>
                         </div>
-                    </div>
+                    </template>
                 </div>
             </el-dropdown-menu>
         </template>
@@ -151,11 +160,11 @@ const uploadStore = useUploadStore()
 // 计算属性
 const uploadQueue = computed(() => {
     const queue = uploadStore.uploadQueue
-    
+
     // 分离已完成和未完成的任务
     const completedTasks = queue.filter(task => task.status === 'Completed')
     const activeTasks = queue.filter(task => task.status !== 'Completed')
-    
+
     // 对已完成的任务按完成时间排序（最新完成的在前）
     const sortedCompletedTasks = completedTasks.sort((a, b) => {
         // 如果有finished_at字段，按该字段排序
@@ -165,7 +174,7 @@ const uploadQueue = computed(() => {
         // 如果没有finished_at，按任务ID或创建时间排序
         return b.id.localeCompare(a.id)
     })
-    
+
     // 返回：活动任务在前，已完成任务在后
     return [...activeTasks, ...sortedCompletedTasks]
 })
@@ -405,10 +414,10 @@ const formatUploadSpeed = (video: any): string => {
 // 判断是否为第一个已完成的任务（用于显示分割线）
 const isFirstCompletedTask = (currentTask: any, taskList: any[]): boolean => {
     if (currentTask.status !== 'Completed') return false
-    
+
     const currentIndex = taskList.findIndex(task => task.id === currentTask.id)
     if (currentIndex === 0) return true
-    
+
     // 检查前一个任务是否不是已完成状态
     const previousTask = taskList[currentIndex - 1]
     return previousTask.status !== 'Completed'
@@ -423,12 +432,12 @@ const formatFinishedTime = (timestamp: number | string): string => {
         const diffMins = Math.floor(diffMs / (1000 * 60))
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-        
+
         if (diffMins < 1) return '刚刚完成'
         if (diffMins < 60) return `${diffMins}分钟前`
         if (diffHours < 24) return `${diffHours}小时前`
         if (diffDays < 7) return `${diffDays}天前`
-        
+
         // 超过7天显示具体日期
         return date.toLocaleDateString('zh-CN', {
             month: 'short',
@@ -439,6 +448,63 @@ const formatFinishedTime = (timestamp: number | string): string => {
     } catch {
         return '未知时间'
     }
+}
+
+// 检查任务是否超过8小时（需要警告）
+const isTaskExpiredSoon = (task: any): boolean => {
+    if (task.status !== 'Completed' || !task.finished_at) return false
+
+    try {
+        const finishedDate = new Date(task.finished_at)
+        const now = new Date()
+        const diffHours = (now.getTime() - finishedDate.getTime()) / (1000 * 60 * 60)
+
+        return diffHours >= 8
+    } catch {
+        return false
+    }
+}
+
+// 获取任务警告样式类
+const getTaskWarningClass = (task: any): string => {
+    if (isTaskExpiredSoon(task)) {
+        try {
+            const finishedDate = new Date(task.finished_at)
+            const now = new Date()
+            const diffHours = (now.getTime() - finishedDate.getTime()) / (1000 * 60 * 60)
+
+            if (diffHours >= 8) {
+                return 'task-warning task-expired'
+            } else {
+                return 'task-warning'
+            }
+        } catch {
+            return 'task-warning'
+        }
+    }
+    return ''
+}
+
+// 获取任务警告提示文本
+const getTaskWarningTooltip = (task: any): string => {
+    if (isTaskExpiredSoon(task)) {
+        try {
+            const finishedDate = new Date(task.finished_at)
+            const now = new Date()
+            const diffHours = Math.floor(
+                (now.getTime() - finishedDate.getTime()) / (1000 * 60 * 60)
+            )
+
+            if (diffHours >= 10) {
+                return '此任务完成超过10小时，服务器可能已删除相关文件'
+            } else {
+                return `此任务完成已${diffHours}小时，服务器将在10小时后删除相关文件`
+            }
+        } catch {
+            return '任务完成时间较长，可能无法上传'
+        }
+    }
+    return ''
 }
 </script>
 
@@ -707,5 +773,82 @@ const formatFinishedTime = (timestamp: number | string): string => {
     font-size: 11px;
     color: #67c23a;
     font-weight: 500;
+}
+
+/* 警告任务样式 */
+.task-warning {
+    border: 2px solid #e6a23c;
+    border-radius: 6px;
+    background: linear-gradient(to right, rgba(230, 162, 60, 0.05), rgba(230, 162, 60, 0.02));
+    cursor: help;
+    position: relative;
+}
+
+.task-warning::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background: linear-gradient(to bottom, #e6a23c, #f39c12);
+    border-radius: 2px 0 0 2px;
+}
+
+.task-warning:hover {
+    border-color: #f39c12;
+    background: linear-gradient(to right, rgba(230, 162, 60, 0.1), rgba(230, 162, 60, 0.05));
+    box-shadow: 0 2px 8px rgba(230, 162, 60, 0.3);
+    transform: translateY(-1px);
+    transition: all 0.3s ease;
+}
+
+.task-warning .completed-time {
+    color: #e6a23c;
+    font-weight: 600;
+    animation: pulse-warning 2s infinite;
+}
+
+@keyframes pulse-warning {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* 超过10小时的任务使用更强烈的警告颜色 */
+.task-warning.task-expired {
+    border-color: #f56c6c;
+    background: linear-gradient(to right, rgba(245, 108, 108, 0.05), rgba(245, 108, 108, 0.02));
+}
+
+.task-warning.task-expired::before {
+    background: linear-gradient(to bottom, #f56c6c, #e74c3c);
+}
+
+.task-warning.task-expired:hover {
+    border-color: #e74c3c;
+    background: linear-gradient(to right, rgba(245, 108, 108, 0.1), rgba(245, 108, 108, 0.05));
+    box-shadow: 0 2px 8px rgba(245, 108, 108, 0.3);
+}
+
+.task-warning.task-expired .completed-time {
+    color: #f56c6c;
+    animation: pulse-danger 1.5s infinite;
+}
+
+@keyframes pulse-danger {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(1.05);
+    }
 }
 </style>
