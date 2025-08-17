@@ -1090,12 +1090,13 @@ const initializeData = async () => {
                             video.filename = task.video.filename
                             video.path = task.video.path
                             video.complete = true
+                            video.finished_at = task.finished_at
                             saveTemplate()
                             userConfigStore.saveConfig()
                         }
                     }
                 }
-            }, 1000) // 每5秒更新一次上传队列
+            }, 1000) // 每秒更新一次上传队列
         }
     } catch (error) {
         console.error('初始化数据失败: ', error)

@@ -36,7 +36,7 @@
         <div v-if="videos && videos.length > 0" class="uploaded-videos-section">
             <div class="uploaded-videos-list">
                 <div
-                    v-for="(video, index) in updateVideo(videos)"
+                    v-for="(video, index) in updatedVideos"
                     :key="video.id"
                     class="uploaded-video-item"
                     :class="getVideoWarningClass(video)"
@@ -47,7 +47,7 @@
                         <el-input-number
                             :model-value="index + 1"
                             :min="1"
-                            :max="videos.length"
+                            :max="updatedVideos.length"
                             size="small"
                             controls-position="right"
                             :step="-1"
@@ -108,20 +108,12 @@
                                     上传中
                                 </span>
                                 <span v-else class="status-text pending">待上传</span>
-
-                                <!-- 完成时间显示 -->
-                                <span
-                                    class="completed-time"
-                                    v-if="video.complete && video.finished_at"
-                                >
-                                    {{ formatFinishedTime(video.finished_at) }}
-                                </span>
                             </div>
                         </div>
 
                         <!-- 进度条区域 -->
                         <div class="progress-section">
-                            <div class="progress-bar-container">
+                            <div class="progress-bar-container" v-if="!video.complete">
                                 <el-progress
                                     :percentage="video.progress"
                                     :show-text="false"
@@ -137,6 +129,10 @@
                                 {{ formatUploadSpeed(video) }}
                             </div>
                         </div>
+                        <!-- 完成时间显示 -->
+                        <span class="completed-time" v-if="video.complete">
+                            {{ formatFinishedTime(video.finished_at) }}
+                        </span>
                     </div>
 
                     <!-- 文件操作按钮 -->
@@ -157,7 +153,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick } from 'vue'
+import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
 import { CircleCheck, Loading, Cloudy, Edit, Delete, UploadFilled } from '@element-plus/icons-vue'
 import { useUploadStore } from '../stores/upload'
 
@@ -188,30 +184,52 @@ const editingFileName = ref('')
 const videoNameInput = ref()
 const uploadStore = useUploadStore()
 
-// 更新视频数据
-const updateVideo = (videos: any[]) => {
-    for (let i = 0; i < videos.length; i++) {
-        if (videos[i].id == videos[i].filename || !videos[i].path) {
-            videos[i].complete = true
+// 用于触发时间更新的响应式变量
+const currentTime = ref(Date.now())
+let timeUpdateTimer: number | null = null
+
+// 定时更新当前时间，用于相对时间的实时更新
+onMounted(() => {
+    timeUpdateTimer = setInterval(() => {
+        currentTime.value = Date.now()
+    }, 60000) // 每分钟更新一次
+})
+
+onUnmounted(() => {
+    if (timeUpdateTimer) {
+        clearInterval(timeUpdateTimer)
+    }
+})
+
+// 实时更新的视频数据计算属性
+const updatedVideos = computed(() => {
+    if (!props.videos || props.videos.length === 0) return []
+
+    return props.videos.map(video => {
+        const updatedVideo = { ...video }
+
+        if (updatedVideo.id == updatedVideo.filename || !updatedVideo.path) {
+            updatedVideo.complete = true
         } else {
-            const task = uploadStore.getUploadTask(videos[i].id)
+            const task = uploadStore.getUploadTask(updatedVideo.id)
             if (task) {
-                videos[i].complete = task.status === 'Completed'
-                videos[i].totalSize = task.total_size || 0
-                videos[i].speed = task.speed || 0
-                videos[i].progress = task.progress || 0
-                videos[i].finished_at = task.finished_at || null
+                updatedVideo.complete = task.status === 'Completed'
+                updatedVideo.totalSize = task.total_size || 0
+                updatedVideo.speed = task.speed || 0
+                updatedVideo.progress = task.progress || 0
+                updatedVideo.finished_at = task.finished_at || null
             } else {
-                videos[i].complete = false
-                videos[i].totalSize = 0
-                videos[i].speed = 0
-                videos[i].progress = 0
-                videos[i].finished_at = null
+                updatedVideo.complete = false
+                updatedVideo.totalSize = 0
+                updatedVideo.speed = 0
+                updatedVideo.progress = 0
+                updatedVideo.finished_at = null
             }
         }
-    }
-    return videos
-}
+
+        return updatedVideo
+    })
+})
 
 // 重新排序视频
 const handleReorderVideo = (currentIndex: number, newIndex: number) => {
@@ -286,7 +304,7 @@ const formatUploadSpeed = (video: any) => {
 const formatFinishedTime = (timestamp: number | string): string => {
     try {
         const date = new Date(timestamp)
-        const now = new Date()
+        const now = new Date(currentTime.value) // 使用响应式的当前时间
         const diffMs = now.getTime() - date.getTime()
         const diffMins = Math.floor(diffMs / (1000 * 60))
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
@@ -297,13 +315,7 @@ const formatFinishedTime = (timestamp: number | string): string => {
         if (diffHours < 24) return `${diffHours}小时前`
         if (diffDays < 7) return `${diffDays}天前`
 
-        // 超过7天显示具体日期
-        return date.toLocaleDateString('zh-CN', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        })
+        return ''
     } catch {
         return '未知时间'
     }
@@ -315,7 +327,7 @@ const isVideoExpiredSoon = (video: any): boolean => {
 
     try {
         const finishedDate = new Date(video.finished_at)
-        const now = new Date()
+        const now = new Date(currentTime.value) // 使用响应式的当前时间
         const diffHours = Math.floor((now.getTime() - finishedDate.getTime()) / (1000 * 60 * 60))
 
         return diffHours >= 8
@@ -329,7 +341,7 @@ const getVideoWarningClass = (video: any): string => {
     if (isVideoExpiredSoon(video)) {
         try {
             const finishedDate = new Date(video.finished_at)
-            const now = new Date()
+            const now = new Date(currentTime.value) // 使用响应式的当前时间
             const diffHours = (now.getTime() - finishedDate.getTime()) / (1000 * 60 * 60)
 
             if (diffHours >= 8) {
@@ -349,7 +361,7 @@ const getVideoWarningTooltip = (video: any): string => {
     if (isVideoExpiredSoon(video)) {
         try {
             const finishedDate = new Date(video.finished_at)
-            const now = new Date()
+            const now = new Date(currentTime.value) // 使用响应式的当前时间
             const diffHours = Math.floor(
                 (now.getTime() - finishedDate.getTime()) / (1000 * 60 * 60)
             )
@@ -637,7 +649,7 @@ const handleRemoveFile = (id: string) => {
 
 /* 完成时间样式 */
 .completed-time {
-    font-size: 11px;
+    font-size: 10px;
     color: #67c23a;
     font-weight: 500;
     margin-left: 8px;
