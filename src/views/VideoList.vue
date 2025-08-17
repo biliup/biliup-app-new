@@ -231,8 +231,10 @@ onUnmounted(() => {
 const updatedVideos = computed(() => {
     if (!props.videos || props.videos.length === 0) return []
 
-    return props.videos.map(video => {
+    let hasChanges = false
+    const updatedList = props.videos.map(video => {
         const updatedVideo = { ...video }
+        const originalVideo = { ...video }
 
         if (updatedVideo.id == updatedVideo.filename || !updatedVideo.path) {
             updatedVideo.complete = true
@@ -253,8 +255,29 @@ const updatedVideos = computed(() => {
             }
         }
 
+        // 检查是否有变化
+        if (
+            originalVideo.complete !== updatedVideo.complete ||
+            originalVideo.totalSize !== updatedVideo.totalSize ||
+            originalVideo.speed !== updatedVideo.speed ||
+            originalVideo.progress !== updatedVideo.progress ||
+            originalVideo.finished_at !== updatedVideo.finished_at
+        ) {
+            hasChanges = true
+        }
+
         return updatedVideo
     })
+
+    // 如果有变化，同步更新回 props.videos
+    if (hasChanges) {
+        // 使用 nextTick 确保在下一个事件循环中更新，避免无限循环
+        nextTick(() => {
+            emit('update:videos', updatedList)
+        })
+    }
+
+    return updatedList
 })
 
 // 重新排序视频
