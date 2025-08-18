@@ -1,9 +1,17 @@
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::{
     fs,
     path::{Path, PathBuf},
 };
-use tracing::info;
+use tracing::{error, info};
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct FileEntry {
+    pub name: String,
+    pub path: String,
+    pub is_directory: bool,
+}
 
 /// 获取文件大小
 pub fn get_file_size(path: &Path) -> Result<u64> {
@@ -11,49 +19,106 @@ pub fn get_file_size(path: &Path) -> Result<u64> {
     Ok(metadata.len())
 }
 
-// /// 获取文件扩展名
-// pub fn get_file_extension(path: &Path) -> Option<String> {
-//     path.extension()
-//         .and_then(|ext| ext.to_str())
-//         .map(|ext| ext.to_lowercase())
-// }
+/// 递归读取目录，返回所有文件（可选择是否包含子目录）
+pub fn read_dir_recursive(
+    dir_path: &Path,
+    include_subdirs: bool,
+    max_depth: Option<u32>,
+) -> Result<Vec<FileEntry>> {
+    let mut result = Vec::new();
+    read_dir_recursive_internal(
+        dir_path,
+        include_subdirs,
+        max_depth.unwrap_or(20),
+        0,
+        &mut result,
+    )?;
+    Ok(result)
+}
 
-// /// 检查是否为视频文件
-// pub fn is_video_file(path: &Path) -> bool {
-//     if let Some(ext) = get_file_extension(path) {
-//         matches!(
-//             ext.as_str(),
-//             "mp4" | "avi" | "mov" | "mkv" | "flv" | "wmv" | "webm" | "m4v"
-//         )
-//     } else {
-//         false
-//     }
-// }
+fn read_dir_recursive_internal(
+    dir_path: &Path,
+    include_subdirs: bool,
+    max_depth: u32,
+    current_depth: u32,
+    result: &mut Vec<FileEntry>,
+) -> Result<()> {
+    // 防止递归深度过深
+    if current_depth > max_depth {
+        return Ok(());
+    }
 
-// /// 获取文件名（不含扩展名）
-// pub fn get_file_stem(path: &Path) -> Option<String> {
-//     path.file_stem()
-//         .and_then(|stem| stem.to_str())
-//         .map(|stem| stem.to_string())
-// }
+    // 检查目录是否存在和可读
+    if !dir_path.exists() || !dir_path.is_dir() {
+        return Err(anyhow::anyhow!(
+            "Directory does not exist or is not readable: {:?}",
+            dir_path
+        ));
+    }
 
-// /// 格式化文件大小
-// pub fn format_file_size(size: u64) -> String {
-//     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
-//     let mut size = size as f64;
-//     let mut unit_index = 0;
+    let entries = match fs::read_dir(dir_path) {
+        Ok(entries) => entries,
+        Err(e) => {
+            // 记录警告但继续处理其他目录
+            error!("Warning: Failed to read directory {:?}: {}", dir_path, e);
+            return Ok(());
+        }
+    };
 
-//     while size >= 1024.0 && unit_index < UNITS.len() - 1 {
-//         size /= 1024.0;
-//         unit_index += 1;
-//     }
+    for entry in entries {
+        let entry = match entry {
+            Ok(entry) => entry,
+            Err(e) => {
+                error!("Warning: Failed to read directory entry: {}", e);
+                continue;
+            }
+        };
 
-//     if unit_index == 0 {
-//         format!("{:.0} {}", size, UNITS[unit_index])
-//     } else {
-//         format!("{:.2} {}", size, UNITS[unit_index])
-//     }
-// }
+        let path = entry.path();
+        let file_name = match entry.file_name().to_str() {
+            Some(name) => name.to_string(),
+            None => continue, // 跳过无法转换为字符串的文件名
+        };
+
+        // 跳过隐藏文件和系统文件夹
+        if file_name.starts_with('.')
+            || file_name.to_lowercase().contains("system")
+            || file_name.to_lowercase().contains("$recycle")
+            || file_name.to_lowercase().contains("windows")
+        {
+            continue;
+        }
+
+        let path_str = match path.to_str() {
+            Some(path_str) => path_str.to_string(),
+            None => continue,
+        };
+
+        if path.is_dir() {
+            if include_subdirs {
+                // 递归处理子目录
+                if let Err(e) = read_dir_recursive_internal(
+                    &path,
+                    include_subdirs,
+                    max_depth,
+                    current_depth + 1,
+                    result,
+                ) {
+                    error!("Warning: Failed to read subdirectory {:?}: {}", path, e);
+                }
+            }
+        } else {
+            // 添加文件到结果中
+            result.push(FileEntry {
+                name: file_name,
+                path: path_str,
+                is_directory: false,
+            });
+        }
+    }
+
+    Ok(())
+}
 
 /// 获取应用配置目录路径
 pub fn get_config_dir() -> Result<PathBuf> {

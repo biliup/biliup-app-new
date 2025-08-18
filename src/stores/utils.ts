@@ -18,6 +18,36 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
+    const getFileSize = async (filePath: string): Promise<number> => {
+        try {
+            const size = await invoke<number>('get_file_size', { filePath })
+            return size
+        } catch (error) {
+            console.error('获取文件大小失败:', error)
+            throw error
+        }
+    }
+
+    const readDirRecursive = async (
+        dirPath: string,
+        includeSubdirs: boolean,
+        maxDepth?: number
+    ): Promise<Array<{ name: string; path: string; is_directory: boolean }>> => {
+        try {
+            const files = await invoke<
+                Array<{ name: string; path: string; is_directory: boolean }>
+            >('read_dir_recursive', {
+                dirPath,
+                includeSubdirs,
+                maxDepth: maxDepth || 20
+            })
+            return files
+        } catch (error) {
+            console.error('递归读取目录失败:', error)
+            throw error
+        }
+    }
+
     const downloadCover = async (uid: number, url: string) => {
         if (!url) {
             return undefined
@@ -140,6 +170,8 @@ export const useUtilsStore = defineStore('template', () => {
         topiclist: computed(() => topiclist.value),
         seasonlist: computed(() => seasonlist.value),
         getCurrentVersion,
+        getFileSize,
+        readDirRecursive,
         uploadCover,
         downloadCover,
         initTypeList,

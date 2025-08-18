@@ -608,13 +608,22 @@
                                                 type="datetime"
                                                 placeholder="选择发布时间"
                                                 format="YYYY-MM-DD HH:mm:ss"
-                                                :disabled-date="(date: Date) => {
-                                                    const now = new Date();
-                                                    const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
-                                                    const fifteenDaysLater = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+                                                :disabled-date="
+                                                    (date: Date) => {
+                                                        const now = new Date()
+                                                        const twoHoursLater = new Date(
+                                                            now.getTime() + 2 * 60 * 60 * 1000
+                                                        )
+                                                        const fifteenDaysLater = new Date(
+                                                            now.getTime() + 15 * 24 * 60 * 60 * 1000
+                                                        )
 
-                                                    return date < twoHoursLater || date > fifteenDaysLater;
-                                                }"
+                                                        return (
+                                                            date < twoHoursLater ||
+                                                            date > fifteenDaysLater
+                                                        )
+                                                    }
+                                                "
                                             />
                                         </el-form-item>
 

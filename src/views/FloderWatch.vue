@@ -53,9 +53,7 @@
                             controls-position="right"
                             style="width: 200px"
                         />
-                        <span class="setting-description">
-                            连续检测此次数后自动提交稿件
-                        </span>
+                        <span class="setting-description"> 连续检测此次数后自动提交稿件 </span>
                     </el-form-item>
 
                     <el-form-item label="检测间隔时间：">
@@ -69,6 +67,15 @@
                         />
                         <span class="setting-description">
                             检测间隔时间（秒），范围：5秒-3600秒（1小时）
+                        </span>
+                    </el-form-item>
+
+                    <el-form-item label="监控范围：">
+                        <el-checkbox v-model="settings.includeSubfolders">
+                            包含子文件夹
+                        </el-checkbox>
+                        <span class="setting-description">
+                            勾选后将递归监控所有子文件夹中的视频文件
                         </span>
                     </el-form-item>
                 </el-form>
@@ -138,7 +145,7 @@ import { ref, computed, onUnmounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { FolderOpened, Loading } from '@element-plus/icons-vue'
 import { open } from '@tauri-apps/plugin-dialog'
-import { readDir, stat } from '@tauri-apps/plugin-fs'
+import { useUtilsStore } from '../stores/utils'
 
 // Props and Emits
 interface Props {
@@ -154,6 +161,7 @@ interface Emits {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+const utilsStore = useUtilsStore()
 
 // 显示状态
 const visible = computed({
@@ -165,7 +173,8 @@ const visible = computed({
 const settings = ref({
     folderPath: '',
     maxEmptyChecks: 5,
-    checkInterval: 60 // 检测间隔时间（秒），默认60秒
+    checkInterval: 60, // 检测间隔时间（秒），默认60秒
+    includeSubfolders: false // 是否包含子文件夹
 })
 
 // 监控状态
@@ -273,7 +282,17 @@ const performCheck = async (): Promise<{
     stableFiles: string[]
 }> => {
     try {
-        const entries = await readDir(settings.value.folderPath)
+        // 根据设置决定是否递归读取目录
+        const entries = await utilsStore
+            .readDirRecursive(settings.value.folderPath, settings.value.includeSubfolders, 20)
+            .then(files =>
+                files.map(file => ({
+                    name: file.name,
+                    path: file.path,
+                    isDirectory: file.is_directory
+                }))
+            )
+
         const currentVideoNames = getCurrentVideoNames()
         const currentVideoTitles = getCurrentVideoTitles()
         const newFiles: string[] = []
@@ -288,14 +307,11 @@ const performCheck = async (): Promise<{
         for (const entry of sortedEntries) {
             if (!entry.name) continue
 
-            // 根据操作系统选择正确的路径分隔符
-            const separator = navigator.platform.toLowerCase().includes('win') ? '\\' : '/'
-            const filePath = `${settings.value.folderPath}${separator}${entry.name}`
+            const filePath = entry.path
 
             try {
-                // 获取文件状态信息
-                const fileStats = await stat(filePath)
-                const fileSize = fileStats.size || 0
+                // 获取文件大小
+                const fileSize = await utilsStore.getFileSize(filePath)
 
                 const isVideoFile = isSupportedVideoFormat(entry.name)
 
@@ -324,7 +340,17 @@ const performCheck = async (): Promise<{
                     }
                 }
             } catch (statError) {
-                console.warn(`获取文件 ${entry.name} 状态失败:`, statError)
+                // 更详细的错误日志
+                const errorMsg = statError instanceof Error ? statError.message : String(statError)
+                if (
+                    errorMsg.includes('forbidden') ||
+                    errorMsg.includes('permission') ||
+                    errorMsg.includes('access')
+                ) {
+                    console.warn(`权限不足，跳过文件: ${entry.name} (${filePath})`)
+                } else {
+                    console.warn(`获取文件 ${entry.name} 状态失败:`, statError)
+                }
                 // 如果无法获取文件状态，跳过该文件
                 continue
             }
@@ -400,13 +426,20 @@ const startMonitoring = async () => {
     // 清空文件大小历史记录
     fileSizeHistory.value.clear()
 
+    const folderMsg = settings.value.includeSubfolders
+        ? `开始监控文件夹: ${settings.value.folderPath} (包含子文件夹)`
+        : `开始监控文件夹: ${settings.value.folderPath}`
+    console.log(folderMsg)
+
     // 立即执行第一次检测
     await performMonitoringCycle()
 
     // 设置定时器，按配置的间隔检测
     monitorTimer = setInterval(performMonitoringCycle, settings.value.checkInterval * 1000)
 
-    ElMessage.success('开始监控文件夹')
+    ElMessage.success(
+        settings.value.includeSubfolders ? '开始监控文件夹（包含子文件夹）' : '开始监控文件夹'
+    )
 }
 
 // 停止监控

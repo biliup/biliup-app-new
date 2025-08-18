@@ -1,17 +1,37 @@
 use biliup::bilibili::BiliBili;
 use serde_json::{Value, json};
 use std::str::FromStr;
-use std::{fs::File, io::Read};
+use std::{fs::File, io::Read, path::Path};
 use tauri::Manager;
 use tokio::sync::Mutex;
 use tracing::info;
 
 use crate::utils::crypto::encode_base64;
+use crate::utils::file_utils::{self, FileEntry};
 use crate::{AppData, models::TemplateConfig};
 
 #[tauri::command]
 pub async fn get_current_version() -> Result<String, String> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
+}
+
+/// 获取文件大小
+#[tauri::command]
+pub async fn get_file_size(file_path: String) -> Result<u64, String> {
+    let path = Path::new(&file_path);
+    file_utils::get_file_size(path).map_err(|e| format!("获取文件大小失败: {}", e))
+}
+
+/// 递归读取目录
+#[tauri::command]
+pub async fn read_dir_recursive(
+    dir_path: String,
+    include_subdirs: bool,
+    max_depth: Option<u32>,
+) -> Result<Vec<FileEntry>, String> {
+    let path = Path::new(&dir_path);
+    file_utils::read_dir_recursive(path, include_subdirs, max_depth)
+        .map_err(|e| format!("读取目录失败: {}", e))
 }
 
 /// 上传封面并进行返回url
