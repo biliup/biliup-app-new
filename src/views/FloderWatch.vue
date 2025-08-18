@@ -14,7 +14,7 @@
                 <div class="info-text">
                     <p>📁 <strong>文件夹监控功能：</strong></p>
                     <ul>
-                        <li>选择监控文件夹，每分钟自动检测新增视频文件</li>
+                        <li>选择监控文件夹，按设定间隔自动检测新增视频文件</li>
                         <li>文件需连续3次检测大小无变化才会被添加（确保文件完整）</li>
                         <li>自动将大于1KB且稳定的视频文件添加到当前模板</li>
                         <li>
@@ -54,7 +54,21 @@
                             style="width: 200px"
                         />
                         <span class="setting-description">
-                            连续检测此次数无小文件后自动提交稿件
+                            连续检测此次数后自动提交稿件
+                        </span>
+                    </el-form-item>
+
+                    <el-form-item label="检测间隔时间：">
+                        <el-input-number
+                            v-model="settings.checkInterval"
+                            :min="5"
+                            :max="3600"
+                            :step="1"
+                            controls-position="right"
+                            style="width: 200px"
+                        />
+                        <span class="setting-description">
+                            检测间隔时间（秒），范围：5秒-3600秒（1小时）
                         </span>
                     </el-form-item>
                 </el-form>
@@ -150,7 +164,8 @@ const visible = computed({
 // 设置
 const settings = ref({
     folderPath: '',
-    maxEmptyChecks: 5
+    maxEmptyChecks: 5,
+    checkInterval: 60 // 检测间隔时间（秒），默认60秒
 })
 
 // 监控状态
@@ -333,7 +348,7 @@ const addNewFiles = async (filenames: string[]) => {
 
 // 更新下次检测时间显示
 const updateNextCheckTime = () => {
-    const next = new Date(Date.now() + 60000) // 1分钟后
+    const next = new Date(Date.now() + settings.value.checkInterval * 1000)
     nextCheckTime.value = next.toLocaleTimeString()
 }
 
@@ -388,8 +403,8 @@ const startMonitoring = async () => {
     // 立即执行第一次检测
     await performMonitoringCycle()
 
-    // 设置定时器，每分钟检测一次
-    monitorTimer = setInterval(performMonitoringCycle, 60000)
+    // 设置定时器，按配置的间隔检测
+    monitorTimer = setInterval(performMonitoringCycle, settings.value.checkInterval * 1000)
 
     ElMessage.success('开始监控文件夹')
 }
