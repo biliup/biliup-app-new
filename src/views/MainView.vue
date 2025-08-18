@@ -131,7 +131,12 @@
                                         <div class="template-name">
                                             {{ template.name }}
                                             <span
-                                                v-show="checkTemplateHasUnsavedChanges(userTemplate.user.uid, template.name)"
+                                                v-show="
+                                                    checkTemplateHasUnsavedChanges(
+                                                        userTemplate.user.uid,
+                                                        template.name
+                                                    )
+                                                "
                                                 class="unsaved-indicator"
                                                 title="有未保存的修改"
                                             ></span>
@@ -206,14 +211,19 @@
                                 <h3 class="edit-bv-template-disaplay" v-if="currentTemplate?.aid">
                                     编辑稿件：
                                 </h3>
-                                <el-tooltip 
+                                <el-tooltip
                                     v-if="currentTemplate?.aid"
                                     content="刷新稿件数据"
                                     placement="top"
                                 >
-                                    <el-icon 
+                                    <el-icon
                                         class="refresh-btn"
-                                        @click.stop="reloadTemplateFromAV(selectedUser.uid, currentTemplate.aid)"
+                                        @click.stop="
+                                            reloadTemplateFromAV(
+                                                selectedUser.uid,
+                                                currentTemplate.aid
+                                            )
+                                        "
                                     >
                                         <refresh />
                                     </el-icon>
@@ -935,7 +945,7 @@ const checkTemplateHasUnsavedChanges = (uid: number, templateName: string): bool
 
     const currentUserConfig = userConfigStore.configRoot.config[uid]
     const baseUserConfig = userConfigStore.configBase.config[uid]
-    
+
     if (!currentUserConfig?.templates[templateName] || !baseUserConfig?.templates[templateName]) {
         return false
     }
@@ -1047,7 +1057,9 @@ const initializeData = async () => {
                     if (task.status === 'Completed') {
                         const templateName = task.template
                         const uid = task.user.uid
-                        const videos = userConfigStore.configRoot?.config[uid]?.templates[templateName]?.videos || []
+                        const videos =
+                            userConfigStore.configRoot?.config[uid]?.templates[templateName]
+                                ?.videos || []
 
                         const video = videos.find(v => v.id === task.video?.id)
                         if (video && video.filename !== task.video?.filename) {
@@ -1144,7 +1156,6 @@ const hasUnsavedChanges = (uid: number, template: string, currentTemplateData: T
 
     return false
 }
-
 
 // 设置拖拽功能
 const setupDragAndDrop = async () => {
@@ -1396,16 +1407,19 @@ const resetTemplate = async () => {
 
     // 确认重置
     try {
-        await ElMessageBox.confirm(
-            '确定要重置当前模板吗？这将清除所有未保存的更改。',
-            '确认重置',
-            {
-                confirmButtonText: '确定',
-                cancelButtonText: '取消',
-                type: 'warning'
-            }
-        )
-        currentForm.value = JSON.parse(JSON.stringify(userConfigStore.configBase?.config[selectedUser.value.uid]?.templates[currentTemplateName.value])) || userConfigStore.createDefaultTemplate()
+        await ElMessageBox.confirm('确定要重置当前模板吗？这将清除所有未保存的更改。', '确认重置', {
+            confirmButtonText: '确定',
+            cancelButtonText: '取消',
+            type: 'warning'
+        })
+        currentForm.value =
+            JSON.parse(
+                JSON.stringify(
+                    userConfigStore.configBase?.config[selectedUser.value.uid]?.templates[
+                        currentTemplateName.value
+                    ]
+                )
+            ) || userConfigStore.createDefaultTemplate()
         ElMessage.success('模板已重置')
     } catch (error) {
         // 用户取消了重置
@@ -1413,12 +1427,8 @@ const resetTemplate = async () => {
     }
 }
 
-const reloadTemplateFromAV = async (
-    userUid: number,
-    aid: number,
-) => {
+const reloadTemplateFromAV = async (userUid: number, aid: number) => {
     try {
-
         const newTemplate = (await utilsStore.getVideoDetail(userUid, aid.toString())) as any
 
         // 处理视频列表
@@ -1810,16 +1820,12 @@ const clearAllVideos = async () => {
     const videoText = videoCount === 1 ? '1 个文件' : `${videoCount} 个文件`
 
     try {
-        await ElMessageBox.confirm(
-            `确定要清空所有已选择的 ${videoText} 吗？`,
-            '确认清空文件',
-            {
-                confirmButtonText: '确定清空',
-                cancelButtonText: '取消',
-                type: 'warning',
-                dangerouslyUseHTMLString: false
-            }
-        )
+        await ElMessageBox.confirm(`确定要清空所有已选择的 ${videoText} 吗？`, '确认清空文件', {
+            confirmButtonText: '确定清空',
+            cancelButtonText: '取消',
+            type: 'warning',
+            dangerouslyUseHTMLString: false
+        })
 
         // 取消所有对应的上传任务
         const videoIds = currentForm.value.videos.map(video => video.id)
