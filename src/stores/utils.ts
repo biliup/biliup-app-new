@@ -6,7 +6,7 @@ export const useUtilsStore = defineStore('template', () => {
     const typelist = ref<any[]>([])
     const topiclist = ref<any[]>([])
     const seasonlist = ref<any[]>([])
-    let hasSeason = false
+    const hasSeason = ref<boolean>(false)
 
     const getCurrentVersion = async () => {
         try {
@@ -62,18 +62,18 @@ export const useUtilsStore = defineStore('template', () => {
     }
 
     const getSeasonList = async (uid: number) => {
-        hasSeason = false
+        hasSeason.value = false
 
         try {
             seasonlist.value = ((await invoke('get_season_list', { uid })) as any).seasons
             // {"seasons": [{season_id: 1, section_id: 2, title: '合集1'}, {season_id: 2, section_id: 2, title: '合集2'}]}
-            hasSeason = seasonlist.value.length > 0
+            hasSeason.value = seasonlist.value.length > 0
         } catch (error) {
             console.error('获取合集列表失败:', error)
             seasonlist.value = []
             throw error
         }
-        return hasSeason
+        return hasSeason.value
     }
 
     const uploadCover = async (uid: number, file: string) => {

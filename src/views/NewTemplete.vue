@@ -89,7 +89,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { uploadForm, useUserConfigStore } from '../stores/user_config'
+import { useUserConfigStore } from '../stores/user_config'
 import { useUtilsStore } from '../stores/utils'
 import { ElMessage } from 'element-plus'
 
@@ -260,21 +260,18 @@ const createTemplateFromBV = async (
     try {
         console.log(`从BV号 ${bvNumber} 创建模板: ${templateName}`)
 
-        const newForm = (await utilsStore.getVideoDetail(userUid, bvNumber)) as uploadForm
+        const newTemplate = (await utilsStore.getVideoDetail(userUid, bvNumber)) as any
 
-        for (const video of newForm.videos) {
-            video.id = video.filename
-            video.path = ''
+        // 处理视频列表
+        if (newTemplate.videos && Array.isArray(newTemplate.videos)) {
+            for (const video of newTemplate.videos) {
+                video.id = video.filename
+                video.path = ''
+            }
         }
 
-        const newTemplate = userConfigStore.buildTemplateFromUploadForm(newForm)
-
-        if (!isEdit) {
-            newTemplate.aid = undefined
-        }
-
-        if (newForm.aid && (await utilsStore.getSeasonList(userUid))) {
-            const season_id = await utilsStore.getVideoSeason(userUid, newForm.aid)
+        if (newTemplate.aid && (await utilsStore.getSeasonList(userUid))) {
+            const season_id = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
 
             if (season_id !== 0) {
                 const section_id = await utilsStore.seasonlist.find(
@@ -283,6 +280,10 @@ const createTemplateFromBV = async (
                 newTemplate.season_id = season_id
                 newTemplate.section_id = section_id
             }
+        }
+
+        if (!isEdit) {
+            newTemplate.aid = undefined
         }
 
         await userConfigStore.addUserTemplate(userUid, templateName, newTemplate)

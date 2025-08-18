@@ -79,11 +79,12 @@ impl UploadService {
     pub async fn create_task(
         &mut self,
         user: &User,
+        template: &str,
         video: &VideoInfo,
         config_copy: Arc<Mutex<ConfigRoot>>,
         clients: Arc<Mutex<HashMap<u64, MyClient>>>,
     ) -> Result<bool> {
-        let task = UploadTask::new(user, video, config_copy, clients);
+        let task = UploadTask::new(user, template, video, config_copy, clients);
         if self.upload_queue.lock().await.contains_key(&task.id) {
             warn!("任务已存在: {:?}", task);
             return Ok(false); // 任务已存在

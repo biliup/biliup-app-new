@@ -4,9 +4,10 @@ use std::str::FromStr;
 use std::{fs::File, io::Read};
 use tauri::Manager;
 use tokio::sync::Mutex;
+use tracing::info;
 
 use crate::utils::crypto::encode_base64;
-use crate::{AppData, models::UploadForm};
+use crate::{AppData, models::TemplateConfig};
 
 #[tauri::command]
 pub async fn get_current_version() -> Result<String, String> {
@@ -184,7 +185,7 @@ pub async fn get_video_detail(
     app: tauri::AppHandle,
     uid: u64,
     video_id: String,
-) -> Result<UploadForm, String> {
+) -> Result<TemplateConfig, String> {
     let vid = biliup::uploader::bilibili::Vid::from_str(&video_id)
         .map_err(|e| format!("解析视频 ID 失败: {e}"))?;
 
@@ -209,7 +210,7 @@ pub async fn get_video_detail(
         .video_data(&vid, proxy.as_deref())
         .await
     {
-        Ok(res) => Ok(UploadForm::from_bilibili_res(res).map_err(|e| e.to_string())?),
+        Ok(res) => Ok(TemplateConfig::from_bilibili_res(res).map_err(|e| e.to_string())?),
         Err(e) => Err(e.to_string()),
     }
 }
@@ -344,7 +345,13 @@ pub async fn switch_season(
             .json::<Value>()
             .await
         {
-            Ok(_) => Ok(true),
+            Ok(res) => {
+                info!("{res}");
+                if res["code"].as_i64() != Some(0) {
+                    return Err(serde_json::to_string(&res).unwrap_or("未知错误".to_string()));
+                }
+                Ok(true)
+            }
             Err(e) => Err(e.to_string()),
         }
     }

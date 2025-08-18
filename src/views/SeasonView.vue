@@ -87,7 +87,7 @@ const clearSelection = () => {
 
 // 更新selectedSeasonKey的辅助函数
 const updateSelectedKey = () => {
-    if (selectedSeasonId.value !== undefined && selectedSectionId.value !== undefined) {
+    if (selectedSeasonId.value && selectedSectionId.value) {
         selectedSeasonKey.value = `${selectedSeasonId.value}-${selectedSectionId.value}`
     } else {
         selectedSeasonKey.value = undefined

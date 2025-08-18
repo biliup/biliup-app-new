@@ -44,7 +44,7 @@ pub struct LegacyStreamerConfig {
     pub dtime: Option<u32>,
     pub open_subtitle: bool,
     pub interactive: u8,
-    pub mission_id: Option<u64>,
+    pub mission_id: Option<u32>,
     pub dolby: u8,
     pub lossless_music: u8,
     pub no_reprint: u8,

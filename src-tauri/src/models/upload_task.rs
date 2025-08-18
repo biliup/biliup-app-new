@@ -12,6 +12,7 @@ use tokio::sync::Mutex;
 #[derive(Debug, Clone, Serialize)]
 pub struct UploadTask {
     pub id: String,
+    pub template: String,
     pub user: User,
     pub video: VideoInfo,
     pub status: TaskStatus,
@@ -43,6 +44,7 @@ pub enum TaskStatus {
 impl UploadTask {
     pub fn new(
         user: &User,
+        template: &str,
         video: &VideoInfo,
         config: Arc<Mutex<ConfigRoot>>,
         clients: Arc<Mutex<HashMap<u64, MyClient>>>,
@@ -51,6 +53,7 @@ impl UploadTask {
             id: video.id.clone(),
             user: user.clone(),
             video: video.clone(),
+            template: template.to_string(),
             status: TaskStatus::Waiting,
             error_message: None,
             created_at: chrono::Utc::now().timestamp_millis() as usize,

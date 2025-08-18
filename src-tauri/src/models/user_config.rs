@@ -13,16 +13,23 @@ pub struct UserInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct Subtitle {
+    #[serde(default)]
     pub open: u8,
+    #[serde(default)]
     pub lan: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct VideoInfo {
+    #[serde(default)]
     pub id: String,
+    #[serde(default)]
     pub title: String,
+    #[serde(default)]
     pub filename: String,
+    #[serde(default)]
     pub desc: String,
+    #[serde(default)]
     pub path: String,
     #[serde(default)]
     pub finished_at: u64,
@@ -30,50 +37,86 @@ pub struct VideoInfo {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TemplateConfig {
+    #[serde(default)]
     pub copyright: u8, // 1: 自制, 2: 转载
+    #[serde(default)]
     pub source: String,
-    pub tid: u32,      // 分区ID
+    #[serde(default)]
+    pub tid: u32, // 分区ID
+    #[serde(default)]
     pub cover: String, // 封面URL
+    #[serde(default)]
     pub title: String,
+    #[serde(default)]
     pub desc: String,
+    #[serde(default)]
     pub desc_v2: Option<String>,
+    #[serde(default)]
     pub dynamic: String, // 粉丝动态
+    #[serde(default)]
     pub subtitle: Subtitle,
+    #[serde(default)]
     pub tag: String, // 逗号分隔的标签
+    #[serde(default)]
     pub videos: Vec<VideoInfo>,
+    #[serde(default)]
     pub dtime: Option<u32>, // 定时发布时间
+    #[serde(default)]
     pub open_subtitle: bool,
+    #[serde(default)]
     pub interactive: u8,
-    pub mission_id: Option<u64>,
-    pub topic_id: Option<u64>,
+    #[serde(default)]
+    pub mission_id: Option<u32>,
+    #[serde(default)]
+    pub topic_id: Option<u32>,
+    #[serde(default)]
     pub season_id: Option<u64>,
+    #[serde(default)]
     pub section_id: Option<u64>,
+    #[serde(default)]
     pub dolby: u8,
+    #[serde(default)]
     pub lossless_music: u8, // Hi-Res无损音质
+    #[serde(default)]
     pub no_reprint: u8,
+    #[serde(default)]
     pub open_elec: u8,
+    #[serde(default)]
     pub aid: Option<u64>,
+    #[serde(default)]
     pub up_selection_reply: u8,
+    #[serde(default)]
     pub up_close_reply: u8,
+    #[serde(default)]
     pub up_close_danmu: u8,
+    #[serde(default)]
     pub atomic_int: u32,
+    #[serde(default)]
     pub is_only_self: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserConfig {
     pub user: UserInfo,
+    #[serde(default)]
     pub line: Option<String>,
+    #[serde(default)]
     pub proxy: Option<String>,
+    #[serde(default)]
     pub limit: u32,
+    #[serde(default)]
     pub templates: HashMap<String, TemplateConfig>, // 匹配config.json中的"templates"字段
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigRoot {
+    #[serde(default)]
     pub max_curr: u32,
+    #[serde(default)]
     pub auto_upload: bool,
+    #[serde(default)]
     pub auto_start: bool,
+    #[serde(default)]
     pub config: HashMap<u64, UserConfig>,
 }
 

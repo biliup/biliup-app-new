@@ -1,64 +1,11 @@
 use std::collections::HashMap;
 
+use crate::models::TemplateConfig;
 use anyhow::Result;
 use biliup::bilibili;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use tracing::debug;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UploadForm {
-    #[serde(default)]
-    pub title: String,
-    #[serde(default)]
-    pub cover: String,
-    #[serde(default)]
-    pub copyright: u8,
-    #[serde(default)]
-    pub source: String,
-    #[serde(default)]
-    pub aid: Option<u64>,
-    #[serde(default)]
-    pub tid: u32,
-    #[serde(default)]
-    pub tag: String,
-    #[serde(default)]
-    pub desc: String,
-    #[serde(default)]
-    pub dynamic: String,
-    #[serde(default)]
-    pub videos: Vec<Value>,
-    #[serde(default)]
-    pub dtime: Option<u32>,
-    #[serde(default)]
-    pub open_subtitle: bool,
-    #[serde(default)]
-    pub interactive: u8,
-    #[serde(default)]
-    pub mission_id: Option<u32>,
-    #[serde(default)]
-    pub topic_id: Option<u32>,
-    #[serde(default)]
-    pub season_id: Option<u32>,
-    #[serde(default)]
-    pub section_id: Option<u32>,
-    #[serde(default)]
-    pub dolby: u8,
-    #[serde(default)]
-    pub lossless_music: u8,
-    #[serde(default)]
-    pub no_reprint: u8,
-    #[serde(default)]
-    pub open_elec: u8,
-    #[serde(default)]
-    pub up_selection_reply: u8,
-    #[serde(default)]
-    pub up_close_reply: u8,
-    #[serde(default)]
-    pub up_close_danmu: u8,
-    #[serde(default)]
-    pub is_only_self: u8,
-}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TopicDetail {
@@ -125,20 +72,22 @@ pub struct BilibiliForm {
     pub extra_fields: Option<HashMap<String, Value>>,
 }
 
-impl UploadForm {
+impl TemplateConfig {
     pub fn from_bilibili_res(value: Value) -> Result<Self> {
         let archive = value["archive"].clone();
         debug!("{}", serde_json::to_string(&archive)?);
-        let mut upload_form: Self = serde_json::from_value(archive)?;
+        let mut template_config: Self = serde_json::from_value(archive)?;
 
         let videos = value["videos"].clone();
         debug!("{}", serde_json::to_string(&videos)?);
 
-        upload_form.videos = videos
+        template_config.videos = videos
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("videos should be an array"))?
-            .to_vec();
-        Ok(upload_form)
+            .into_iter()
+            .map(|v| Ok(serde_json::from_value(v.clone())?))
+            .collect::<Result<Vec<_>>>()?;
+        Ok(template_config)
     }
 
     pub fn into_bilibili_form(self) -> BilibiliForm {
@@ -184,7 +133,7 @@ impl UploadForm {
                 lan: String::new(), // 默认语言
             },
             tag: self.tag,
-            videos: self.videos,
+            videos: self.videos.into_iter().map(|v| json!(v)).collect(),
             dtime: self.dtime,
             open_subtitle: self.open_subtitle,
             interactive: self.interactive,

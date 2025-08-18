@@ -10,7 +10,7 @@ interface User {
 }
 
 // 模板配置接口
-interface TemplateConfig {
+export interface TemplateConfig {
     copyright: number // 1: 自制, 2: 转载
     source: string
     tid: number // 分区ID
@@ -21,7 +21,7 @@ interface TemplateConfig {
     dynamic: string // 粉丝动态
     subtitle: { open: number; lan: string }
     tag: string // 逗号分隔的标签
-    videos: Array<{ title: string; name: string; desc: string; path: string; finished_at: number }>
+    videos: any[]
     dtime?: number // 定时发布时间, 10位时间戳
     open_subtitle: boolean
     interactive: number
@@ -70,37 +70,9 @@ interface TemplateCommandResponse {
     template?: TemplateConfig
 }
 
-// 接口定义
-export interface uploadForm {
-    title: string
-    cover: string
-    copyright: number
-    source: string
-    aid?: number
-    tid: number
-    tag: string
-    desc: string
-    dynamic: string
-    videos: any[]
-    dtime?: number
-    open_subtitle: boolean
-    interactive: number
-    mission_id?: number
-    topic_id?: number
-    season_id?: number
-    section_id?: number
-    dolby: number
-    lossless_music: number
-    no_reprint: number
-    open_elec: number
-    up_selection_reply: number
-    up_close_reply: number
-    up_close_danmu: number
-    is_only_self: number
-}
-
 export const useUserConfigStore = defineStore('userConfig', () => {
     const configRoot = ref<ConfigRoot | null>(null)
+    const configBase = ref<ConfigRoot | null>(null)
     const userTemplates = ref<UserWithTemplates[]>([])
     const loading = ref(false)
     const error = ref<string | null>(null)
@@ -150,6 +122,23 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         try {
             const configData: ConfigRoot = await invoke('load_config')
             configRoot.value = configData
+            configBase.value = JSON.parse(JSON.stringify(configData))
+            return configData
+        } catch (err) {
+            error.value = `加载配置失败: ${err}`
+            console.error('加载配置失败:', err)
+            throw err
+        } finally {
+            loading.value = false
+        }
+    }
+
+    const loadBaseConfig = async () => {
+        loading.value = true
+        error.value = null
+        try {
+            const configData: ConfigRoot = await invoke('load_config')
+            configBase.value = JSON.parse(JSON.stringify(configData))
             return configData
         } catch (err) {
             error.value = `加载配置失败: ${err}`
@@ -165,6 +154,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         error.value = null
         try {
             await invoke('save_config', {})
+            await loadBaseConfig()
             return true
         } catch (err) {
             error.value = `保存配置失败: ${err}`
@@ -468,40 +458,10 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         return true
     }
 
-    const buildTemplateFromUploadForm = (form: uploadForm) => {
-        return {
-            ...createDefaultTemplate(),
-            title: form.title,
-            cover: form.cover,
-            copyright: form.copyright,
-            source: form.source,
-            aid: form.aid,
-            tid: form.tid,
-            desc: form.desc,
-            dynamic: form.dynamic,
-            tag: form.tag,
-            videos: form.videos,
-            dtime: form.dtime || undefined,
-            open_subtitle: Boolean(form.open_subtitle),
-            interactive: form.interactive,
-            mission_id: form.mission_id,
-            topic_id: form.topic_id,
-            season_id: form.season_id,
-            section_id: form.section_id,
-            dolby: form.dolby,
-            lossless_music: form.lossless_music,
-            no_reprint: form.no_reprint,
-            open_elec: form.open_elec,
-            up_selection_reply: form.up_selection_reply,
-            up_close_reply: form.up_close_reply,
-            up_close_danmu: form.up_close_danmu,
-            is_only_self: form.is_only_self
-        }
-    }
-
     return {
         // 状态
         configRoot,
+        configBase,
         userTemplates,
         loading,
         error,
@@ -523,7 +483,6 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         duplicateUserTemplate,
         updateUserConfig,
         updateGlobalConfig,
-        createDefaultTemplate,
-        buildTemplateFromUploadForm
+        createDefaultTemplate
     }
 })

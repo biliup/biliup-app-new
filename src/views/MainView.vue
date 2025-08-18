@@ -131,11 +131,7 @@
                                         <div class="template-name">
                                             {{ template.name }}
                                             <span
-                                                v-if="
-                                                    selectedUser?.uid === userTemplate.user.uid &&
-                                                    currentTemplateName === template.name &&
-                                                    hasUnsavedChanges
-                                                "
+                                                v-show="checkTemplateHasUnsavedChanges(userTemplate.user.uid, template.name)"
                                                 class="unsaved-indicator"
                                                 title="有未保存的修改"
                                             ></span>
@@ -190,7 +186,7 @@
             </el-aside>
 
             <!-- 主要内容区域 -->
-            <el-main class="main-content">
+            <el-main class="main-content" v-if="currentForm">
                 <div class="content-wrapper" ref="contentWrapperRef">
                     <div v-if="!selectedUser" class="no-selection">
                         <el-empty description="请选择用户和模板开始使用" />
@@ -210,6 +206,18 @@
                                 <h3 class="edit-bv-template-disaplay" v-if="currentTemplate?.aid">
                                     编辑稿件：
                                 </h3>
+                                <el-tooltip 
+                                    v-if="currentTemplate?.aid"
+                                    content="刷新稿件数据"
+                                    placement="top"
+                                >
+                                    <el-icon 
+                                        class="refresh-btn"
+                                        @click.stop="reloadTemplateFromAV(selectedUser.uid, currentTemplate.aid)"
+                                    >
+                                        <refresh />
+                                    </el-icon>
+                                </el-tooltip>
                                 <h3
                                     v-if="!isEditingTemplateName"
                                     @click="startEditTemplateName"
@@ -231,7 +239,7 @@
                                 />
                             </div>
                             <div class="header-actions">
-                                <el-button @click="loadTemplateToForm">放弃更改</el-button>
+                                <el-button @click="resetTemplate">放弃更改</el-button>
                                 <el-button type="primary" @click="saveTemplate">保存</el-button>
                                 <el-button
                                     @click="
@@ -449,7 +457,7 @@
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.videos" class="card-content">
                                         <VideoList
-                                            v-model:videos="currentForm.videos"
+                                            v-model:videos="videos"
                                             :is-drag-over="isDragOver"
                                             :uploading="uploading"
                                             @select-video="selectVideoWithTauri"
@@ -774,7 +782,7 @@
 import { ref, onMounted, computed, nextTick, watch, onUnmounted } from 'vue'
 import { v4 as uuidv4 } from 'uuid'
 import { useAuthStore } from '../stores/auth'
-import { uploadForm, useUserConfigStore } from '../stores/user_config'
+import { useUserConfigStore, TemplateConfig } from '../stores/user_config'
 import { useUtilsStore } from '../stores/utils'
 import { useUploadStore } from '../stores/upload'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -786,7 +794,8 @@ import {
     User,
     Check,
     Edit,
-    Setting
+    Setting,
+    Refresh
 } from '@element-plus/icons-vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { listen } from '@tauri-apps/api/event'
@@ -860,140 +869,87 @@ const selectedCategory = ref<any>(null)
 const selectedSubCategory = ref<any>(null)
 const categoryPopoverVisible = ref(false)
 
-// 表单数据
-const currentForm = ref<uploadForm>({
-    title: '',
-    cover: '',
-    copyright: 1,
-    source: '',
-    aid: undefined,
-    tid: 0,
-    tag: '',
-    desc: '',
-    dynamic: '',
-    videos: [],
-    dtime: undefined,
-    open_subtitle: false,
-    interactive: 0,
-    mission_id: undefined,
-    topic_id: undefined,
-    season_id: undefined,
-    section_id: undefined,
-    dolby: 0,
-    lossless_music: 0,
-    no_reprint: 0,
-    open_elec: 0,
-    up_selection_reply: 0,
-    up_close_reply: 0,
-    up_close_danmu: 0,
-    is_only_self: 0
+const currentTemplate = computed(() => {
+    if (!selectedUser.value || !currentTemplateName.value || !userConfigStore.configRoot?.config) {
+        return null
+    }
+    const userConfig = userConfigStore.configRoot.config[selectedUser.value.uid]
+    if (!userConfig || !userConfig.templates[currentTemplateName.value]) {
+        return null
+    }
+    return userConfig.templates[currentTemplateName.value]
+})
+
+// 当前表单数据 - 直接操作模板配置
+const currentForm = computed({
+    get() {
+        return currentTemplate.value
+    },
+    set(value) {
+        if (
+            !selectedUser.value ||
+            !currentTemplateName.value ||
+            !userConfigStore.configRoot?.config ||
+            !value
+        ) {
+            return
+        }
+        const userConfig = userConfigStore.configRoot.config[selectedUser.value.uid]
+        if (userConfig && userConfig.templates[currentTemplateName.value]) {
+            userConfig.templates[currentTemplateName.value] = value
+        }
+    }
 })
 
 const tags = ref<string[]>([])
 
-// 当前模板配置
-const currentTemplate = computed(() => {
-    if (!selectedUser.value || !currentTemplateName.value) return null
-    return userConfigStore.getUserTemplate(selectedUser.value.uid, currentTemplateName.value)
-})
-
-// 基础模板配置（用于检测是否有未保存的修改）
-const baseTemplate = ref<any>(null)
-
 // 日期选择器的计算属性 - 处理时间戳转换
 const dtimeDate = computed({
     get() {
-        return currentForm.value.dtime ? new Date(currentForm.value.dtime * 1000) : null
+        return currentForm.value?.dtime ? new Date(currentForm.value.dtime * 1000) : null
     },
     set(value: Date | null) {
-        currentForm.value.dtime = value ? Math.floor(value.getTime() / 1000) : undefined
+        if (currentForm.value) {
+            currentForm.value.dtime = value ? Math.floor(value.getTime() / 1000) : undefined
+        }
     }
 })
 
-// 检测是否有未保存的修改
-const hasUnsavedChanges = computed(() => {
-    // 如果没有基础模板或当前模板，则没有未保存的修改
-    if (!baseTemplate.value || !currentTemplate.value) {
-        return false
-    }
-
-    // 如果当前选择的用户或模板名为空，则没有未保存的修改
-    if (!selectedUser.value || !currentTemplateName.value) {
-        return false
-    }
-
-    // 构建当前表单数据
-    const currentFormData = {
-        title: currentForm.value.title,
-        cover: currentForm.value.cover,
-        copyright: currentForm.value.copyright,
-        source: currentForm.value.source,
-        tid: currentForm.value.tid,
-        desc: currentForm.value.desc,
-        dynamic: currentForm.value.dynamic,
-        tag: currentForm.value.tag,
-        videos: currentForm.value.videos,
-        dtime: currentForm.value.dtime || undefined,
-        open_subtitle: currentForm.value.open_subtitle,
-        interactive: currentForm.value.interactive,
-        mission_id: currentForm.value.mission_id,
-        topic_id: currentForm.value.topic_id,
-        season_id: currentForm.value.season_id,
-        section_id: currentForm.value.section_id,
-        dolby: currentForm.value.dolby,
-        lossless_music: currentForm.value.lossless_music,
-        no_reprint: currentForm.value.no_reprint,
-        open_elec: currentForm.value.open_elec,
-        up_selection_reply: currentForm.value.up_selection_reply,
-        up_close_reply: currentForm.value.up_close_reply,
-        up_close_danmu: currentForm.value.up_close_danmu,
-        is_only_self: currentForm.value.is_only_self
-    }
-
-    // 对比关键字段是否有变化
-    const result = Object.keys(currentFormData).some((key: string) => {
-        const a = (currentFormData as any)[key]
-        const b = baseTemplate.value[key]
-        // treat undefined and null as equal
-        if (
-            (a === undefined || a === null || a === '') &&
-            (b === undefined || b === null || b === '')
-        )
-            return false
-        if (a === currentFormData.videos) {
-            // 只比较id, title, desc, path, filename
-            if ((a as any[]).length !== (b as any[]).length) return true
-            if ((a as any[]).length === 0 && (b as any[]).length === 0) return false
-            const videoA = (a as any[]).map((v: any) => ({
-                id: v.id,
-                title: v.title,
-                desc: v.desc,
-                path: v.path,
-                filename: v.filename
-            }))
-            const videoB = (b as any[]).map((v: any) => ({
-                id: v.id,
-                title: v.title,
-                desc: v.desc,
-                path: v.path,
-                filename: v.filename
-            }))
-            return JSON.stringify(videoA) !== JSON.stringify(videoB)
+// 视频数组的计算属性 - 确保始终返回数组
+const videos = computed({
+    get() {
+        return currentForm.value?.videos || []
+    },
+    set(value: any[]) {
+        if (currentForm.value) {
+            currentForm.value.videos = value
         }
-        if (JSON.stringify(a) !== JSON.stringify(b)) {
-            console.log(`Field "${key}" has changed: ${JSON.stringify(a)} !== ${JSON.stringify(b)}`)
-        }
-        return JSON.stringify(a) !== JSON.stringify(b)
-    })
-
-    return result
+    }
 })
+
+// 检查指定模板是否有未保存的改动
+const checkTemplateHasUnsavedChanges = (uid: number, templateName: string): boolean => {
+    if (!userConfigStore.configRoot?.config || !userConfigStore.configBase?.config) {
+        return false
+    }
+
+    const currentUserConfig = userConfigStore.configRoot.config[uid]
+    const baseUserConfig = userConfigStore.configBase.config[uid]
+    
+    if (!currentUserConfig?.templates[templateName] || !baseUserConfig?.templates[templateName]) {
+        return false
+    }
+
+    const currentTemplateData = currentUserConfig.templates[templateName]
+
+    return hasUnsavedChanges(uid, templateName, currentTemplateData)
+}
 
 // 生命周期
 // 监听封面变化，异步加载显示用的封面URL
 watch(
-    () => currentForm.value.cover,
-    async (newCover: string) => {
+    () => currentForm.value?.cover,
+    async (newCover: string | undefined) => {
         if (newCover && selectedUser.value) {
             try {
                 const downloadedCover = await utilsStore.downloadCover(
@@ -1015,7 +971,9 @@ watch(
 watch(
     () => tags.value,
     (newTags: string[]) => {
-        currentForm.value.tag = newTags.join(',')
+        if (currentForm.value) {
+            currentForm.value.tag = newTags.join(',')
+        }
     },
     { deep: true }
 )
@@ -1024,7 +982,7 @@ watch(
 watch(
     () => selectedUser.value,
     async (newUser: any) => {
-        if (currentForm.value.cover && newUser) {
+        if (currentForm.value?.cover && newUser) {
             try {
                 const downloadedCover = await utilsStore.downloadCover(
                     newUser.uid,
@@ -1087,14 +1045,16 @@ const initializeData = async () => {
                 }
                 for (const task of uploadStore.uploadQueue) {
                     if (task.status === 'Completed') {
-                        const video = currentForm.value.videos.find(v => v.id === task.video?.id)
+                        const templateName = task.template
+                        const uid = task.user.uid
+                        const videos = userConfigStore.configRoot?.config[uid]?.templates[templateName]?.videos || []
+
+                        const video = videos.find(v => v.id === task.video?.id)
                         if (video && video.filename !== task.video?.filename) {
                             video.filename = task.video.filename
                             video.path = task.video.path
                             video.complete = true
                             video.finished_at = task.finished_at
-                            saveTemplate()
-                            userConfigStore.saveConfig()
                         }
                     }
                 }
@@ -1105,6 +1065,86 @@ const initializeData = async () => {
         ElMessage.error(`'初始化数据失败: ${error}'`)
     }
 }
+
+const hasUnsavedChanges = (uid: number, template: string, currentTemplateData: TemplateConfig) => {
+    const baseUserConfig = userConfigStore.configBase?.config?.[uid]
+    if (!baseUserConfig || !baseUserConfig.templates[template]) {
+        return true
+    }
+
+    const baseTemplate = baseUserConfig.templates[template]
+
+    // 比较关键字段
+    const fieldsToCompare = [
+        'title',
+        'cover',
+        'copyright',
+        'source',
+        'tid',
+        'desc',
+        'dynamic',
+        'tag',
+        'dtime',
+        'open_subtitle',
+        'interactive',
+        'mission_id',
+        'topic_id',
+        'season_id',
+        'section_id',
+        'dolby',
+        'lossless_music',
+        'no_reprint',
+        'open_elec',
+        'up_selection_reply',
+        'up_close_reply',
+        'up_close_danmu',
+        'is_only_self'
+    ]
+
+    for (const field of fieldsToCompare) {
+        const currentValue = (currentTemplateData as any)[field]
+        const baseValue = (baseTemplate as any)[field]
+
+        // 处理 undefined/null/空字符串 的情况
+        if (
+            (currentValue === undefined || currentValue === null || currentValue === '') &&
+            (baseValue === undefined || baseValue === null || baseValue === '')
+        ) {
+            continue
+        }
+
+        if (JSON.stringify(currentValue) !== JSON.stringify(baseValue)) {
+            return true
+        }
+    }
+
+    // 特别比较 videos 数组
+    const currentVideos = currentTemplateData.videos || []
+    const baseVideos = baseTemplate.videos || []
+
+    if (currentVideos.length !== baseVideos.length) {
+        return true
+    }
+
+    // 比较视频的关键字段
+    for (let i = 0; i < currentVideos.length; i++) {
+        const currentVideo = currentVideos[i]
+        const baseVideo = baseVideos[i]
+
+        const videoFieldsToCompare = ['title', 'filename', 'desc', 'path']
+        for (const field of videoFieldsToCompare) {
+            if (
+                JSON.stringify((currentVideo as any)[field]) !==
+                JSON.stringify((baseVideo as any)[field])
+            ) {
+                return true
+            }
+        }
+    }
+
+    return false
+}
+
 
 // 设置拖拽功能
 const setupDragAndDrop = async () => {
@@ -1197,6 +1237,10 @@ const addVideoToCurrentForm = async (videoPath: string) => {
     }
 
     // 检查文件是否已经存在
+    if (!currentForm.value) {
+        return 0 // 没有当前模板，跳过添加
+    }
+
     const existingFile = currentForm.value.videos.find(f => f.path === videoPath)
     if (existingFile) {
         return 0 // 跳过已存在的文件
@@ -1217,8 +1261,11 @@ const addVideoToCurrentForm = async (videoPath: string) => {
     if (userConfigStore.configRoot?.auto_upload && selectedUser.value) {
         try {
             // 自动创建上传任务
-            const video = currentForm.value.videos[currentForm.value.videos.length - 1]
-            await uploadStore.createUploadTask(selectedUser.value.uid, [video])
+            await uploadStore.createUploadTask(
+                selectedUser.value.uid,
+                currentTemplateName.value,
+                currentForm.value.videos
+            )
             console.log(`自动添加文件到上传队列: ${videoBaseName}`)
 
             // 如果同时启用自动开始，则自动开始任务
@@ -1319,15 +1366,6 @@ const selectTemplate = async (user: any, templateName: string) => {
         }
     }
 
-    if (hasUnsavedChanges.value && selectedUser.value && currentTemplateName.value) {
-        // 用户选择保存
-        await saveTemplate()
-        ElMessage.success('已切换模板，旧模板自动保存')
-    }
-
-    // 立即清空基础模板
-    baseTemplate.value = null
-
     // 清理自动提交状态s
     if (autoSubmitTimeout.value) {
         clearTimeout(autoSubmitTimeout.value)
@@ -1347,40 +1385,86 @@ const selectTemplate = async (user: any, templateName: string) => {
     })
 
     // 加载模板数据到表单
-    await loadTemplateToForm()
+    await loadTemplate()
+}
+
+const resetTemplate = async () => {
+    if (!selectedUser.value || !currentTemplateName.value) {
+        ElMessage.warning('请先选择用户和模板')
+        return
+    }
+
+    // 确认重置
+    try {
+        await ElMessageBox.confirm(
+            '确定要重置当前模板吗？这将清除所有未保存的更改。',
+            '确认重置',
+            {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }
+        )
+        currentForm.value = JSON.parse(JSON.stringify(userConfigStore.configBase?.config[selectedUser.value.uid]?.templates[currentTemplateName.value])) || userConfigStore.createDefaultTemplate()
+        ElMessage.success('模板已重置')
+    } catch (error) {
+        // 用户取消了重置
+        console.log('重置操作已取消')
+    }
+}
+
+const reloadTemplateFromAV = async (
+    userUid: number,
+    aid: number,
+) => {
+    try {
+
+        const newTemplate = (await utilsStore.getVideoDetail(userUid, aid.toString())) as any
+
+        // 处理视频列表
+        if (newTemplate.videos && Array.isArray(newTemplate.videos)) {
+            for (const video of newTemplate.videos) {
+                video.id = video.filename
+                video.path = ''
+            }
+        }
+
+        if (newTemplate.aid && (await utilsStore.getSeasonList(userUid))) {
+            const season_id = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
+
+            if (season_id !== 0) {
+                const section_id = await utilsStore.seasonlist.find(
+                    item => item.season_id === season_id
+                )?.section_id
+                newTemplate.season_id = season_id
+                newTemplate.section_id = section_id
+            }
+        }
+
+        currentForm.value = newTemplate
+    } catch (error) {
+        console.error('刷新失败: ', error)
+        ElMessage.error(`刷新失败: ${error}`)
+        throw error
+    }
 }
 
 // 加载模板数据到表单
-const loadTemplateToForm = async () => {
+const loadTemplate = async () => {
     try {
-        // 如果没有模板，则初始化为空白表单
+        // 如果没有模板，则使用默认模板配置
         if (!currentTemplate.value) {
-            currentForm.value = {
-                title: '',
-                cover: '',
-                copyright: 1,
-                source: '',
-                aid: undefined,
-                tid: 0,
-                desc: '',
-                dynamic: '',
-                videos: [],
-                tag: '',
-                dtime: undefined,
-                open_subtitle: false,
-                interactive: 0,
-                mission_id: undefined,
-                topic_id: undefined,
-                season_id: undefined,
-                section_id: undefined,
-                dolby: 0,
-                lossless_music: 0,
-                no_reprint: 0,
-                open_elec: 0,
-                up_selection_reply: 0,
-                up_close_reply: 0,
-                up_close_danmu: 0,
-                is_only_self: 0
+            const defaultTemplate = userConfigStore.createDefaultTemplate()
+            // 直接设置到配置中
+            if (
+                selectedUser.value &&
+                currentTemplateName.value &&
+                userConfigStore.configRoot?.config
+            ) {
+                const userConfig = userConfigStore.configRoot.config[selectedUser.value.uid]
+                if (userConfig) {
+                    userConfig.templates[currentTemplateName.value] = defaultTemplate
+                }
             }
 
             // 清空标签
@@ -1390,9 +1474,6 @@ const loadTemplateToForm = async () => {
             selectedCategory.value = null
             selectedSubCategory.value = null
 
-            // 重置基础模板
-            baseTemplate.value = null
-
             // 等待所有更新完成
             await nextTick()
 
@@ -1400,33 +1481,6 @@ const loadTemplateToForm = async () => {
         }
 
         const template = currentTemplate.value
-        currentForm.value = {
-            title: template.title || '',
-            cover: template.cover || '',
-            copyright: template.copyright || 1,
-            source: template.source || '',
-            aid: template.aid || undefined,
-            tid: template.tid || 0,
-            desc: template.desc || '',
-            dynamic: template.dynamic || '',
-            videos: template.videos || [],
-            tag: template.tag,
-            dtime: template.dtime || undefined,
-            open_subtitle: template.open_subtitle || false,
-            interactive: template.interactive || 0,
-            mission_id: template.mission_id,
-            topic_id: template.topic_id,
-            season_id: template.season_id || undefined,
-            section_id: template.section_id || undefined,
-            dolby: template.dolby || 0,
-            lossless_music: template.lossless_music || 0,
-            no_reprint: template.no_reprint || 0,
-            open_elec: template.open_elec || 0,
-            up_selection_reply: template.up_selection_reply || 0,
-            up_close_reply: template.up_close_reply || 0,
-            up_close_danmu: template.up_close_danmu || 0,
-            is_only_self: template.is_only_self || 0
-        }
 
         // 解析标签
         tags.value = template.tag ? template.tag.split(',').filter(tag => tag.trim()) : []
@@ -1440,11 +1494,10 @@ const loadTemplateToForm = async () => {
             selectedSubCategory.value = null
         }
 
-        // 等待所有表单数据更新完成
+        // 等待所有更新完成
         await nextTick()
 
-        // 保存基础模板状态（深拷贝）
-        baseTemplate.value = JSON.parse(JSON.stringify(template))
+        // 模板数据已直接操作，无需保存基础状态
     } catch (error) {
         console.error('加载模板失败:', error)
         ElMessage.error(`加载模板失败: ${error}`)
@@ -1509,16 +1562,13 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                 // 再删除原模板
                 await userConfigStore.removeUserTemplate(user.uid, template.name)
 
-                // 如果重命名的是当前选中的模板，更新选择
+                // 更新当前选择
                 if (
                     selectedUser.value?.uid === user.uid &&
                     currentTemplateName.value === template.name
                 ) {
                     currentTemplateName.value = trimmedName
-                    // 更新基础模板状态
-                    if (baseTemplate.value) {
-                        baseTemplate.value = JSON.parse(JSON.stringify(originalTemplate))
-                    }
+                    // 模板数据已直接操作，无需额外状态管理
                 }
 
                 ElMessage.success('模板重命名成功')
@@ -1548,7 +1598,7 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                 ) {
                     currentTemplateName.value = ''
                     selectedUser.value = null
-                    baseTemplate.value = null
+                    // 模板数据已直接操作，无需额外状态管理
                 }
 
                 ElMessage.success('模板删除成功')
@@ -1564,6 +1614,10 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
 
 // 处理模板创建成功事件
 const handleTemplateCreated = async (userUid: number, templateName: string) => {
+    if (autoSubmitting.value) {
+        return
+    }
+
     // 自动选择新创建的模板
     const targetUser = loginUsers.value.find(user => user.uid === userUid)
     if (targetUser) {
@@ -1577,28 +1631,26 @@ const handleTemplateCreated = async (userUid: number, templateName: string) => {
             }
         })
 
-        await loadTemplateToForm()
+        await loadTemplate()
     }
 }
 
 // 保存模板
 const saveTemplate = async () => {
-    if (!selectedUser.value || !currentTemplateName.value) {
+    if (!selectedUser.value || !currentTemplateName.value || !currentTemplate.value) {
         ElMessage.error('请先选择模板')
         return
     }
 
     try {
-        const templateConfig = userConfigStore.buildTemplateFromUploadForm(currentForm.value)
-
+        // 直接保存当前模板配置
         await userConfigStore.updateUserTemplate(
             selectedUser.value.uid,
             currentTemplateName.value,
-            templateConfig
+            currentTemplate.value
         )
 
-        // 更新基础模板状态
-        baseTemplate.value = JSON.parse(JSON.stringify(templateConfig))
+        // 模板数据已直接操作并保存，无需额外状态管理
     } catch (error) {
         console.error('保存模板失败: ', error)
         ElMessage.error(`'保存模板失败: ${error}'`)
@@ -1634,7 +1686,9 @@ const onCategoryChange = (categoryId: number) => {
     const category = typeList.value.find(item => item.id === categoryId)
     selectedCategory.value = category
     selectedSubCategory.value = null
-    currentForm.value.tid = 0
+    if (currentForm.value) {
+        currentForm.value.tid = 0
+    }
 }
 
 const onSubCategoryChange = (subCategoryId: number) => {
@@ -1643,7 +1697,9 @@ const onSubCategoryChange = (subCategoryId: number) => {
             (item: any) => item.id === subCategoryId
         )
         selectedSubCategory.value = subCategory
-        currentForm.value.tid = subCategoryId
+        if (currentForm.value) {
+            currentForm.value.tid = subCategoryId
+        }
         // 选择子分区后关闭popover
         categoryPopoverVisible.value = false
     }
@@ -1746,7 +1802,7 @@ const selectVideoWithTauri = async () => {
 
 // 清空所有文件
 const clearAllVideos = async () => {
-    if (!currentForm.value.videos || currentForm.value.videos.length === 0) {
+    if (!currentForm.value?.videos || currentForm.value.videos.length === 0) {
         return
     }
 
@@ -1755,7 +1811,7 @@ const clearAllVideos = async () => {
 
     try {
         await ElMessageBox.confirm(
-            `确定要清空所有已选择的 ${videoText} 吗？此操作不可撤销。`,
+            `确定要清空所有已选择的 ${videoText} 吗？`,
             '确认清空文件',
             {
                 confirmButtonText: '确定清空',
@@ -1791,6 +1847,10 @@ const clearAllVideos = async () => {
 
 // 调整视频顺序
 const removeUploadedFile = async (videoId: string) => {
+    if (!currentForm.value?.videos) {
+        return
+    }
+
     const videoIndex = currentForm.value.videos.findIndex(f => f.id === videoId)
     if (videoIndex > -1) {
         const video = currentForm.value.videos[videoIndex]
@@ -1838,7 +1898,7 @@ const removeUploadedFile = async (videoId: string) => {
 // 上传相关
 const createUpload = async () => {
     // 检查是否有文件可上传
-    const hasUploadedFiles = currentForm.value.videos && currentForm.value.videos.length > 0
+    const hasUploadedFiles = currentForm.value?.videos && currentForm.value.videos.length > 0
 
     if (!hasUploadedFiles) {
         ElMessage.error('请先选择视频文件')
@@ -1852,13 +1912,16 @@ const createUpload = async () => {
 
     uploading.value = true
     try {
-        console.log('开始上传文件:', currentForm.value.videos)
-        // 确保传递的是正确格式的数组
-        const num_added = await uploadStore.createUploadTask(
-            selectedUser.value.uid,
-            currentForm.value.videos
-        )
-        ElMessage.success(`添加 ${num_added} 个文件到上传队列`)
+        if (currentForm.value) {
+            console.log('开始上传文件:', currentForm.value.videos)
+            // 确保传递的是正确格式的数组
+            const num_added = await uploadStore.createUploadTask(
+                selectedUser.value.uid,
+                currentTemplateName.value,
+                currentForm.value.videos
+            )
+            ElMessage.success(`添加 ${num_added} 个文件到上传队列`)
+        }
 
         // 如果启用自动开始，则自动开始任务
         if (userConfigStore.configRoot?.auto_start) {
@@ -1919,7 +1982,7 @@ const autoStartWaitingTasks = async () => {
 
 // 检查是否所有文件都已上传完成
 const allFilesUploaded = computed(() => {
-    if (!currentForm.value.videos || currentForm.value.videos.length === 0) {
+    if (!currentForm.value?.videos || currentForm.value.videos.length === 0) {
         return false
     }
     return currentForm.value.videos.every(video => video.complete && video.path === '')
@@ -1975,7 +2038,7 @@ const submitTemplate = async (from_timeout: boolean) => {
                 )
                 let add = old_season_id && old_season_id !== 0 ? false : true
 
-                if (old_season_id !== currentForm.value.season_id) {
+                if (currentForm.value && old_season_id !== currentForm.value.season_id) {
                     const new_season_id = currentForm.value.season_id || 0
                     const new_section_id = currentForm.value.section_id || 0
                     await utilsStore.switchSeason(
@@ -1989,8 +2052,8 @@ const submitTemplate = async (from_timeout: boolean) => {
 
                     const season_title =
                         utilsStore.seasonlist.find(
-                            (s: any) => s.season_id === currentForm.value.season_id
-                        )?.title || currentForm.value.season_id
+                            (s: any) => s.season_id === currentForm.value?.season_id
+                        )?.title || currentForm.value?.season_id
                     ElMessage.success(`视频${resp.bvid}加入合集${season_title}`)
                 }
             } catch (error) {
@@ -1998,7 +2061,6 @@ const submitTemplate = async (from_timeout: boolean) => {
                 ElMessage.error(`设置合集失败: ${error}`)
             }
         }
-        saveTemplate()
     } catch (error) {
         console.error('视频提交失败: ', error)
         ElMessage.error(`视频提交失败: ${error}`)
@@ -2068,11 +2130,6 @@ const saveTemplateName = async () => {
 
         // 更新当前选择
         currentTemplateName.value = newName
-
-        // 更新基础模板状态
-        if (baseTemplate.value) {
-            baseTemplate.value = JSON.parse(JSON.stringify(originalTemplate))
-        }
 
         ElMessage.success('模板重命名成功')
         isEditingTemplateName.value = false
@@ -2479,6 +2536,20 @@ const refreshAllData = async () => {
 
 .template-name-input {
     max-width: 300px;
+}
+
+.refresh-btn {
+    cursor: pointer;
+    color: #606266;
+    font-size: 16px;
+    transition: all 0.3s;
+    border-radius: 4px;
+}
+
+.refresh-btn:hover {
+    color: #409eff;
+    background-color: #f0f9ff;
+    transform: rotate(180deg);
 }
 
 .header-actions {

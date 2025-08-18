@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core'
 
 interface UploadTask {
     id: string
+    template: string
     user: any
     video: any
     status: string
@@ -22,7 +23,7 @@ export const useUploadStore = defineStore('upload', () => {
     const uploadQueue = ref<UploadTask[]>([])
 
     // 创建上传任务
-    const createUploadTask = async (uid: number, videoFiles: any[]) => {
+    const createUploadTask = async (uid: number, template: string, videoFiles: any[]) => {
         try {
             var count = 0
             // 遍历videoFiles, 将所有id不存在uploadQueue中的任务添加到uploadQueue
@@ -34,7 +35,7 @@ export const useUploadStore = defineStore('upload', () => {
                 }
                 if (!uploadQueue.value.some(task => task.id === video.id)) {
                     try {
-                        await invoke('create_upload_task', { uid, video })
+                        await invoke('create_upload_task', { uid, template, video })
                         count++
                     } catch (error) {
                         console.error('创建上传任务失败:', error)

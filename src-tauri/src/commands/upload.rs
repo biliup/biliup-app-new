@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     AppData,
-    models::{UploadForm, UploadTask, VideoInfo},
+    models::{TemplateConfig, UploadTask, VideoInfo},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,7 +19,12 @@ pub struct UploadProgress {
 
 /// 创建上传任务
 #[tauri::command]
-pub async fn create_upload_task(app: AppHandle, uid: u64, video: VideoInfo) -> Result<(), String> {
+pub async fn create_upload_task(
+    app: AppHandle,
+    uid: u64,
+    template: String,
+    video: VideoInfo,
+) -> Result<(), String> {
     let app_lock = app.state::<Mutex<AppData>>();
     let mut app_data = app_lock.lock().await;
     let user = app_data
@@ -35,7 +40,7 @@ pub async fn create_upload_task(app: AppHandle, uid: u64, video: VideoInfo) -> R
     let upload_service = &mut app_data.upload_service;
 
     upload_service
-        .create_task(&user, &video, config_copy, clients_copy)
+        .create_task(&user, &template, &video, config_copy, clients_copy)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -119,7 +124,7 @@ pub async fn retry_upload(app: AppHandle, task_id: String) -> Result<bool, Strin
 }
 
 #[tauri::command]
-pub async fn submit(app: AppHandle, uid: u64, form: UploadForm) -> Result<Value, String> {
+pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Value, String> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
