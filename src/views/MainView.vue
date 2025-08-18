@@ -602,13 +602,19 @@
 
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.advanced" class="card-content">
-                                        <el-form-item label="定时发布">
+                                        <el-form-item v-if="!currentForm.aid" label="定时发布">
                                             <el-date-picker
                                                 v-model="dtimeDate"
                                                 type="datetime"
                                                 placeholder="选择发布时间"
                                                 format="YYYY-MM-DD HH:mm:ss"
-                                                :disabled-date="(date: Date) => date < new Date()"
+                                                :disabled-date="(date: Date) => {
+                                                    const now = new Date();
+                                                    const twoHoursLater = new Date(now.getTime() + 2 * 60 * 60 * 1000);
+                                                    const fifteenDaysLater = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000);
+
+                                                    return date < twoHoursLater || date > fifteenDaysLater;
+                                                }"
                                             />
                                         </el-form-item>
 
