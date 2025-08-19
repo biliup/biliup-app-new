@@ -20,7 +20,7 @@ use tokio::{
     sync::{Mutex, mpsc},
     task,
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, info, trace, warn};
 
 // define a macro :  task_title!(task_mutex)
 macro_rules! task_title {
@@ -233,7 +233,7 @@ async fn upload_background_interval(
         //     max_running.lock().await
         // );
     } else {
-        debug!("当前运行任务数已达最大并行数: {}", current_running);
+        trace!("当前运行任务数已达最大并行数: {}", current_running);
         return;
     }
 

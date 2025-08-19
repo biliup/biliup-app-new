@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { ElMessage } from 'element-plus'
 
 interface UploadTask {
     id: string
@@ -97,13 +98,29 @@ export const useUploadStore = defineStore('upload', () => {
             const queue: UploadTask[] = await invoke('get_upload_queue')
             uploadQueue.value = queue
             // 更新速率
-            let now = Date.now()
-            for (const task of queue) {
-                if (!task.started_at) continue
-                if (task.status !== 'Running') continue
-                const elapsed = now - task.started_at!
-                task.speed = elapsed > 0 ? (task.total_transmit_bytes * 1000) / elapsed : 0
-            }
+            const now = Date.now()
+            queue
+                .filter(task => task.started_at && task.status === 'Running')
+                .forEach(task => {
+                    const elapsed = now - task.started_at!
+                    task.speed = elapsed > 0 ? (task.total_transmit_bytes * 1000) / elapsed : 0
+                })
+
+            queue
+                .filter(
+                    task =>
+                        task.started_at &&
+                        task.status === 'Running' &&
+                        task.speed === 0 &&
+                        now - task.started_at! > 30000
+                )
+                .forEach(task => {
+                    ElMessage.warning(
+                        `${task.user.username}-${task.video.title} 超过 30 秒未上传，正在重试...`
+                    )
+                    retryUpload(task.id, false)
+                })
+
             return queue
         } catch (error) {
             console.error('获取上传队列失败:', error)
@@ -112,10 +129,12 @@ export const useUploadStore = defineStore('upload', () => {
     }
 
     // 重试上传
-    const retryUpload = async (taskId: string) => {
+    const retryUpload = async (taskId: string, refresh: boolean = true) => {
         try {
             await invoke('retry_upload', { taskId })
-            await getUploadQueue()
+            if (refresh) {
+                await getUploadQueue()
+            }
         } catch (error) {
             console.error('重试上传失败:', error)
             throw error
