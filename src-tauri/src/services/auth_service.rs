@@ -8,7 +8,7 @@ use biliup::{
 };
 use qrcode::QrCode;
 use serde_json::Value;
-use tracing::info;
+use tracing::{debug, info};
 
 pub struct AuthService {
     credential: Option<Credential>,
@@ -147,7 +147,7 @@ impl AuthService {
         let username = myinfo["data"]["name"].as_str().unwrap().to_owned();
         let uid = myinfo["data"]["mid"].as_u64().unwrap_or(0);
         let avatar_url = myinfo["data"]["face"].as_str().unwrap_or("").to_string();
-        info!("头像 URL: {}", avatar_url);
+        debug!("头像 URL: {}", avatar_url);
 
         let avatar = bilibili
             .client
@@ -158,7 +158,7 @@ impl AuthService {
             .bytes()
             .await?;
         let avatar = encode_base64(&avatar);
-        info!("头像 URL: {}", avatar_url);
+        debug!("头像 URL: {}", avatar_url);
         Ok((bilibili, User::new(uid, username, avatar)))
     }
 }

@@ -19,6 +19,14 @@
                     <h2 class="app-title">Biliup APP</h2>
                     <div class="app-version">(v{{ currentVer }})</div>
                 </div>
+                <div class="header-center">
+                    <el-button type="info" size="small" @click="exportLogs" title="导出日志">
+                        导出日志
+                    </el-button>
+                    <el-button type="primary" size="small" @click="checkUpdate" title="检查更新">
+                        检查更新
+                    </el-button>
+                </div>
                 <div class="header-right">
                     <!-- 上传队列下拉框 -->
                     <UploadQueue />
@@ -2304,6 +2312,43 @@ const refreshAllData = async () => {
         console.error('刷新数据失败:', error)
     }
 }
+
+// 导出日志
+const exportLogs = async () => {
+    try {
+        const log_path = await utilsStore.exportLogs()
+        await import('@tauri-apps/plugin-opener').then(({ openPath }) => openPath(log_path))
+    } catch (error) {
+        console.error('导出日志失败:', error)
+    }
+}
+
+// 检查更新
+const checkUpdate = async () => {
+    try {
+        const updateInfo = await utilsStore.checkUpdate()
+        if (updateInfo) {
+            // 如果有更新，显示确认对话框
+            try {
+                await ElMessageBox.confirm(`发现新版本 ${updateInfo}，是否前往下载？`, '发现更新', {
+                    confirmButtonText: '前往下载',
+                    cancelButtonText: '稍后再说',
+                    type: 'info'
+                })
+                // 用户确认后打开下载页面
+                await import('@tauri-apps/plugin-opener').then(({ openUrl }) =>
+                    openUrl(`https://github.com/HsuJv/biliup-app-new/releases/tag/${updateInfo}`)
+                )
+            } catch {
+                // 用户取消，不做任何操作
+            }
+        } else {
+            utilsStore.showMessage('当前已是最新版本', 'success')
+        }
+    } catch (error) {
+        console.error('检查更新失败:', error)
+    }
+}
 </script>
 
 <style scoped>
@@ -2339,6 +2384,12 @@ const refreshAllData = async () => {
 
 .app-version {
     display: inline-block;
+}
+
+.header-center {
+    display: flex;
+    align-items: center;
+    gap: 12px;
 }
 
 .header-right {

@@ -179,6 +179,31 @@ export const useUtilsStore = defineStore('template', () => {
         })
     }
 
+    // 导出日志
+    const exportLogs = async (): Promise<string> => {
+        try {
+            const result = await invoke<string>('export_logs')
+            showMessage('日志导出成功', 'success')
+            return result
+        } catch (error) {
+            console.error('导出日志失败:', error)
+            showMessage(`导出日志失败: ${error}`, 'error')
+            throw error
+        }
+    }
+
+    // 检查更新
+    const checkUpdate = async (): Promise<string | null> => {
+        try {
+            const result = await invoke<string | null>('check_update')
+            return result
+        } catch (error) {
+            console.error('检查更新失败:', error)
+            showMessage(`检查更新失败: ${error}`, 'error')
+            throw error
+        }
+    }
+
     return {
         typelist: computed(() => typelist.value),
         topiclist: computed(() => topiclist.value),
@@ -196,6 +221,8 @@ export const useUtilsStore = defineStore('template', () => {
         getSeasonList,
         getVideoSeason,
         switchSeason,
-        showMessage
+        showMessage,
+        exportLogs,
+        checkUpdate
     }
 })

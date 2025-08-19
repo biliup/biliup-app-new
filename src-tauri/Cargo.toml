@@ -41,9 +41,11 @@ chrono = "0.4.41"
 serde_yaml = "0.9"
 tracing = { version = "0.1", features = ["release_max_level_off"] }
 tracing-subscriber = "0.3.18"
+tracing-appender = "0.2"
 indexmap = "2"
 bytes="1"
 debug-ignore = "1.0"
+zip = "2.2"
 
 
 

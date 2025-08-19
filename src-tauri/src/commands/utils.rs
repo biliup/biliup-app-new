@@ -19,7 +19,7 @@ pub async fn get_current_version() -> Result<String, String> {
 #[tauri::command]
 pub async fn get_file_size(file_path: String) -> Result<u64, String> {
     let path = Path::new(&file_path);
-    file_utils::get_file_size(path).map_err(|e| format!("获取文件大小失败: {}", e))
+    file_utils::get_file_size(path).map_err(|e| format!("获取文件大小失败: {e}"))
 }
 
 /// 递归读取目录
@@ -31,7 +31,7 @@ pub async fn read_dir_recursive(
 ) -> Result<Vec<FileEntry>, String> {
     let path = Path::new(&dir_path);
     file_utils::read_dir_recursive(path, include_subdirs, max_depth)
-        .map_err(|e| format!("读取目录失败: {}", e))
+        .map_err(|e| format!("读取目录失败: {e}"))
 }
 
 /// 上传封面并进行返回url
@@ -180,7 +180,7 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, S
                 let mut season_vec = Vec::new();
 
                 let seasons = res["data"]["seasons"].as_array()
-                    .ok_or("用户没有创建合集").unwrap_or_else(|_| &season_vec).to_owned();
+                    .ok_or("用户没有创建合集").unwrap_or(&season_vec).to_owned();
                 for season in &seasons {
                     let season_id = season["season"]["id"].as_u64().unwrap_or(0);
                     let section_id = season["sections"]["sections"][0]["id"].as_u64().unwrap_or(0);
@@ -375,4 +375,112 @@ pub async fn switch_season(
             Err(e) => Err(e.to_string()),
         }
     }
+}
+
+/// 导出日志
+#[tauri::command]
+pub async fn export_logs() -> Result<String, String> {
+    use std::fs;
+    use std::io::Write;
+    use zip::ZipWriter;
+
+    let log_dir = crate::utils::get_log_path().map_err(|e| format!("获取日志目录失败: {e}"))?;
+
+    // 创建临时zip文件
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
+    let zip_path = log_dir.join(format!("logs_export_{}.zip", timestamp));
+
+    let zip_file = fs::File::create(&zip_path).map_err(|e| format!("创建ZIP文件失败: {e}"))?;
+    let mut zip = ZipWriter::new(zip_file);
+    let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
+        .compression_method(zip::CompressionMethod::Deflated)
+        .unix_permissions(0o644);
+
+    // 添加日志文件
+    if let Ok(entries) = fs::read_dir(&log_dir) {
+        for entry in entries.flatten() {
+            if let Some(extension) = entry.path().extension() {
+                if extension == "log" {
+                    let file_name = entry.file_name().to_string_lossy().to_string();
+                    if let Ok(content) = fs::read(&entry.path()) {
+                        zip.start_file(&file_name, options.clone())
+                            .map_err(|e| format!("创建ZIP条目失败: {e}"))?;
+                        zip.write_all(&content)
+                            .map_err(|e| format!("写入ZIP文件失败: {e}"))?;
+                    }
+                }
+            }
+        }
+    }
+
+    // TODO: 添加web console内容 - 需要从前端传递
+    // zip.start_file("web_console.log", options.clone())
+    //     .map_err(|e| format!("创建web console条目失败: {e}"))?;
+    // zip.write_all(b"Web console logs would be added here")
+    //     .map_err(|e| format!("写入web console失败: {e}"))?;
+
+    zip.finish().map_err(|e| format!("完成ZIP文件失败: {e}"))?;
+
+    Ok(log_dir.to_string_lossy().to_string())
+}
+
+/// 检查更新
+#[tauri::command]
+pub async fn check_update() -> Result<Option<String>, String> {
+    use reqwest;
+    use serde_json::Value;
+
+    let client = reqwest::Client::new();
+    let response = client
+        .get("https://api.github.com/repos/HsuJv/biliup-app-new/releases/latest")
+        .header("User-Agent", "biliup-app")
+        .send()
+        .await
+        .map_err(|e| format!("网络请求失败: {e}"))?;
+
+    let release_info: Value = response
+        .json()
+        .await
+        .map_err(|e| format!("解析响应失败: {e}"))?;
+
+    let latest_tag = release_info["tag_name"]
+        .as_str()
+        .ok_or("无法获取最新版本标签")?;
+
+    // 解析版本号 (格式: app-va.b.c)
+    let latest_version = latest_tag.strip_prefix("app-v").ok_or("版本标签格式错误")?;
+
+    let current_version = env!("CARGO_PKG_VERSION");
+
+    if is_newer_version(latest_version, current_version)? {
+        Ok(Some(latest_tag.to_string()))
+    } else {
+        Ok(None)
+    }
+}
+
+/// 比较版本号
+fn is_newer_version(latest: &str, current: &str) -> Result<bool, String> {
+    let parse_version = |v: &str| -> Result<Vec<u32>, String> {
+        v.split('.')
+            .map(|part| {
+                part.parse::<u32>()
+                    .map_err(|_| "版本号格式错误".to_string())
+            })
+            .collect()
+    };
+
+    let latest_parts = parse_version(latest)?;
+    let current_parts = parse_version(current)?;
+
+    for (latest_part, current_part) in latest_parts.iter().zip(current_parts.iter()) {
+        if latest_part > current_part {
+            return Ok(true);
+        } else if latest_part < current_part {
+            return Ok(false);
+        }
+    }
+
+    // 如果前面的部分都相等，比较长度
+    Ok(latest_parts.len() > current_parts.len())
 }

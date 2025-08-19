@@ -10,17 +10,13 @@ use biliup::bilibili::BiliBili;
 use commands::*;
 use tauri::Manager;
 use tokio::sync::Mutex;
-#[cfg(debug_assertions)]
-use tracing::Level;
 use tracing::{error, info};
-#[cfg(debug_assertions)]
-use tracing_subscriber::FmtSubscriber;
 use utils::CompatibilityConverter;
 
 use crate::{
     models::{ConfigRoot, User},
     services::{AuthService, upload_service::UploadService},
-    utils::{crypto::encode_base64, get_config_json_path},
+    utils::{crypto::encode_base64, get_config_json_path, get_log_path},
 };
 
 pub struct MyClient {
@@ -81,18 +77,6 @@ async fn startup() -> Result<AppData> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
-    // 避免 Tauri #9453
-    // 仅调试模式启用tracing
-    #[cfg(debug_assertions)]
-    {
-        let subscriber = FmtSubscriber::builder()
-            .with_max_level(Level::TRACE)
-            .finish();
-
-        tracing::subscriber::set_global_default(subscriber)
-            .expect("setting default subscriber failed");
-    }
-
     // 启动时进行兼容性检查
     if let Err(e) = CompatibilityConverter::startup_with_compatibility().await {
         info!("无旧biliup配置: {}", e);
@@ -116,26 +100,63 @@ pub async fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
-        .setup(|app: &mut tauri::App| {
-            // let stdout_log = tracing_subscriber::fmt::layer()
-            //     .pretty()
-            //     .with_filter(LevelFilter::INFO);
-            // let file_appender =
-            //     tracing_appender::rolling::never(config_path(app.handle())?, "biliup.log");
-            // // let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-            // let file_layer = tracing_subscriber::fmt::layer()
-            //     .with_ansi(false)
-            //     .with_writer(file_appender)
-            //     .with_filter(LevelFilter::INFO);
-            // Registry::default().with(stdout_log).with(file_layer).init();
+        .setup(move |app: &mut tauri::App| {
+            info!("Tauri app is starting...");
+            let log_dir = get_log_path()?;
+            let log_file = format!(
+                "biliup-{}.log",
+                chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S")
+            );
+            let file_appender = tracing_appender::rolling::never(log_dir, &log_file);
+            let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+
+            use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
+
+            let file_layer = tracing_subscriber::fmt::layer()
+                .with_writer(non_blocking)
+                .with_ansi(false) // 禁用 ANSI 颜色代码
+                .with_target(false)
+                .with_thread_ids(false)
+                .with_file(true)
+                .with_line_number(true);
+
+            #[cfg(debug_assertions)]
+            let console_layer = tracing_subscriber::fmt::layer()
+                .with_writer(std::io::stdout)
+                .with_ansi(true) // 启用 ANSI 颜色代码
+                .with_target(false)
+                .with_thread_ids(false)
+                .with_file(true)
+                .with_line_number(true);
+
+            // !!!!!!
+            // !!!!!! Attention
+            // Tauri #9453提出启用tracing后traui应用有概率卡死
+            // 在发行版本中尽量少的输出日志
+
+            #[cfg(debug_assertions)]
+            tracing_subscriber::registry()
+                .with(file_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
+                .with(console_layer.with_filter(tracing_subscriber::filter::LevelFilter::TRACE))
+                .init();
+
+            #[cfg(not(debug_assertions))]
+            tracing_subscriber::registry()
+                .with(file_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
+                .init();
+
+            info!("日志已输出到: {:?} {}", get_log_path()?, log_file);
+
             #[cfg(debug_assertions)] // only include this code on debug builds
             {
                 let windows = app.webview_windows();
-                for (name, window) in windows {
-                    error!("Window name: {}", name);
+                for (_name, window) in windows {
                     window.open_devtools();
                 }
             }
+
+            // 管理应用数据状态
+            app.manage(Mutex::new(appdata));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -178,11 +199,9 @@ pub async fn run() {
             get_video_detail,
             get_video_season,
             switch_season,
+            export_logs,
+            check_update,
         ])
-        .setup(|app: &mut tauri::App| {
-            app.manage(Mutex::new(appdata));
-            Ok(())
-        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

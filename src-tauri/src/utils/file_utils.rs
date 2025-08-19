@@ -120,6 +120,19 @@ fn read_dir_recursive_internal(
     Ok(())
 }
 
+/// 获取日志路径
+pub fn get_log_path() -> Result<PathBuf> {
+    let config_dir = get_config_dir()?;
+    let log_dir = config_dir.join("logs");
+
+    // 确保日志目录存在
+    if !log_dir.exists() {
+        fs::create_dir_all(&log_dir)?;
+    }
+
+    Ok(log_dir)
+}
+
 /// 获取应用配置目录路径
 pub fn get_config_dir() -> Result<PathBuf> {
     let appdata_dir = dirs::config_dir().ok_or_else(|| anyhow::anyhow!("无法获取 APPDATA 目录"))?;

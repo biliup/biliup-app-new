@@ -86,7 +86,7 @@ impl TemplateConfig {
         template_config.videos = videos
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("videos should be an array"))?
-            .into_iter()
+            .iter()
             .map(|v| Ok(serde_json::from_value(v.clone())?))
             .collect::<Result<Vec<_>>>()?;
         Ok(template_config)
