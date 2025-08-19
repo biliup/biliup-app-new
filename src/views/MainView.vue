@@ -123,7 +123,11 @@
                                     :class="{
                                         active:
                                             selectedUser?.uid === userTemplate.user.uid &&
-                                            currentTemplateName === template.name
+                                            currentTemplateName === template.name,
+                                        'auto-submitting':
+                                            autoSubmittingRecord[
+                                                getTemplateKey(userTemplate.user.uid, template.name)
+                                            ]
                                     }"
                                     @click="selectTemplate(userTemplate.user, template.name)"
                                 >
@@ -761,9 +765,12 @@
                                     type="primary"
                                     size="large"
                                     :loading="submitting"
-                                    @click="submitTemplate(false)"
+                                    @click="submitTemplate"
                                     :disabled="
-                                        !currentForm.videos || currentForm.videos.length === 0
+                                        !currentForm.videos ||
+                                        currentForm.videos.length === 0 ||
+                                        !currentForm.title ||
+                                        currentForm.title.trim() === ''
                                     "
                                 >
                                     <el-icon v-if="!allFilesUploaded && !submitting"
@@ -771,7 +778,7 @@
                                     /></el-icon>
                                     <el-icon v-else-if="!submitting"><check /></el-icon>
                                     {{
-                                        !autoSubmitting
+                                        !getCurrentAutoSubmitting
                                             ? currentTemplate?.aid
                                                 ? '编辑稿件'
                                                 : '新增稿件'
@@ -877,8 +884,137 @@ const showGlobalConfigDialog = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
-const autoSubmitting = ref(false)
-const autoSubmitTimeout = ref<number | null>(null)
+// 自动提交状态记录 - 记录每个模板的自动提交状态
+const autoSubmittingRecord = ref<Record<string, boolean>>({})
+// 全局自动提交检查间隔
+let autoSubmitInterval: number | null = null
+
+// 生成模板键名
+const getTemplateKey = (uid: number, templateName: string) => `${uid}-${templateName}`
+
+// 获取当前模板的自动提交状态
+const getCurrentAutoSubmitting = computed(() => {
+    if (!selectedUser.value || !currentTemplateName.value) return false
+    const key = getTemplateKey(selectedUser.value.uid, currentTemplateName.value)
+    return autoSubmittingRecord.value[key] || false
+})
+
+// 设置模板的自动提交状态
+const setAutoSubmitting = (uid: number, templateName: string, status: boolean) => {
+    const key = getTemplateKey(uid, templateName)
+    if (status) {
+        autoSubmittingRecord.value[key] = true
+    } else {
+        delete autoSubmittingRecord.value[key]
+    }
+}
+
+// 检查是否有任何模板在自动提交
+const hasAnyAutoSubmitting = computed(() => {
+    return Object.keys(autoSubmittingRecord.value).length > 0
+})
+
+// 全局自动提交检查函数
+const checkAutoSubmitAll = async () => {
+    const templateKeys = Object.keys(autoSubmittingRecord.value)
+
+    for (const templateKey of templateKeys) {
+        const [uidStr, templateName] = templateKey.split('-', 2)
+        const uid = parseInt(uidStr)
+
+        if (isNaN(uid) || !templateName) continue
+
+        // 获取用户和模板配置
+        const user = loginUsers.value.find(u => u.uid === uid)
+        if (!user || !userConfigStore.configRoot?.config[uid]?.templates[templateName]) {
+            // 如果用户或模板不存在，清除自动提交状态
+            setAutoSubmitting(uid, templateName, false)
+            continue
+        }
+
+        const template = userConfigStore.configRoot.config[uid].templates[templateName]
+
+        // 检查是否所有文件都已上传完成
+        if (template.videos && template.videos.length > 0) {
+            const allUploaded = template.videos.every(video => video.complete && video.path === '')
+
+            if (allUploaded) {
+                // 文件已全部上传完成，执行提交
+                try {
+                    await performTemplateSubmit(uid, templateName, template)
+                    setAutoSubmitting(uid, templateName, false)
+                } catch (error) {
+                    console.error(`模板 ${templateKey} 自动提交失败:`, error)
+                    setAutoSubmitting(uid, templateName, false)
+                }
+            }
+        } else {
+            // 没有视频文件，清除自动提交状态
+            setAutoSubmitting(uid, templateName, false)
+        }
+    }
+
+    // 如果没有模板在自动提交，停止间隔检查
+    if (!hasAnyAutoSubmitting.value && autoSubmitInterval) {
+        clearInterval(autoSubmitInterval)
+        autoSubmitInterval = null
+    }
+}
+
+// 启动全局自动提交检查
+const startAutoSubmitCheck = () => {
+    if (!autoSubmitInterval) {
+        autoSubmitInterval = setInterval(checkAutoSubmitAll, 500)
+    }
+}
+
+// 执行模板提交
+const performTemplateSubmit = async (uid: number, templateName: string, template: any) => {
+    const user = loginUsers.value.find(u => u.uid === uid)
+    if (!user) throw new Error('用户不存在')
+
+    submitting.value = true
+    try {
+        const resp = (await uploadStore.submitTemplate(uid, template)) as any
+
+        // 更新最后提交时间（只对当前模板）
+        if (selectedUser.value?.uid === uid && currentTemplateName.value === templateName) {
+            lastSubmit.value = new Date().toLocaleString()
+        }
+
+        ElMessage.success(`视频${resp.bvid}提交成功 (模板: ${templateName})`)
+
+        if (resp && resp.aid && utilsStore.hasSeason) {
+            try {
+                const old_season_id = await utilsStore.getVideoSeason(uid, resp.aid)
+                let add = old_season_id && old_season_id !== 0 ? false : true
+
+                if (template && old_season_id !== template.season_id) {
+                    const new_season_id = template.season_id || 0
+                    const new_section_id = template.section_id || 0
+                    await utilsStore.switchSeason(
+                        uid,
+                        resp.aid,
+                        new_season_id,
+                        new_section_id,
+                        template.title,
+                        add
+                    )
+
+                    const season_title =
+                        utilsStore.seasonlist.find((s: any) => s.season_id === template.season_id)
+                            ?.title || template.season_id
+                    ElMessage.success(`视频${resp.bvid}加入合集${season_title}`)
+                }
+            } catch (error) {
+                console.error('设置合集失败: ', error)
+                ElMessage.error(`设置合集失败: ${error}`)
+            }
+        }
+    } finally {
+        submitting.value = false
+    }
+}
 const lastSubmit = ref<string>('')
 const inputVisible = ref(false)
 const newTag = ref('')
@@ -1071,11 +1207,14 @@ onUnmounted(() => {
         keyboardCleanup()
     }
 
-    // 清理自动提交的 timeout
-    if (autoSubmitTimeout.value) {
-        clearTimeout(autoSubmitTimeout.value)
-        autoSubmitTimeout.value = null
+    // 清理自动提交间隔检查
+    if (autoSubmitInterval) {
+        clearInterval(autoSubmitInterval)
+        autoSubmitInterval = null
     }
+
+    // 清理所有自动提交状态
+    autoSubmittingRecord.value = {}
 })
 
 // 初始化数据
@@ -1403,29 +1542,6 @@ const selectTemplate = async (user: any, templateName: string) => {
         return
     }
 
-    if (autoSubmitTimeout.value) {
-        try {
-            await ElMessageBox.confirm(
-                '正在自动提交中，切换模板将导致自动提交失败',
-                '确认切换模板',
-                {
-                    confirmButtonText: '确认并切换',
-                    cancelButtonText: '不切换',
-                    distinguishCancelAndClose: true,
-                    type: 'warning'
-                }
-            )
-        } catch (action) {
-            return
-        }
-    }
-
-    // 清理自动提交状态s
-    if (autoSubmitTimeout.value) {
-        clearTimeout(autoSubmitTimeout.value)
-        autoSubmitTimeout.value = null
-    }
-    autoSubmitting.value = false
     lastSubmit.value = ''
 
     selectedUser.value = user
@@ -1667,7 +1783,7 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
 
 // 处理模板创建成功事件
 const handleTemplateCreated = async (userUid: number, templateName: string) => {
-    if (autoSubmitting.value) {
+    if (getCurrentAutoSubmitting.value) {
         return
     }
 
@@ -2006,7 +2122,7 @@ const handleAddVideosToForm = async (newVideos: any[]) => {
 
 // 处理文件夹监控提交稿件事件
 const handleSubmitTemplate = async () => {
-    await submitTemplate(false)
+    await submitTemplate()
 }
 
 // 自动开始待处理的任务
@@ -2041,88 +2157,27 @@ const allFilesUploaded = computed(() => {
 })
 
 // 提交视频
-const submitTemplate = async (from_timeout: boolean) => {
-    if (!currentTemplateName.value) {
+const submitTemplate = async () => {
+    if (!currentTemplateName.value || !selectedUser.value) {
         ElMessage.error('请选择模板')
         return
     }
 
     if (!allFilesUploaded.value) {
-        if (!autoSubmitting.value) {
+        const currentAutoSubmitting = getCurrentAutoSubmitting.value
+        if (!currentAutoSubmitting) {
             // 首次点击，开始自动提交
-            autoSubmitting.value = true
-            autoSubmitTimeout.value = setTimeout(async () => {
-                await submitTemplate(true)
-            }, 500)
+            setAutoSubmitting(selectedUser.value.uid, currentTemplateName.value, true)
+            startAutoSubmitCheck()
             ElMessage.info('已启动自动提交，上传完成后将自动提交')
         } else {
-            if (from_timeout) {
-                autoSubmitTimeout.value = setTimeout(async () => {
-                    await submitTemplate(true)
-                }, 500)
-            } else {
-                // 第二次点击，取消自动提交
-                if (autoSubmitTimeout.value) {
-                    clearTimeout(autoSubmitTimeout.value)
-                    autoSubmitTimeout.value = null
-                }
-                autoSubmitting.value = false
-                ElMessage.info('已取消自动提交')
-            }
+            // 第二次点击，取消自动提交
+            setAutoSubmitting(selectedUser.value.uid, currentTemplateName.value, false)
+            ElMessage.info('已取消自动提交')
         }
         return
-    }
-
-    submitting.value = true
-    try {
-        const resp = (await uploadStore.submitTemplate(
-            selectedUser.value.uid,
-            currentForm.value
-        )) as any
-        lastSubmit.value = new Date().toLocaleString()
-        ElMessage.success(`视频${resp.bvid}提交成功`)
-
-        if (resp && resp.aid && utilsStore.hasSeason) {
-            try {
-                const old_season_id = await utilsStore.getVideoSeason(
-                    selectedUser.value.uid,
-                    resp.aid
-                )
-                let add = old_season_id && old_season_id !== 0 ? false : true
-
-                if (currentForm.value && old_season_id !== currentForm.value.season_id) {
-                    const new_season_id = currentForm.value.season_id || 0
-                    const new_section_id = currentForm.value.section_id || 0
-                    await utilsStore.switchSeason(
-                        selectedUser.value.uid,
-                        resp.aid,
-                        new_season_id,
-                        new_section_id,
-                        currentForm.value.title,
-                        add
-                    )
-
-                    const season_title =
-                        utilsStore.seasonlist.find(
-                            (s: any) => s.season_id === currentForm.value?.season_id
-                        )?.title || currentForm.value?.season_id
-                    ElMessage.success(`视频${resp.bvid}加入合集${season_title}`)
-                }
-            } catch (error) {
-                console.error('设置合集失败: ', error)
-                ElMessage.error(`设置合集失败: ${error}`)
-            }
-        }
-    } catch (error) {
-        console.error('视频提交失败: ', error)
-        ElMessage.error(`视频提交失败: ${error}`)
-    } finally {
-        submitting.value = false
-        autoSubmitting.value = false
-        if (autoSubmitTimeout.value) {
-            clearTimeout(autoSubmitTimeout.value)
-            autoSubmitTimeout.value = null
-        }
+    } else {
+        performTemplateSubmit(selectedUser.value.uid, currentTemplateName.value, currentForm.value)
     }
 }
 
@@ -2452,6 +2507,81 @@ const refreshAllData = async () => {
 .template-item.active {
     background: #ecf5ff;
     border-left: 3px solid #409eff;
+}
+
+.template-item.auto-submitting {
+    position: relative;
+    overflow: hidden;
+    background: linear-gradient(45deg, #e3f2fd, #f3e5f5);
+    border: 2px solid #409eff;
+    box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
+    animation: pulse-border 1.5s ease-in-out infinite alternate;
+}
+
+.template-item.auto-submitting::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(64, 158, 255, 0.6), transparent);
+    animation: shimmer 1.5s infinite;
+    z-index: 1;
+}
+
+.template-item.auto-submitting::after {
+    content: '⚡ 自动上传中...';
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    font-size: 10px;
+    color: #409eff;
+    font-weight: bold;
+    animation: blink 1s infinite;
+    z-index: 3;
+}
+
+.template-item.auto-submitting .template-main {
+    position: relative;
+    z-index: 2;
+}
+
+.template-item.auto-submitting .template-name {
+    color: #1976d2;
+    font-weight: 600;
+    text-shadow: 0 1px 3px rgba(25, 118, 210, 0.2);
+}
+
+@keyframes shimmer {
+    0% {
+        left: -100%;
+    }
+    100% {
+        left: 100%;
+    }
+}
+
+@keyframes pulse-border {
+    0% {
+        border-color: #409eff;
+        box-shadow: 0 0 20px rgba(64, 158, 255, 0.4);
+    }
+    100% {
+        border-color: #1890ff;
+        box-shadow: 0 0 30px rgba(24, 144, 255, 0.6);
+    }
+}
+
+@keyframes blink {
+    0%,
+    50% {
+        opacity: 1;
+    }
+    51%,
+    100% {
+        opacity: 0.3;
+    }
 }
 
 .template-main {
