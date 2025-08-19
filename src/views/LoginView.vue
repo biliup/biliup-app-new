@@ -23,7 +23,7 @@
                         </el-tab-pane>
 
                         <!-- 用户名密码登录 -->
-                        <el-tab-pane label="密码登录" name="password">
+                        <el-tab-pane label="密码登录" name="password" disabled>
                             <div class="password-login">
                                 <el-form
                                     :model="passwordForm"
@@ -59,7 +59,7 @@
                         </el-tab-pane>
 
                         <!-- 短信登录 -->
-                        <el-tab-pane label="短信登录" name="sms">
+                        <el-tab-pane label="短信登录" name="sms" disabled>
                             <div class="sms-login">
                                 <el-form :model="smsForm" ref="smsFormRef" :rules="smsRules">
                                     <el-form-item prop="phone">
@@ -124,7 +124,7 @@
                         </el-tab-pane>
 
                         <!-- Cookie登录 -->
-                        <el-tab-pane label="Cookie登录" name="cookie">
+                        <el-tab-pane label="Cookie登录" name="cookie" disabled>
                             <div class="cookie-login">
                                 <el-input
                                     v-model="cookieValue"
