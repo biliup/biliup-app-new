@@ -242,14 +242,14 @@ const selectedUser = computed(
 )
 
 const configForm = ref<GlobalConfigForm>({
-    max_curr: 2,
+    max_curr: 1,
     auto_upload: true,
     auto_start: true
 })
 
 // 保存原始配置用于检查变化
 const originalConfig = ref<GlobalConfigForm>({
-    max_curr: 2,
+    max_curr: 1,
     auto_upload: true,
     auto_start: true
 })
@@ -467,7 +467,7 @@ const handleClose = (done: () => void) => {
 const handleDialogClose = () => {
     // 重置表单为默认值
     configForm.value = {
-        max_curr: 2,
+        max_curr: 1,
         auto_upload: true,
         auto_start: true
     }

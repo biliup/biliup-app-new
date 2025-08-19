@@ -5,7 +5,7 @@ use anyhow::Result;
 use biliup::bilibili;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use tracing::debug;
+use tracing::{debug, trace};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TopicDetail {
@@ -74,8 +74,10 @@ pub struct BilibiliForm {
 
 impl TemplateConfig {
     pub fn from_bilibili_res(value: Value) -> Result<Self> {
+        trace!("{}", serde_json::to_string(&value)?);
+
         let archive = value["archive"].clone();
-        debug!("{}", serde_json::to_string(&archive)?);
+        debug!("{}", serde_json::to_string(&value)?);
         let mut template_config: Self = serde_json::from_value(archive)?;
 
         let videos = value["videos"].clone();

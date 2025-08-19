@@ -251,7 +251,7 @@ impl ConfigRoot {
 
     pub fn default() -> Self {
         Self {
-            max_curr: 2,
+            max_curr: 1,
             auto_start: true,
             auto_upload: true,
             config: HashMap::new(),

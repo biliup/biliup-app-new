@@ -233,7 +233,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         if (!configRoot.value) {
             configRoot.value = {
-                max_curr: 2,
+                max_curr: 1,
                 auto_start: true,
                 auto_upload: true,
                 config: {}
