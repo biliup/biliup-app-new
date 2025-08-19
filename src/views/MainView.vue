@@ -300,15 +300,19 @@
                                                 class="cover-uploader"
                                                 action="#"
                                                 @click="selectCoverWithTauri"
+                                                v-loading="coverLoading"
                                             >
                                                 <img
-                                                    v-if="coverDisplayUrl"
+                                                    v-if="coverDisplayUrl && !coverLoading"
                                                     :src="coverDisplayUrl"
                                                     class="cover-image"
                                                 />
-                                                <el-icon v-else class="cover-uploader-icon"
-                                                    ><plus
-                                                /></el-icon>
+                                                <el-icon
+                                                    v-else-if="!coverLoading"
+                                                    class="cover-uploader-icon"
+                                                >
+                                                    <plus />
+                                                </el-icon>
                                             </div>
                                         </el-form-item>
 
@@ -862,6 +866,7 @@ const currentVer = ref<string>('')
 
 // 封面显示URL
 const coverDisplayUrl = ref<string>('')
+const coverLoading = ref<boolean>(false)
 
 // 响应式数据
 const selectedUser = ref<any>(null)
@@ -991,6 +996,7 @@ watch(
     async (newCover: string | undefined) => {
         if (newCover && selectedUser.value) {
             try {
+                coverLoading.value = true
                 const downloadedCover = await utilsStore.downloadCover(
                     selectedUser.value.uid,
                     newCover
@@ -999,9 +1005,12 @@ watch(
             } catch (error) {
                 console.error('Failed to download cover:', error)
                 coverDisplayUrl.value = ''
+            } finally {
+                coverLoading.value = false
             }
         } else {
             coverDisplayUrl.value = ''
+            coverLoading.value = false
         }
     }
 )
@@ -1023,6 +1032,7 @@ watch(
     async (newUser: any) => {
         if (currentForm.value?.cover && newUser) {
             try {
+                coverLoading.value = true
                 const downloadedCover = await utilsStore.downloadCover(
                     newUser.uid,
                     currentForm.value.cover
@@ -1031,9 +1041,12 @@ watch(
             } catch (error) {
                 console.error('Failed to download cover:', error)
                 coverDisplayUrl.value = ''
+            } finally {
+                coverLoading.value = false
             }
         } else {
             coverDisplayUrl.value = ''
+            coverLoading.value = false
         }
     }
 )
@@ -1778,6 +1791,7 @@ const selectCoverWithTauri = async () => {
         }
 
         if (selectedUser.value && currentTemplate.value && currentForm.value) {
+            coverLoading.value = true
             const url = await utilsStore.uploadCover(selectedUser.value.uid, selected)
             if (url) {
                 currentTemplate.value.cover = url
@@ -1792,6 +1806,8 @@ const selectCoverWithTauri = async () => {
         console.error('封面选择失败: ', error)
         ElMessage.error(`'封面选择失败: ${error}'`)
         return
+    } finally {
+        coverLoading.value = false
     }
 }
 
