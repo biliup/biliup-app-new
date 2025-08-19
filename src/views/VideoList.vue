@@ -62,17 +62,26 @@
 
                     <div class="video-status-icon">
                         <!-- 上传完成 -->
-                        <el-icon v-if="video.complete" class="status-complete">
+                        <el-icon v-if="video.status === 'Completed'" class="status-complete">
                             <circle-check />
                         </el-icon>
                         <!-- 上传中 -->
-                        <el-icon
-                            v-else-if="!video.complete && video.progress > 0"
-                            class="status-uploading"
-                        >
+                        <el-icon v-else-if="video.status === 'Running'" class="status-uploading">
                             <loading />
                         </el-icon>
-                        <!-- 待上传 -->
+                        <!-- 失败 -->
+                        <el-icon v-else-if="video.status === 'Failed'" class="status-failed">
+                            <circle-close />
+                        </el-icon>
+                        <!-- 暂停 -->
+                        <el-icon v-else-if="video.status === 'Paused'" class="status-paused">
+                            <video-pause />
+                        </el-icon>
+                        <!-- 已取消 -->
+                        <el-icon v-else-if="video.status === 'Cancelled'" class="status-cancelled">
+                            <circle-close />
+                        </el-icon>
+                        <!-- 待上传/等待中 -->
                         <el-icon v-else class="status-pending">
                             <cloudy />
                         </el-icon>
@@ -105,36 +114,56 @@
 
                             <!-- 状态标签移动到文件名右侧 -->
                             <div class="video-status">
-                                <span v-if="video.complete" class="status-text complete"
-                                    >上传完成</span
+                                <span
+                                    class="status-text"
+                                    :class="{
+                                        complete: video.status === 'Completed',
+                                        uploading: video.status === 'Running',
+                                        pending:
+                                            video.status === 'Waiting' ||
+                                            video.status === 'Pending',
+                                        failed: video.status === 'Failed',
+                                        paused: video.status === 'Paused',
+                                        cancelled: video.status === 'Cancelled'
+                                    }"
                                 >
-                                <span v-else-if="video.progress > 0" class="status-text uploading">
-                                    上传中
+                                    {{ getStatusText(video.status || 'Waiting') }}
                                 </span>
-                                <span v-else class="status-text pending">待上传</span>
                             </div>
                         </div>
 
                         <!-- 进度条区域 -->
                         <div class="progress-section">
-                            <div class="progress-bar-container" v-if="!video.complete">
+                            <div
+                                class="progress-bar-container"
+                                v-if="video.status !== 'Completed' && video.status !== 'Failed'"
+                            >
                                 <el-progress
                                     :percentage="video.progress"
                                     :show-text="false"
                                     size="small"
                                     :stroke-width="3"
-                                    :color="video.complete ? '#67c23a' : '#409eff'"
+                                    :color="getProgressColor(video.status)"
                                 />
                                 <span class="progress-text"
                                     >{{ formatUploadProgress(video) }}%</span
                                 >
                             </div>
-                            <div class="upload-speed" v-if="!video.complete && video.speed > 0">
+                            <div v-if="video.status === 'Failed'" class="error-message">
+                                {{ video.errorMessage || '上传失败' }}
+                            </div>
+                            <div
+                                class="upload-speed"
+                                v-if="video.status === 'Running' && video.speed > 0"
+                            >
                                 {{ formatUploadSpeed(video) }}
                             </div>
                         </div>
                         <!-- 完成时间显示 -->
-                        <span class="completed-time" v-if="video.complete">
+                        <span
+                            class="completed-time"
+                            v-if="video.status === 'Completed' && video.finished_at"
+                        >
                             {{ formatFinishedTime(video.finished_at) }}
                         </span>
                     </div>
@@ -174,7 +203,9 @@ import {
     Edit,
     Delete,
     UploadFilled,
-    FolderOpened
+    FolderOpened,
+    CircleClose,
+    VideoPause
 } from '@element-plus/icons-vue'
 import { useUploadStore } from '../stores/upload'
 import FloderWatch from './FloderWatch.vue'
@@ -243,16 +274,22 @@ const updatedVideos = computed(() => {
 
         if (updatedVideo.id == updatedVideo.filename || !updatedVideo.path) {
             updatedVideo.complete = true
+            updatedVideo.status = 'Completed'
+            updatedVideo.errorMessage = ''
         } else {
             const task = uploadStore.getUploadTask(updatedVideo.id)
             if (task) {
                 updatedVideo.complete = task.status === 'Completed'
+                updatedVideo.status = task.status || 'Waiting'
+                updatedVideo.errorMessage = task.error_message || ''
                 updatedVideo.totalSize = task.total_size || 0
                 updatedVideo.speed = task.speed || 0
                 updatedVideo.progress = task.progress || 0
                 updatedVideo.finished_at = task.finished_at || 0
             } else {
                 updatedVideo.complete = false
+                updatedVideo.status = 'Waiting'
+                updatedVideo.errorMessage = ''
                 updatedVideo.totalSize = 0
                 updatedVideo.speed = 0
                 updatedVideo.progress = 0
@@ -263,6 +300,8 @@ const updatedVideos = computed(() => {
         // 检查是否有变化
         if (
             originalVideo.complete !== updatedVideo.complete ||
+            originalVideo.errorMessage !== updatedVideo.errorMessage ||
+            originalVideo.status !== updatedVideo.status ||
             originalVideo.totalSize !== updatedVideo.totalSize ||
             originalVideo.speed !== updatedVideo.speed ||
             originalVideo.progress !== updatedVideo.progress ||
@@ -375,9 +414,39 @@ const formatFinishedTime = (timestamp: number | string): string => {
     }
 }
 
+// 获取状态文本，与UploadQueue保持一致
+const getStatusText = (status: string) => {
+    const statusMap = {
+        Waiting: '待开始',
+        Pending: '等待中',
+        Running: '上传中',
+        Completed: '已完成',
+        Cancelled: '已取消',
+        Paused: '已暂停',
+        Failed: '失败'
+    }
+    return statusMap[status as keyof typeof statusMap] || status
+}
+
+// 获取进度条颜色
+const getProgressColor = (status: string) => {
+    switch (status) {
+        case 'Running':
+            return '#409eff'
+        case 'Failed':
+            return '#f56c6c'
+        case 'Paused':
+            return '#e6a23c'
+        case 'Cancelled':
+            return '#909399'
+        default:
+            return '#409eff'
+    }
+}
+
 // 检查视频是否超过8小时（需要警告）
 const isVideoExpiredSoon = (video: any): boolean => {
-    if (!video.complete || !video.finished_at) return false
+    if (video.status !== 'Completed' || !video.finished_at) return false
 
     try {
         const finishedDate = new Date(video.finished_at)
@@ -563,6 +632,21 @@ const handleSubmitVideos = () => {
     font-size: 12px;
 }
 
+.status-failed {
+    color: #f56c6c;
+    font-size: 14px;
+}
+
+.status-paused {
+    color: #e6a23c;
+    font-size: 14px;
+}
+
+.status-cancelled {
+    color: #909399;
+    font-size: 14px;
+}
+
 @keyframes rotate {
     from {
         transform: rotate(0deg);
@@ -654,6 +738,21 @@ const handleSubmitVideos = () => {
     color: #909399;
 }
 
+.video-status .status-text.failed {
+    background: #fef0f0;
+    color: #f56c6c;
+}
+
+.video-status .status-text.paused {
+    background: #fdf6ec;
+    color: #e6a23c;
+}
+
+.video-status .status-text.cancelled {
+    background: #f4f4f5;
+    color: #909399;
+}
+
 .progress-section {
     display: flex;
     flex-direction: column;
@@ -686,6 +785,28 @@ const handleSubmitVideos = () => {
     text-align: right;
     font-family: 'Courier New', monospace;
     line-height: 1.2;
+}
+
+.error-message {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    color: #f56c6c;
+    background: #fef0f0;
+    border: 1px solid #fbc4c4;
+    border-radius: 3px;
+    padding: 3px 6px;
+    margin-top: 2px;
+    line-height: 1.3;
+    word-break: break-word;
+    max-width: 100%;
+}
+
+.error-message .error-icon {
+    font-size: 10px;
+    color: #f56c6c;
+    flex-shrink: 0;
 }
 
 .video-actions {

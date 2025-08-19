@@ -20,7 +20,7 @@ use tokio::{
     sync::{Mutex, mpsc},
     task,
 };
-use tracing::{debug, info, trace, warn};
+use tracing::{debug, error, info, trace, warn};
 
 // define a macro :  task_title!(task_mutex)
 macro_rules! task_title {
@@ -105,7 +105,7 @@ impl UploadService {
         for task_mutex in self.upload_queue.lock().await.values() {
             tasks.push(task_mutex.lock().await.clone());
 
-            if task_mutex.lock().await.is_completed() {
+            if task_mutex.lock().await.is_completed() || task_mutex.lock().await.is_failed() {
                 let title = task_title!(task_mutex);
                 // pull out from the handles
                 if self
@@ -180,8 +180,8 @@ impl UploadService {
                 handle.abort();
                 info!("结束后台任务: {}", task_title!(task_mutex));
             }
-            task_mutex.lock().await.pending();
-            info!("任务切换至pending: {}", task_title!(task_mutex));
+            task_mutex.lock().await.retry();
+            info!("任务切换重试: {}", task_title!(task_mutex));
             Ok(true)
         } else {
             Err(anyhow::anyhow!("任务ID不存在: {}", task_id))
@@ -240,12 +240,11 @@ async fn upload_background_interval(
     let task_mutexes: Vec<_> = queue.lock().await.values().cloned().collect();
     for task_mutex in task_mutexes {
         // let task_guard = task_mutex.lock().await;
-        // info!(
+        // trace!(
         //     "任务：{}, 状态: {:?}",
         //     task_guard.title(),
         //     task_guard.status
         // );
-        // // let is_pending = task_guard.is_pending();
         // drop(task_guard); // 显式释放锁
 
         if task_mutex.lock().await.is_pending() && remain > 0 {
@@ -257,7 +256,11 @@ async fn upload_background_interval(
             handle.lock().await.insert(
                 task_id,
                 task::spawn(async move {
-                    let _ = upload_impl(task_mutex_clone).await;
+                    let task = Arc::clone(&task_mutex_clone);
+                    if let Err(e) = upload_impl(task).await {
+                        error!("上传任务失败: {}", e);
+                        task_mutex_clone.lock().await.fail(e.to_string());
+                    }
                 }),
             );
             remain -= 1;
@@ -345,6 +348,7 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
         .bilibili
         .clone();
 
+    info!("选择线路: {:?}", line);
     let probe = if let Some(line) = line {
         match line.as_str() {
             "bda2" => line::bda2(),

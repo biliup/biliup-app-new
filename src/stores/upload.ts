@@ -115,10 +115,18 @@ export const useUploadStore = defineStore('upload', () => {
                         now - task.started_at! > 30000
                 )
                 .forEach(task => {
-                    ElMessage.warning(
-                        `${task.user.username}-${task.video.title} 超过 30 秒未上传，正在重试...`
-                    )
-                    retryUpload(task.id, false)
+                    if (task.retry_count && task.retry_count >= 3) {
+                        ElMessage.warning(
+                            `${task.user.username}-${task.video.title} 超过 3 次重试，取消任务`
+                        )
+                        cancelUpload(task.id)
+                    } else {
+                        ElMessage.warning(
+                            `${task.user.username}-${task.video.title} 超过 30 秒未上传，正在重试...`
+                        )
+                        task.retry_count = task.retry_count ? task.retry_count + 1 : 1
+                        retryUpload(task.id, false)
+                    }
                 })
 
             return queue

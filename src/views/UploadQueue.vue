@@ -487,6 +487,12 @@ const getTaskWarningClass = (task: any): string => {
 
 // 获取任务警告提示文本
 const getTaskWarningTooltip = (task: any): string => {
+    // 优先显示失败任务的错误信息
+    if (task.status === 'Failed') {
+        return '上传失败：' + task.error_message
+    }
+
+    // 其次显示已完成但超时的警告信息
     if (isTaskExpiredSoon(task)) {
         try {
             const finishedDate = new Date(task.finished_at)

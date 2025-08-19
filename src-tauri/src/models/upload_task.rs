@@ -92,11 +92,11 @@ impl UploadTask {
         self.finished_at = Some(chrono::Utc::now().timestamp_millis() as usize);
     }
 
-    // pub fn fail(&mut self, error_message: String) {
-    //     self.status = TaskStatus::Failed;
-    //     self.error_message = Some(error_message);
-    //     self.finished_at = Some(chrono::Utc::now().timestamp_millis() as usize);
-    // }
+    pub fn fail(&mut self, error_message: String) {
+        self.status = TaskStatus::Failed;
+        self.error_message = Some(error_message);
+        self.finished_at = Some(chrono::Utc::now().timestamp_millis() as usize);
+    }
 
     pub fn cancel(&mut self) {
         self.total_transmit_bytes = 0;
@@ -105,14 +105,13 @@ impl UploadTask {
         self.finished_at = Some(chrono::Utc::now().timestamp_millis() as usize);
     }
 
-    // pub fn retry(&mut self) {
-    //     self.status = TaskStatus::Pending;
-    //     self.progress = 0.0;
-    //     self.error_message = None;
-    //     self.started_at = None;
-    //     self.finished_at = None;
-    //     self.retry_count += 1;
-    // }
+    pub fn retry(&mut self) {
+        self.status = TaskStatus::Pending;
+        self.error_message = None;
+        self.started_at = None;
+        self.finished_at = None;
+        self.retry_count += 1;
+    }
 
     pub fn update_progress(&mut self, progress: f64) {
         self.progress = progress.clamp(0.0, 100.0);
