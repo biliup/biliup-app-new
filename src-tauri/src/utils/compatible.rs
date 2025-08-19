@@ -171,6 +171,7 @@ impl CompatibilityConverter {
                 up_close_reply: if streamer_config.up_close_reply { 1 } else { 0 },
                 up_close_danmu: if streamer_config.up_close_danmu { 1 } else { 0 },
                 atomic_int: streamer_config.atomic_int,
+                watermark: 0, // 默认关闭
             };
 
             template.insert(streamer_name, template_config);

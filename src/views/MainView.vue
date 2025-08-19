@@ -603,6 +603,17 @@
 
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.advanced" class="card-content">
+                                        <el-form-item label="开启水印">
+                                            <div div class="checkbox-group">
+                                                <el-checkbox
+                                                    v-model="currentForm.watermark"
+                                                    :true-value="1"
+                                                    :false-value="0"
+                                                >
+                                                    开启 (本功能只对本次上传的视频生效)
+                                                </el-checkbox>
+                                            </div>
+                                        </el-form-item>
                                         <el-form-item v-if="!currentForm.aid" label="定时发布">
                                             <el-date-picker
                                                 v-model="dtimeDate"
@@ -644,13 +655,15 @@
                                         </el-form-item>
 
                                         <el-form-item label="互动功能">
-                                            <el-switch
-                                                v-model="currentForm.interactive"
-                                                active-text="开启"
-                                                inactive-text="关闭"
-                                                :active-value="1"
-                                                :inactive-value="0"
-                                            />
+                                            <div div class="checkbox-group">
+                                                <el-checkbox
+                                                    v-model="currentForm.interactive"
+                                                    :true-value="1"
+                                                    :false-value="0"
+                                                >
+                                                    开启
+                                                </el-checkbox>
+                                            </div>
                                         </el-form-item>
 
                                         <el-form-item label="加入合集">
@@ -1126,7 +1139,8 @@ const hasUnsavedChanges = (uid: number, template: string, currentTemplateData: T
         'up_selection_reply',
         'up_close_reply',
         'up_close_danmu',
-        'is_only_self'
+        'is_only_self',
+        'watermark'
     ]
 
     for (const field of fieldsToCompare) {

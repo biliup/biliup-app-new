@@ -39,6 +39,7 @@ export interface TemplateConfig {
     up_close_danmu: number
     atomic_int: number
     is_only_self: number
+    watermark: number
 }
 
 interface UserConfig {
@@ -112,7 +113,8 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         up_close_reply: 0,
         up_close_danmu: 0,
         atomic_int: 0,
-        is_only_self: 0
+        is_only_self: 0,
+        watermark: 0
     })
 
     // 配置文件操作

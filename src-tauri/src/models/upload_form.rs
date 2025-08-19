@@ -107,12 +107,14 @@ impl TemplateConfig {
 
             map.insert("is_only_self".to_string(), json!(self.is_only_self));
 
+            let watermark = Watermark {
+                state: self.watermark,
+            };
+            map.insert("watermark".to_string(), json!(watermark));
+
             // todo!
             {
                 map.insert("is_360".to_string(), json!(-1)); // 默认不是360度视频
-
-                let watermark = Watermark { state: 1 }; // 默认开启水印
-                map.insert("watermark".to_string(), json!(watermark));
             }
 
             Some(map)

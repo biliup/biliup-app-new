@@ -93,6 +93,8 @@ pub struct TemplateConfig {
     pub atomic_int: u32,
     #[serde(default)]
     pub is_only_self: u8,
+    #[serde(default)]
+    pub watermark: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -353,6 +355,7 @@ impl Default for TemplateConfig {
             up_close_danmu: 0,
             atomic_int: 0,
             is_only_self: 0,
+            watermark: 0,
         }
     }
 }
