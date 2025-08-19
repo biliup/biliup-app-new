@@ -195,6 +195,7 @@ impl CompatibilityConverter {
             proxy: None, // 旧版配置没有代理设置
             line: legacy.line,
             limit: legacy.limit,
+            watermark: 0,
             templates: template,
         };
 

@@ -103,6 +103,12 @@
                     />
                 </div>
             </el-form-item>
+
+            <el-form-item label="默认开启水印">
+                <el-checkbox v-model="configForm.watermark" :true-value="1" :false-value="0">
+                    开启
+                </el-checkbox>
+            </el-form-item>
         </el-form>
 
         <template #footer>
@@ -130,6 +136,7 @@ interface UserConfigForm {
     line: string
     proxy: string
     limit: number
+    watermark: number
 }
 
 // 代理表单接口
@@ -167,7 +174,8 @@ const originalProxy = ref('')
 const configForm = ref<UserConfigForm>({
     line: 'auto',
     proxy: '',
-    limit: 3
+    limit: 3,
+    watermark: 0
 })
 
 // 代理设置表单
@@ -279,7 +287,8 @@ const loadUserConfig = async () => {
             configForm.value = {
                 line: userConfig.line || 'auto',
                 proxy: userConfig.proxy || '',
-                limit: userConfig.limit || 3
+                limit: userConfig.limit || 3,
+                watermark: userConfig.watermark || 0
             }
             originalProxy.value = userConfig.proxy || ''
 
@@ -290,7 +299,8 @@ const loadUserConfig = async () => {
             configForm.value = {
                 line: 'auto',
                 proxy: '',
-                limit: 3
+                limit: 3,
+                watermark: 0
             }
             originalProxy.value = ''
             parseProxyUrl('')
@@ -334,6 +344,7 @@ const handleSave = async () => {
         userConfig.line = configForm.value.line === 'auto' ? undefined : configForm.value.line
         userConfig.proxy = proxyUrl || undefined
         userConfig.limit = configForm.value.limit
+        userConfig.watermark = configForm.value.watermark || 0
 
         // 保存配置
         await userConfigStore.updateUserConfig(props.user.uid, userConfig)
@@ -390,7 +401,8 @@ const handleDialogClose = () => {
     configForm.value = {
         line: 'auto',
         proxy: '',
-        limit: 3
+        limit: 3,
+        watermark: 0
     }
     proxyForm.value = {
         enabled: false,

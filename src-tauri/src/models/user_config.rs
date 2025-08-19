@@ -107,6 +107,8 @@ pub struct UserConfig {
     #[serde(default)]
     pub limit: u32,
     #[serde(default)]
+    pub watermark: u8,
+    #[serde(default)]
     pub templates: HashMap<String, TemplateConfig>, // 匹配config.json中的"templates"字段
 }
 
@@ -158,6 +160,7 @@ impl ConfigRoot {
             line: None,
             proxy,
             limit: 0,
+            watermark: 0,
             templates: HashMap::new(),
         };
         self.config.insert(uid, user_config);
@@ -186,15 +189,17 @@ impl ConfigRoot {
         line: Option<String>,
         proxy: Option<String>,
         limit: u32,
+        watermark: u8,
     ) -> Result<&Self> {
         if let Some(user_config) = self.config.get_mut(&uid) {
             info!(
-                "Updated user config for UID {}: line={:?}, proxy={:?}, limit={}",
-                uid, line, proxy, limit
+                "Updated user config for UID {}: line={:?}, proxy={:?}, limit={}, watermark={}",
+                uid, line, proxy, limit, watermark
             );
             user_config.line = line;
             user_config.proxy = proxy;
             user_config.limit = limit;
+            user_config.watermark = watermark;
             Ok(self)
         } else {
             Err(anyhow::anyhow!("用户配置不存在"))

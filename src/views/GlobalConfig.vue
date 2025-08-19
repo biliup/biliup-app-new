@@ -171,6 +171,17 @@
                             />
                         </div>
                     </el-form-item>
+
+                    <!-- 水印设置 -->
+                    <el-form-item label="默认开启水印">
+                        <el-checkbox
+                            v-model="userConfigForm.watermark"
+                            :true-value="1"
+                            :false-value="0"
+                        >
+                            开启
+                        </el-checkbox>
+                    </el-form-item>
                 </el-form>
             </div>
         </el-form>
@@ -223,7 +234,8 @@ const userConfigLoading = ref(false)
 
 const userConfigForm = ref({
     line: 'auto',
-    limit: 0
+    limit: 0,
+    watermark: 0
 })
 
 const userProxyForm = ref({
@@ -358,7 +370,8 @@ const handleSave = async () => {
             await userConfigStore.updateUserConfig(selectedUserUid.value, {
                 line: userConfigForm.value.line === 'auto' ? undefined : userConfigForm.value.line,
                 proxy: proxyUrl || undefined,
-                limit: userConfigForm.value.limit
+                limit: userConfigForm.value.limit,
+                watermark: userConfigForm.value.watermark
             })
         }
 
@@ -397,7 +410,8 @@ const loadUserConfig = async (uid: number) => {
         if (userConfig) {
             userConfigForm.value = {
                 line: userConfig.line || 'auto',
-                limit: userConfig.limit || 0
+                limit: userConfig.limit || 0,
+                watermark: userConfig.watermark || 0
             }
 
             // 解析代理设置
@@ -433,6 +447,22 @@ const loadUserConfig = async (uid: number) => {
                     username: '',
                     password: ''
                 }
+            }
+        } else {
+            // 用户配置不存在时，使用默认值
+            userConfigForm.value = {
+                line: 'auto',
+                limit: 0,
+                watermark: 0
+            }
+
+            userProxyForm.value = {
+                enabled: false,
+                type: 'http',
+                host: '',
+                port: 8080,
+                username: '',
+                password: ''
             }
         }
     } catch (error) {

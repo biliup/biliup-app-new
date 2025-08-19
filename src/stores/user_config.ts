@@ -47,6 +47,7 @@ interface UserConfig {
     line?: string
     proxy?: string
     limit: number
+    watermark: number
     templates: Record<string, TemplateConfig> // 模板名 -> 模板配置
 }
 
@@ -258,6 +259,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         }
 
         const to_add = templateConfig || createDefaultTemplate()
+        to_add.watermark = userConfig.watermark // 使用用户配置中的水印设置
         const server_response: TemplateCommandResponse = await invoke('add_user_template', {
             uid: userUid,
             templateName,
@@ -397,7 +399,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
     // 更新用户基础配置
     const updateUserConfig = async (
         userUid: number,
-        updates: Partial<Pick<UserConfig, 'line' | 'proxy' | 'limit'>>
+        updates: Partial<Pick<UserConfig, 'line' | 'proxy' | 'limit' | 'watermark'>>
     ) => {
         if (!configRoot.value) {
             throw new Error('配置未加载')
@@ -419,12 +421,17 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             userConfig.limit = updates.limit!
         }
 
+        if ('watermark' in updates) {
+            userConfig.watermark = updates.watermark!
+        }
+
         try {
             await invoke('save_user_config', {
                 uid: userUid,
                 line: userConfig.line,
                 proxy: userConfig.proxy,
-                limit: userConfig.limit
+                limit: userConfig.limit,
+                watermark: userConfig.watermark
             })
             // 保存配置
             await saveConfig()
