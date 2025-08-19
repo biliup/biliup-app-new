@@ -30,7 +30,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
 import { useUtilsStore } from '../stores/utils'
-import { ElMessage } from 'element-plus'
 
 // 定义组件props
 interface Props {
@@ -123,7 +122,7 @@ const loadSeasons = async () => {
         }
     } catch (error) {
         console.error('加载合集列表失败:', error)
-        ElMessage.error(`加载合集列表失败: ${error}`)
+        utilsStore.showMessage(`加载合集列表失败: ${error}`, 'error')
     } finally {
         isSearching.value = false
     }

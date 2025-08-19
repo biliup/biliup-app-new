@@ -178,7 +178,6 @@
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import { FolderOpened, Loading } from '@element-plus/icons-vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useUtilsStore } from '../stores/utils'
@@ -275,7 +274,7 @@ const selectFolder = async () => {
         }
     } catch (error) {
         console.error('选择文件夹失败:', error)
-        ElMessage.error('选择文件夹失败')
+        utilsStore.showMessage('选择文件夹失败', 'error')
     }
 }
 
@@ -420,7 +419,7 @@ const addNewFiles = async (filenames: string[]) => {
     if (filenames.length > 0) {
         emit('add-videos', filenames)
         addedFilesCount.value += filenames.length
-        ElMessage.success(`已添加 ${filenames.length} 个视频文件`)
+        utilsStore.showMessage(`已添加 ${filenames.length} 个视频文件`, 'success')
     }
 }
 
@@ -450,12 +449,16 @@ const performMonitoringCycle = async () => {
         // 检查是否达到结束条件
         if (currentCheckRound.value >= settings.value.maxEmptyChecks) {
             if (settings.value.autoSubmit) {
-                ElMessage.success(
-                    `连续 ${settings.value.maxEmptyChecks} 次检测，自动提交稿件到"${templateTitle.value || '当前模板'}"`
+                utilsStore.showMessage(
+                    `连续 ${settings.value.maxEmptyChecks} 次检测，自动提交稿件到"${templateTitle.value || '当前模板'}"`,
+                    'success'
                 )
                 emit('submit-videos')
             } else {
-                ElMessage.success(`连续 ${settings.value.maxEmptyChecks} 次检测，文件夹监控结束}"`)
+                utilsStore.showMessage(
+                    `连续 ${settings.value.maxEmptyChecks} 次检测，文件夹监控结束}"`,
+                    'success'
+                )
             }
             closeDialog()
         }
@@ -464,7 +467,7 @@ const performMonitoringCycle = async () => {
         updateNextCheckTime()
     } catch (error) {
         console.error('监控检测失败:', error)
-        ElMessage.error('监控检测失败，请检查文件夹路径')
+        utilsStore.showMessage('监控检测失败，请检查文件夹路径', 'error')
         stopMonitoring()
     }
 }
@@ -472,7 +475,7 @@ const performMonitoringCycle = async () => {
 // 开始监控
 const startMonitoring = async () => {
     if (!settings.value.folderPath) {
-        ElMessage.error('请先选择监控文件夹')
+        utilsStore.showMessage('请先选择监控文件夹', 'error')
         return
     }
 
@@ -497,7 +500,7 @@ const startMonitoring = async () => {
     const successMsg = settings.value.includeSubfolders
         ? `开始监控文件夹（包含子文件夹，最小${settings.value.minFileSize}MB）`
         : `开始监控文件夹（最小${settings.value.minFileSize}MB）`
-    ElMessage.success(successMsg)
+    utilsStore.showMessage(successMsg, 'success')
 }
 
 // 停止监控
@@ -509,7 +512,7 @@ const stopMonitoring = () => {
         monitorTimer = null
     }
 
-    ElMessage.info('已停止文件夹监控')
+    utilsStore.showMessage('已停止文件夹监控', 'info')
 }
 
 // 关闭对话框

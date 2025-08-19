@@ -835,7 +835,7 @@ import { useAuthStore } from '../stores/auth'
 import { useUserConfigStore, TemplateConfig } from '../stores/user_config'
 import { useUtilsStore } from '../stores/utils'
 import { useUploadStore } from '../stores/upload'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import {
     ArrowDown,
     Plus,
@@ -982,7 +982,7 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
             lastSubmit.value = new Date().toLocaleString()
         }
 
-        ElMessage.success(`视频${resp.bvid}提交成功 (模板: ${templateName})`)
+        utilsStore.showMessage(`视频${resp.bvid}提交成功 (模板: ${templateName})`, 'success')
 
         if (resp && resp.aid && utilsStore.hasSeason) {
             try {
@@ -1004,11 +1004,11 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
                     const season_title =
                         utilsStore.seasonlist.find((s: any) => s.season_id === template.season_id)
                             ?.title || template.season_id
-                    ElMessage.success(`视频${resp.bvid}加入合集${season_title}`)
+                    utilsStore.showMessage(`视频${resp.bvid}加入合集${season_title}`, 'success')
                 }
             } catch (error) {
                 console.error('设置合集失败: ', error)
-                ElMessage.error(`设置合集失败: ${error}`)
+                utilsStore.showMessage(`设置合集失败: ${error}`, 'error')
             }
         }
     } finally {
@@ -1255,7 +1255,7 @@ const initializeData = async () => {
         }
     } catch (error) {
         console.error('初始化数据失败: ', error)
-        ElMessage.error(`'初始化数据失败: ${error}'`)
+        utilsStore.showMessage(`'初始化数据失败: ${error}'`, 'error')
     }
 }
 
@@ -1362,7 +1362,7 @@ const setupDragAndDrop = async () => {
         })
     } catch (error) {
         console.error('设置拖拽功能失败: ', error)
-        ElMessage.error(`'设置拖拽功能失败: ${error}'`)
+        utilsStore.showMessage(`'设置拖拽功能失败: ${error}'`, 'error')
     }
 }
 
@@ -1484,7 +1484,7 @@ const addVideoToCurrentForm = async (videoPath: string) => {
 const handleDroppedFiles = async (videoFiles: any) => {
     // 检查是否有选中的用户和模板
     if (!selectedUser.value || !currentTemplateName.value) {
-        ElMessage.warning('请先选择用户和模板后再拖拽文件')
+        utilsStore.showMessage('请先选择用户和模板后再拖拽文件', 'warning')
         return
     }
 
@@ -1495,16 +1495,16 @@ const handleDroppedFiles = async (videoFiles: any) => {
     }
 
     if (addedCount > 0) {
-        ElMessage.success(`成功添加 ${addedCount} 个视频文件`)
+        utilsStore.showMessage(`成功添加 ${addedCount} 个视频文件`, 'success')
     } else {
-        ElMessage.info('所有文件都已存在，未添加新文件')
+        utilsStore.showMessage('所有文件都已存在，未添加新文件', 'info')
     }
 }
 
 // 处理登录成功
 const handleLoginSuccess = async () => {
     showLoginDialog.value = false
-    ElMessage.success('登录成功')
+    utilsStore.showMessage('登录成功', 'success')
 
     await userConfigStore.saveConfig()
     // 刷新所有数据
@@ -1514,7 +1514,7 @@ const handleLoginSuccess = async () => {
 // 处理登录对话框关闭
 const handleLoginDialogClose = async (done: () => void) => {
     if (loginLoading.value) {
-        ElMessage.warning('登录过程中无法取消')
+        utilsStore.showMessage('登录过程中无法取消', 'warning')
         return
     }
 
@@ -1560,7 +1560,7 @@ const selectTemplate = async (user: any, templateName: string) => {
 
 const resetTemplate = async () => {
     if (!selectedUser.value || !currentTemplateName.value) {
-        ElMessage.warning('请先选择用户和模板')
+        utilsStore.showMessage('请先选择用户和模板', 'warning')
         return
     }
 
@@ -1579,7 +1579,7 @@ const resetTemplate = async () => {
                     ]
                 )
             ) || userConfigStore.createDefaultTemplate()
-        ElMessage.success('模板已重置')
+        utilsStore.showMessage('模板已重置', 'success')
     } catch (error) {
         // 用户取消了重置
         console.log('重置操作已取消')
@@ -1613,7 +1613,7 @@ const reloadTemplateFromAV = async (userUid: number, aid: number) => {
         currentForm.value = newTemplate
     } catch (error) {
         console.error('刷新失败: ', error)
-        ElMessage.error(`刷新失败: ${error}`)
+        utilsStore.showMessage(`刷新失败: ${error}`, 'error')
         throw error
     }
 }
@@ -1669,7 +1669,7 @@ const loadTemplate = async () => {
         // 模板数据已直接操作，无需保存基础状态
     } catch (error) {
         console.error('加载模板失败:', error)
-        ElMessage.error(`加载模板失败: ${error}`)
+        utilsStore.showMessage(`加载模板失败: ${error}`, 'error')
     }
 }
 
@@ -1680,10 +1680,10 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
             try {
                 const newName = `${template.name}_副本`
                 await userConfigStore.duplicateUserTemplate(user.uid, template.name, newName)
-                ElMessage.success('模板复制成功')
+                utilsStore.showMessage('模板复制成功', 'success')
             } catch (error) {
                 console.error('复制模板失败: ', error)
-                ElMessage.error(`'复制模板失败: ${error}'`)
+                utilsStore.showMessage(`'复制模板失败: ${error}'`, 'error')
             }
             break
 
@@ -1714,14 +1714,14 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                 // 检查是否已存在同名模板
                 const existingTemplate = userConfigStore.getUserTemplate(user.uid, trimmedName)
                 if (existingTemplate) {
-                    ElMessage.error('该名称的模板已存在，请使用其他名称')
+                    utilsStore.showMessage('该名称的模板已存在，请使用其他名称', 'error')
                     return
                 }
 
                 // 获取原模板配置
                 const originalTemplate = userConfigStore.getUserTemplate(user.uid, template.name)
                 if (!originalTemplate) {
-                    ElMessage.error('原模板不存在')
+                    utilsStore.showMessage('原模板不存在', 'error')
                     return
                 }
 
@@ -1740,11 +1740,11 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                     // 模板数据已直接操作，无需额外状态管理
                 }
 
-                ElMessage.success('模板重命名成功')
+                utilsStore.showMessage('模板重命名成功', 'success')
             } catch (error) {
                 if (error !== 'cancel') {
                     console.error('重命名模板失败: ', error)
-                    ElMessage.error(`'重命名模板失败: ${error}'`)
+                    utilsStore.showMessage(`'重命名模板失败: ${error}'`, 'error')
                 }
             }
             break
@@ -1770,11 +1770,11 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                     // 模板数据已直接操作，无需额外状态管理
                 }
 
-                ElMessage.success('模板删除成功')
+                utilsStore.showMessage('模板删除成功', 'success')
             } catch (error) {
                 if (error !== 'cancel') {
                     console.error('删除模板失败: ', error)
-                    ElMessage.error(`'删除模板失败: ${error}'`)
+                    utilsStore.showMessage(`'删除模板失败: ${error}'`, 'error')
                 }
             }
             break
@@ -1807,7 +1807,7 @@ const handleTemplateCreated = async (userUid: number, templateName: string) => {
 // 保存模板
 const saveTemplate = async () => {
     if (!selectedUser.value || !currentTemplateName.value || !currentTemplate.value) {
-        ElMessage.error('请先选择模板')
+        utilsStore.showMessage('请先选择模板', 'error')
         return
     }
 
@@ -1822,7 +1822,7 @@ const saveTemplate = async () => {
         // 模板数据已直接操作并保存，无需额外状态管理
     } catch (error) {
         console.error('保存模板失败: ', error)
-        ElMessage.error(`'保存模板失败: ${error}'`)
+        utilsStore.showMessage(`'保存模板失败: ${error}'`, 'error')
     }
 }
 
@@ -1902,7 +1902,7 @@ const selectCoverWithTauri = async () => {
         })
 
         if (!selected || selected.length === 0) {
-            ElMessage.warning('未选择任何封面文件')
+            utilsStore.showMessage('未选择任何封面文件', 'warning')
             return
         }
 
@@ -1916,11 +1916,11 @@ const selectCoverWithTauri = async () => {
                 throw new Error('封面上传失败')
             }
         } else {
-            ElMessage.error('请先选择用户和模板')
+            utilsStore.showMessage('请先选择用户和模板', 'error')
         }
     } catch (error) {
         console.error('封面选择失败: ', error)
-        ElMessage.error(`'封面选择失败: ${error}'`)
+        utilsStore.showMessage(`'封面选择失败: ${error}'`, 'error')
         return
     } finally {
         coverLoading.value = false
@@ -1961,14 +1961,14 @@ const selectVideoWithTauri = async () => {
                 added += await addVideoToCurrentForm(videoPath)
             }
 
-            ElMessage.success(`已选择 ${added} 个文件`)
+            utilsStore.showMessage(`已选择 ${added} 个文件`, 'success')
         } else if (typeof selected === 'string') {
             added += await addVideoToCurrentForm(selected)
-            ElMessage.success(`已选择 ${added} 个文件`)
+            utilsStore.showMessage(`已选择 ${added} 个文件`, 'success')
         }
     } catch (error) {
         console.error('文件选择失败: ', error)
-        ElMessage.error(`'文件选择失败: ${error}'`)
+        utilsStore.showMessage(`'文件选择失败: ${error}'`, 'error')
     }
 }
 
@@ -2007,7 +2007,7 @@ const clearAllVideos = async () => {
 
         // 清空视频文件列表
         currentForm.value.videos = []
-        ElMessage.success(`已清空 ${videoText}`)
+        utilsStore.showMessage(`已清空 ${videoText}`, 'success')
     } catch {
         // 用户取消了操作
     }
@@ -2052,12 +2052,12 @@ const removeUploadedFile = async (videoId: string) => {
             // 删除视频文件
             currentForm.value.videos.splice(videoIndex, 1)
 
-            ElMessage.success('文件删除成功')
+            utilsStore.showMessage('文件删除成功', 'success')
         } catch (error) {
             // 如果用户取消了确认框，不显示错误消息
             if (error !== 'cancel') {
                 console.error('删除文件失败:', error)
-                ElMessage.error(`删除文件失败: ${error}`)
+                utilsStore.showMessage(`删除文件失败: ${error}`, 'error')
             }
         }
     }
@@ -2069,12 +2069,12 @@ const createUpload = async () => {
     const hasUploadedFiles = currentForm.value?.videos && currentForm.value.videos.length > 0
 
     if (!hasUploadedFiles) {
-        ElMessage.error('请先选择视频文件')
+        utilsStore.showMessage('请先选择视频文件', 'error')
         return
     }
 
     if (!selectedUser.value) {
-        ElMessage.error('请先选择用户')
+        utilsStore.showMessage('请先选择用户', 'error')
         return
     }
 
@@ -2088,7 +2088,7 @@ const createUpload = async () => {
                 currentTemplateName.value,
                 currentForm.value.videos
             )
-            ElMessage.success(`添加 ${num_added} 个文件到上传队列`)
+            utilsStore.showMessage(`添加 ${num_added} 个文件到上传队列`, 'success')
         }
 
         // 如果启用自动开始，则自动开始任务
@@ -2103,7 +2103,7 @@ const createUpload = async () => {
         }
     } catch (error) {
         console.error('上传失败: ', error)
-        ElMessage.error(`上传失败: ${error}`)
+        utilsStore.showMessage(`上传失败: ${error}`, 'error')
     } finally {
         uploading.value = false
     }
@@ -2159,7 +2159,7 @@ const allFilesUploaded = computed(() => {
 // 提交视频
 const submitTemplate = async () => {
     if (!currentTemplateName.value || !selectedUser.value) {
-        ElMessage.error('请选择模板')
+        utilsStore.showMessage('请选择模板', 'error')
         return
     }
 
@@ -2169,11 +2169,11 @@ const submitTemplate = async () => {
             // 首次点击，开始自动提交
             setAutoSubmitting(selectedUser.value.uid, currentTemplateName.value, true)
             startAutoSubmitCheck()
-            ElMessage.info('已启动自动提交，上传完成后将自动提交')
+            utilsStore.showMessage('已启动自动提交，上传完成后将自动提交', 'info')
         } else {
             // 第二次点击，取消自动提交
             setAutoSubmitting(selectedUser.value.uid, currentTemplateName.value, false)
-            ElMessage.info('已取消自动提交')
+            utilsStore.showMessage('已取消自动提交', 'info')
         }
         return
     } else {
@@ -2194,7 +2194,7 @@ const saveTemplateName = async () => {
     const newName = editingTemplateName.value.trim()
 
     if (!newName) {
-        ElMessage.error('模板名称不能为空')
+        utilsStore.showMessage('模板名称不能为空', 'error')
         cancelEditTemplateName()
         return
     }
@@ -2205,7 +2205,7 @@ const saveTemplateName = async () => {
     }
 
     if (!selectedUser.value) {
-        ElMessage.error('未选择用户')
+        utilsStore.showMessage('未选择用户', 'error')
         cancelEditTemplateName()
         return
     }
@@ -2214,7 +2214,7 @@ const saveTemplateName = async () => {
         // 检查是否已存在同名模板
         const existingTemplate = userConfigStore.getUserTemplate(selectedUser.value.uid, newName)
         if (existingTemplate) {
-            ElMessage.error('该名称的模板已存在，请使用其他名称')
+            utilsStore.showMessage('该名称的模板已存在，请使用其他名称', 'error')
             return
         }
 
@@ -2224,7 +2224,7 @@ const saveTemplateName = async () => {
             currentTemplateName.value
         )
         if (!originalTemplate) {
-            ElMessage.error('原模板不存在')
+            utilsStore.showMessage('原模板不存在', 'error')
             cancelEditTemplateName()
             return
         }
@@ -2238,11 +2238,11 @@ const saveTemplateName = async () => {
         // 更新当前选择
         currentTemplateName.value = newName
 
-        ElMessage.success('模板重命名成功')
+        utilsStore.showMessage('模板重命名成功', 'success')
         isEditingTemplateName.value = false
     } catch (error) {
         console.error('重命名模板失败: ', error)
-        ElMessage.error(`重命名模板失败: ${error}`)
+        utilsStore.showMessage(`重命名模板失败: ${error}`, 'error')
         cancelEditTemplateName()
     }
 }
@@ -2267,24 +2267,24 @@ const isUserHasUploadTasks = (uid: number) => {
 const handleLogoutUser = async (uid: number) => {
     // 如果用户有上传任务，不允许登出
     if (isUserHasUploadTasks(uid)) {
-        ElMessage.success('用户有未完成的上传任务，无法登出')
+        utilsStore.showMessage('用户有未完成的上传任务，无法登出', 'success')
         return
     }
 
     try {
         const success = await authStore.logoutUser(uid)
         if (success) {
-            ElMessage.success('用户已登出')
+            utilsStore.showMessage('用户已登出', 'success')
             // 刷新前端数据
             await refreshAllData()
         } else {
-            ElMessage.error('登出失败')
+            utilsStore.showMessage('登出失败', 'error')
         }
     } catch (error) {
         // 如果用户取消了确认框，error会是'cancel'，不需要显示错误
         if (error !== 'cancel') {
             console.error('登出用户失败:', error)
-            ElMessage.error(`登出失败: ${error}`)
+            utilsStore.showMessage(`登出失败: ${error}`, 'error')
         }
     }
 }

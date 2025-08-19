@@ -247,8 +247,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '../stores/auth'
-import { ElMessage } from 'element-plus'
 import { ArrowDown } from '@element-plus/icons-vue'
+import { useUtilsStore } from '../stores/utils'
 
 // 定义emit事件
 const emit = defineEmits<{
@@ -257,6 +257,7 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
+const utilsStore = useUtilsStore()
 
 const activeTab = ref('qr')
 const qrCode = ref('')
@@ -336,7 +337,7 @@ const getQRCode = async () => {
         // 检查登录状态
         checkQRLogin()
     } catch (error) {
-        ElMessage.error('获取二维码失败')
+        utilsStore.showMessage('获取二维码失败', 'error')
     } finally {
         loading.value = false
         emit('loading-change', false)
@@ -349,10 +350,10 @@ const checkQRLogin = async () => {
     try {
         const response = await authStore.checkQRLogin()
         if (response.success) {
-            ElMessage.success('登录成功！')
+            utilsStore.showMessage('登录成功！', 'success')
             emit('login-success')
         } else {
-            ElMessage.error(response.message || '登录失败')
+            utilsStore.showMessage(response.message || '登录失败', 'error')
         }
     } catch (error) {
         console.error('检查登录状态失败:', error)
@@ -362,7 +363,7 @@ const checkQRLogin = async () => {
 // Cookie登录
 const loginWithCookie = async () => {
     if (!cookieValue.value.trim()) {
-        ElMessage.warning('请输入Cookie')
+        utilsStore.showMessage('请输入Cookie', 'warning')
         return
     }
 
@@ -372,13 +373,13 @@ const loginWithCookie = async () => {
         const proxyUrl = buildProxyUrl()
         const response = await authStore.loginWithCookie(cookieValue.value, proxyUrl)
         if (response.success) {
-            ElMessage.success('登录成功！')
+            utilsStore.showMessage('登录成功！', 'success')
             emit('login-success')
         } else {
-            ElMessage.error(response.message || '登录失败')
+            utilsStore.showMessage(response.message || '登录失败', 'error')
         }
     } catch (error) {
-        ElMessage.error('登录失败')
+        utilsStore.showMessage('登录失败', 'error')
     } finally {
         loading.value = false
         emit('loading-change', false)
@@ -403,13 +404,13 @@ const loginWithPassword = async () => {
             proxyUrl
         )
         if (response.success) {
-            ElMessage.success('登录成功！')
+            utilsStore.showMessage('登录成功！', 'success')
             emit('login-success')
         } else {
-            ElMessage.error(response.message || '登录失败')
+            utilsStore.showMessage(response.message || '登录失败', 'error')
         }
     } catch (error) {
-        ElMessage.error('登录失败')
+        utilsStore.showMessage('登录失败', 'error')
     } finally {
         loading.value = false
         emit('loading-change', false)
@@ -434,7 +435,7 @@ const sendSMSCode = async () => {
             proxyUrl
         )) as any
         if (response.success) {
-            ElMessage.success('验证码已发送')
+            utilsStore.showMessage('验证码已发送', 'success')
             // 开始倒计时
             smsCountdown.value = 60
             const timer = setInterval(() => {
@@ -444,10 +445,10 @@ const sendSMSCode = async () => {
                 }
             }, 1000)
         } else {
-            ElMessage.error(response.message || '发送失败')
+            utilsStore.showMessage(response.message || '发送失败', 'error')
         }
     } catch (error) {
-        ElMessage.error('发送验证码失败')
+        utilsStore.showMessage('发送验证码失败', 'error')
     } finally {
         sendingCode.value = false
         emit('loading-change', false)
@@ -473,13 +474,13 @@ const loginWithSMS = async () => {
             proxyUrl
         )
         if (response.success) {
-            ElMessage.success('登录成功！')
+            utilsStore.showMessage('登录成功！', 'success')
             emit('login-success')
         } else {
-            ElMessage.error(response.message || '登录失败')
+            utilsStore.showMessage(response.message || '登录失败', 'error')
         }
     } catch (error) {
-        ElMessage.error('登录失败')
+        utilsStore.showMessage('登录失败', 'error')
     } finally {
         loading.value = false
         emit('loading-change', false)

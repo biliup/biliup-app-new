@@ -90,7 +90,8 @@
 import { computed } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useUploadStore } from '../stores/upload'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useUtilsStore } from '../stores/utils'
+import { ElMessageBox } from 'element-plus'
 import { User, ArrowDown, Plus } from '@element-plus/icons-vue'
 
 // Props & Emits
@@ -102,6 +103,7 @@ const emit = defineEmits<{
 // Stores
 const authStore = useAuthStore()
 const uploadStore = useUploadStore()
+const utilsStore = useUtilsStore()
 
 // 计算属性
 const loginUsers = computed(() => {
@@ -125,7 +127,7 @@ const handleLogout = async (user: any) => {
     try {
         // 检查用户是否有未完成的上传任务
         if (isUserHasUploadTasks(user.uid)) {
-            ElMessage.warning('请先删除上传队列中属于该用户的任务')
+            utilsStore.showMessage('请先删除上传队列中属于该用户的任务', 'warning')
             return
         }
 
@@ -146,7 +148,7 @@ const handleLogout = async (user: any) => {
     } catch (error) {
         if (error !== 'cancel') {
             console.error('登出用户失败:', error)
-            ElMessage.error(`登出用户失败: ${error}`)
+            utilsStore.showMessage(`登出用户失败: ${error}`, 'error')
         }
     }
 }

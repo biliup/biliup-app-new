@@ -91,7 +91,6 @@ import { ref, computed, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useUserConfigStore } from '../stores/user_config'
 import { useUtilsStore } from '../stores/utils'
-import { ElMessage } from 'element-plus'
 
 // Props
 const props = defineProps<{
@@ -201,7 +200,7 @@ const resetForm = () => {
 const createNewTemplate = async () => {
     const targetUserUid = newTemplateForm.value.userUid
     if (!targetUserUid) {
-        ElMessage.error('请选择用户')
+        utilsStore.showMessage('请选择用户', 'error')
         return
     }
 
@@ -209,19 +208,19 @@ const createNewTemplate = async () => {
         if (newTemplateForm.value.templateType === 'blank') {
             // 空白模板
             if (!newTemplateForm.value.name.trim()) {
-                ElMessage.error('请输入模板名称')
+                utilsStore.showMessage('请输入模板名称', 'error')
                 return
             }
 
             const templateName = newTemplateForm.value.name.trim()
             await userConfigStore.addUserTemplate(targetUserUid, templateName)
 
-            ElMessage.success('空白模板创建成功')
+            utilsStore.showMessage('空白模板创建成功', 'success')
             emit('template-created', targetUserUid, templateName)
         } else if (newTemplateForm.value.templateType === 'bv') {
             // BV/AV号模板
             if (!newTemplateForm.value.bvNumber.trim()) {
-                ElMessage.error('请输入BV号或AV号')
+                utilsStore.showMessage('请输入BV号或AV号', 'error')
                 return
             }
 
@@ -232,7 +231,7 @@ const createNewTemplate = async () => {
             const isEdit = actionType === 'edit'
             await createTemplateFromBV(targetUserUid, bvNumber, templateName, isEdit)
 
-            ElMessage.success('基于稿件创建模板成功')
+            utilsStore.showMessage('基于稿件创建模板成功', 'success')
             emit('template-created', targetUserUid, templateName)
         }
 
@@ -246,7 +245,7 @@ const createNewTemplate = async () => {
         } else if (typeof error === 'string') {
             errorMessage = `创建模板失败: ${error}`
         }
-        ElMessage.error(errorMessage)
+        utilsStore.showMessage(errorMessage, 'error')
     }
 }
 
@@ -289,7 +288,7 @@ const createTemplateFromBV = async (
         await userConfigStore.addUserTemplate(userUid, templateName, newTemplate)
     } catch (error) {
         console.error('从BV号创建模板失败: ', error)
-        ElMessage.error(`从BV号创建模板失败: ${error}`)
+        utilsStore.showMessage(`从BV号创建模板失败: ${error}`, 'error')
         throw error
     }
 }

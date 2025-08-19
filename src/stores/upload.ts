@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { ElMessage } from 'element-plus'
+import { useUtilsStore } from './utils'
 
 interface UploadTask {
     id: string
@@ -22,6 +22,7 @@ interface UploadTask {
 
 export const useUploadStore = defineStore('upload', () => {
     const uploadQueue = ref<UploadTask[]>([])
+    const utilsStore = useUtilsStore()
 
     // 创建上传任务
     const createUploadTask = async (uid: number, template: string, videoFiles: any[]) => {
@@ -116,12 +117,12 @@ export const useUploadStore = defineStore('upload', () => {
                 )
                 .forEach(task => {
                     if (task.retry_count && task.retry_count >= 3) {
-                        ElMessage.warning(
+                        utilsStore.showMessage(
                             `${task.user.username}-${task.video.title} 超过 3 次重试，取消任务`
                         )
                         cancelUpload(task.id)
                     } else {
-                        ElMessage.warning(
+                        utilsStore.showMessage(
                             `${task.user.username}-${task.video.title} 超过 30 秒未上传，正在重试...`
                         )
                         task.retry_count = task.retry_count ? task.retry_count + 1 : 1

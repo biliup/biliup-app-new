@@ -197,9 +197,10 @@
 
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { useUserConfigStore } from '../stores/user_config'
 import { useAuthStore } from '../stores/auth'
+import { useUtilsStore } from '../stores/utils'
 
 // 全局配置表单接口
 interface GlobalConfigForm {
@@ -222,6 +223,7 @@ const emit = defineEmits<{
 // Store
 const userConfigStore = useUserConfigStore()
 const authStore = useAuthStore()
+const utilsStore = useUtilsStore()
 
 // 响应式数据
 const visible = ref(false)
@@ -329,7 +331,7 @@ const loadGlobalConfig = async () => {
         }
     } catch (error) {
         console.error('加载全局配置失败:', error)
-        ElMessage.error(`加载全局配置失败: ${error}`)
+        utilsStore.showMessage(`加载全局配置失败: ${error}`, 'error')
     } finally {
         loading.value = false
     }
@@ -375,12 +377,12 @@ const handleSave = async () => {
             })
         }
 
-        ElMessage.success('配置保存成功')
+        utilsStore.showMessage('配置保存成功', 'success')
         emit('config-updated')
         visible.value = false
     } catch (error) {
         console.error('保存配置失败:', error)
-        ElMessage.error(`保存配置失败: ${error}`)
+        utilsStore.showMessage(`保存配置失败: ${error}`, 'error')
     } finally {
         saving.value = false
     }
@@ -467,7 +469,7 @@ const loadUserConfig = async (uid: number) => {
         }
     } catch (error) {
         console.error('加载用户配置失败:', error)
-        ElMessage.error(`加载用户配置失败: ${error}`)
+        utilsStore.showMessage(`加载用户配置失败: ${error}`, 'error')
     } finally {
         userConfigLoading.value = false
     }

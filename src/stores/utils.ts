@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { ElMessage } from 'element-plus'
 
 export const useUtilsStore = defineStore('template', () => {
     const typelist = ref<any[]>([])
@@ -165,6 +166,19 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
+    // 消息提示帮助函数
+    const showMessage = (
+        message: string,
+        type: 'success' | 'error' | 'warning' | 'info' = 'info'
+    ) => {
+        ElMessage({
+            message,
+            type,
+            showClose: true,
+            duration: type === 'error' ? 5000 : 3000
+        })
+    }
+
     return {
         typelist: computed(() => typelist.value),
         topiclist: computed(() => topiclist.value),
@@ -181,6 +195,7 @@ export const useUtilsStore = defineStore('template', () => {
         hasSeason,
         getSeasonList,
         getVideoSeason,
-        switchSeason
+        switchSeason,
+        showMessage
     }
 })

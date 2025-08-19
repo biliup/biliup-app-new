@@ -122,8 +122,9 @@
 
 <script setup lang="ts">
 import { ref, watch, nextTick } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessageBox } from 'element-plus'
 import { useUserConfigStore } from '../stores/user_config'
+import { useUtilsStore } from '../stores/utils'
 
 // 接口定义
 interface User {
@@ -164,6 +165,7 @@ const emit = defineEmits<{
 
 // Store
 const userConfigStore = useUserConfigStore()
+const utilsStore = useUtilsStore()
 
 // 响应式数据
 const visible = ref(false)
@@ -307,7 +309,7 @@ const loadUserConfig = async () => {
         }
     } catch (error) {
         console.error('加载用户配置失败:', error)
-        ElMessage.error(`加载用户配置失败: ${error}`)
+        utilsStore.showMessage(`加载用户配置失败: ${error}`, 'error')
     } finally {
         loading.value = false
     }
@@ -349,7 +351,7 @@ const handleSave = async () => {
         // 保存配置
         await userConfigStore.updateUserConfig(props.user.uid, userConfig)
 
-        ElMessage.success('配置保存成功')
+        utilsStore.showMessage('配置保存成功', 'success')
 
         // 如果代理设置有变化，提示重启
         if (proxyChanged) {
@@ -364,7 +366,7 @@ const handleSave = async () => {
         visible.value = false
     } catch (error) {
         console.error('保存配置失败:', error)
-        ElMessage.error(`保存配置失败: ${error}`)
+        utilsStore.showMessage(`保存配置失败: ${error}`, 'error')
     } finally {
         saving.value = false
     }

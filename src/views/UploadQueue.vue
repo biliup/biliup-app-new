@@ -145,7 +145,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useUploadStore } from '../stores/upload'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { useUtilsStore } from '../stores/utils'
+import { ElMessageBox } from 'element-plus'
 import {
     ArrowDown,
     List,
@@ -156,6 +157,7 @@ import {
 } from '@element-plus/icons-vue'
 
 const uploadStore = useUploadStore()
+const utilsStore = useUtilsStore()
 
 // 计算属性
 const uploadQueue = computed(() => {
@@ -184,7 +186,7 @@ const clearCompleted = async () => {
     try {
         const completedTasks = uploadStore.uploadQueue.filter(task => task.status === 'Completed')
         if (completedTasks.length === 0) {
-            ElMessage.info('没有已完成的任务')
+            utilsStore.showMessage('没有已完成的任务', 'info')
             return
         }
 
@@ -197,10 +199,10 @@ const clearCompleted = async () => {
             }
         }
 
-        ElMessage.success(`已清空 ${successCount} 个完成的任务`)
+        utilsStore.showMessage(`已清空 ${successCount} 个完成的任务`, 'success')
     } catch (error) {
         console.error('清空已完成任务失败:', error)
-        ElMessage.error(`清空已完成任务失败: ${error}`)
+        utilsStore.showMessage(`清空已完成任务失败: ${error}`, 'error')
     }
 }
 
@@ -224,7 +226,7 @@ const startAll = async () => {
     try {
         const canBeStarted = uploadStore.uploadQueue.filter(task => canStart(task.status))
         if (canBeStarted.length === 0) {
-            ElMessage.info('没有可开始的任务')
+            utilsStore.showMessage('没有可开始的任务', 'info')
             return
         }
 
@@ -237,20 +239,20 @@ const startAll = async () => {
             }
         }
 
-        ElMessage.success(`已开始 ${successCount} 个任务`)
+        utilsStore.showMessage(`已开始 ${successCount} 个任务`, 'success')
     } catch (error) {
         console.error('开始所有任务失败:', error)
-        ElMessage.error(`开始所有任务失败: ${error}`)
+        utilsStore.showMessage(`开始所有任务失败: ${error}`, 'error')
     }
 }
 
 const startUpload = async (taskId: string) => {
     try {
         await uploadStore.startUpload(taskId)
-        ElMessage.success('任务已开始')
+        utilsStore.showMessage('任务已开始', 'success')
     } catch (error) {
         console.error('开始上传失败:', error)
-        ElMessage.error(`开始上传失败: ${error}`)
+        utilsStore.showMessage(`开始上传失败: ${error}`, 'error')
     }
 }
 
@@ -258,7 +260,7 @@ const pauseAll = async () => {
     try {
         const activeTasks = uploadStore.uploadQueue.filter(task => canPause(task.status))
         if (activeTasks.length === 0) {
-            ElMessage.info('没有可暂停的任务')
+            utilsStore.showMessage('没有可暂停的任务', 'info')
             return
         }
 
@@ -271,20 +273,20 @@ const pauseAll = async () => {
             }
         }
 
-        ElMessage.success(`已暂停 ${successCount} 个任务`)
+        utilsStore.showMessage(`已暂停 ${successCount} 个任务`, 'success')
     } catch (error) {
         console.error('暂停所有任务失败:', error)
-        ElMessage.error(`暂停所有任务失败: ${error}`)
+        utilsStore.showMessage(`暂停所有任务失败: ${error}`, 'error')
     }
 }
 
 const pauseUpload = async (taskId: string) => {
     try {
         await uploadStore.pauseUpload(taskId)
-        ElMessage.success('任务已暂停')
+        utilsStore.showMessage('任务已暂停', 'success')
     } catch (error) {
         console.error('暂停上传失败:', error)
-        ElMessage.error(`暂停上传失败: ${error}`)
+        utilsStore.showMessage(`暂停上传失败: ${error}`, 'error')
     }
 }
 
@@ -292,7 +294,7 @@ const cancelAll = async () => {
     try {
         const activeTasks = uploadStore.uploadQueue.filter(task => canCancel(task.status))
         if (activeTasks.length === 0) {
-            ElMessage.info('没有可取消的任务')
+            utilsStore.showMessage('没有可取消的任务', 'info')
             return
         }
 
@@ -316,12 +318,12 @@ const cancelAll = async () => {
             }
         }
 
-        ElMessage.success(`已取消 ${successCount} 个任务`)
+        utilsStore.showMessage(`已取消 ${successCount} 个任务`, 'success')
     } catch (error) {
         // 如果用户取消了确认框，不显示错误消息
         if (error !== 'cancel') {
             console.error('取消所有上传失败:', error)
-            ElMessage.error(`取消所有上传失败: ${error}`)
+            utilsStore.showMessage(`取消所有上传失败: ${error}`, 'error')
         }
     }
 }
@@ -344,12 +346,12 @@ const cancelUpload = async (taskId: string) => {
         )
 
         await uploadStore.cancelUpload(taskId)
-        ElMessage.success('任务已取消')
+        utilsStore.showMessage('任务已取消', 'success')
     } catch (error) {
         // 如果用户取消了确认框，不显示错误消息
         if (error !== 'cancel') {
             console.error('取消上传失败:', error)
-            ElMessage.error(`取消上传失败: ${error}`)
+            utilsStore.showMessage(`取消上传失败: ${error}`, 'error')
         }
     }
 }
@@ -357,10 +359,10 @@ const cancelUpload = async (taskId: string) => {
 const retryUpload = async (taskId: string) => {
     try {
         await uploadStore.retryUpload(taskId)
-        ElMessage.success('任务已重试')
+        utilsStore.showMessage('任务已重试', 'success')
     } catch (error) {
         console.error('重试上传失败:', error)
-        ElMessage.error(`重试上传失败: ${error}`)
+        utilsStore.showMessage(`重试上传失败: ${error}`, 'error')
     }
 }
 
