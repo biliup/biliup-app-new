@@ -158,6 +158,7 @@
         <FloderWatch
             v-model="showFolderWatchDialog"
             :current-videos="updatedVideos"
+            :template-title="templateTitle"
             @add-videos="handleAddVideos"
             @submit-videos="handleSubmitVideos"
         />
@@ -183,6 +184,7 @@ interface Props {
     videos: any[]
     isDragOver?: boolean
     uploading?: boolean
+    templateTitle?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -209,6 +211,9 @@ const uploadStore = useUploadStore()
 
 // 文件夹监控对话框状态
 const showFolderWatchDialog = ref(false)
+
+// 模板标题
+const templateTitle = computed(() => props.templateTitle)
 
 // 用于触发时间更新的响应式变量
 const currentTime = ref(Date.now())

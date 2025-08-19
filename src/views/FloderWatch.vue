@@ -6,11 +6,12 @@
         :close-on-click-modal="!monitoring"
         :close-on-press-escape="!monitoring"
         :show-close="!monitoring"
+        draggable
         center
     >
         <div class="folder-watch-content">
             <!-- 功能说明 -->
-            <el-alert title="功能说明" type="info" show-icon :closable="false" class="info-alert" v-if="!monitoring">
+            <el-alert type="info" show-icon :closable="false" class="info-alert" v-if="!monitoring">
                 <div class="info-text">
                     <p>📁 <strong>文件夹监控功能：</strong></p>
                     <ul>
@@ -18,10 +19,10 @@
                         <li>文件需连续3次检测大小无变化才会被添加（确保文件完整）</li>
                         <li>自动将符合大小要求且稳定的视频文件添加到当前模板</li>
                         <li>支持设置最小文件大小过滤，跳过过小的文件</li>
-                        <li>
-                            连续{{
+                        <li v-if="settings.autoSubmit">
+                            启用自动提交后，连续{{
                                 settings.maxEmptyChecks
-                            }}次检测无小文件（≤1KB），且无大小持续改变的文件后自动提交稿件
+                            }}次检测，无小于1KB且无大小持续改变的文件后自动提交稿件
                         </li>
                     </ul>
                 </div>
@@ -76,7 +77,7 @@
                             包含子文件夹
                         </el-checkbox>
                         <span class="setting-description">
-                            勾选后将递归监控所有子文件夹中的视频文件
+                            勾选后将递归监控所有子文件夹中的视频文件（最大深度20）
                         </span>
                     </el-form-item>
 
@@ -93,6 +94,15 @@
                             过滤小于此大小的文件（MB），0为不过滤
                         </span>
                     </el-form-item>
+
+                    <el-form-item label="自动提交：">
+                        <el-checkbox v-model="settings.autoSubmit"> 启用 </el-checkbox>
+                        <span class="setting-description">
+                            启用后，连续{{ settings.maxEmptyChecks }}次检测，无变化后将自动提交到"{{
+                                templateTitle || '当前模板'
+                            }}"
+                        </span>
+                    </el-form-item>
                 </el-form>
             </div>
 
@@ -106,9 +116,16 @@
 
                     <div class="status-info">
                         <p><strong>监控路径：</strong>{{ settings.folderPath }}</p>
-                        <p><strong>监控配置：</strong>
+                        <p>
+                            <strong>监控配置：</strong>
                             {{ settings.includeSubfolders ? '包含子文件夹' : '仅当前文件夹' }}，
                             最小文件大小 {{ settings.minFileSize }}MB
+                        </p>
+                        <p v-if="settings.autoSubmit" class="auto-submit-info">
+                            <strong>自动提交：</strong>连续
+                            {{ settings.maxEmptyChecks }} 次检测，无变化后将自动提交到"{{
+                                templateTitle || '当前模板'
+                            }}"
                         </p>
                         <p>
                             <strong>检测轮数：</strong>{{ currentCheckRound }} /
@@ -170,6 +187,7 @@ import { useUtilsStore } from '../stores/utils'
 interface Props {
     modelValue: boolean
     currentVideos: any[]
+    templateTitle?: string
 }
 
 interface Emits {
@@ -181,6 +199,9 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 const utilsStore = useUtilsStore()
+
+// 模板标题
+const templateTitle = computed(() => props.templateTitle)
 
 // 显示状态
 const visible = computed({
@@ -194,7 +215,8 @@ const settings = ref({
     maxEmptyChecks: 5,
     checkInterval: 60, // 检测间隔时间（秒），默认60秒
     includeSubfolders: false, // 是否包含子文件夹
-    minFileSize: 1 // 最小文件大小（MB），默认1MB
+    minFileSize: 0, // 最小文件大小（MB），默认1MB
+    autoSubmit: true // 是否自动提交稿件
 })
 
 // 监控状态
@@ -339,7 +361,9 @@ const performCheck = async (): Promise<{
                 if (isVideoFile) {
                     // 检查文件大小是否符合最小要求
                     if (fileSizeMB < settings.value.minFileSize) {
-                        console.log(`文件 ${entry.name} 大小 ${fileSizeMB.toFixed(2)}MB 小于最小要求 ${settings.value.minFileSize}MB，跳过`)
+                        console.log(
+                            `文件 ${entry.name} 大小 ${fileSizeMB.toFixed(2)}MB 小于最小要求 ${settings.value.minFileSize}MB，跳过`
+                        )
                         continue
                     }
 
@@ -423,12 +447,17 @@ const performMonitoringCycle = async () => {
             currentCheckRound.value++
         }
 
-        // 检查是否达到提交条件
+        // 检查是否达到结束条件
         if (currentCheckRound.value >= settings.value.maxEmptyChecks) {
-            ElMessage.success(`连续 ${settings.value.maxEmptyChecks} 次检测无小文件，自动提交稿件`)
-            emit('submit-videos')
+            if (settings.value.autoSubmit) {
+                ElMessage.success(
+                    `连续 ${settings.value.maxEmptyChecks} 次检测，自动提交稿件到"${templateTitle.value || '当前模板'}"`
+                )
+                emit('submit-videos')
+            } else {
+                ElMessage.success(`连续 ${settings.value.maxEmptyChecks} 次检测，文件夹监控结束}"`)
+            }
             closeDialog()
-            return
         }
 
         // 更新下次检测时间
@@ -465,7 +494,7 @@ const startMonitoring = async () => {
     // 设置定时器，按配置的间隔检测
     monitorTimer = setInterval(performMonitoringCycle, settings.value.checkInterval * 1000)
 
-    const successMsg = settings.value.includeSubfolders 
+    const successMsg = settings.value.includeSubfolders
         ? `开始监控文件夹（包含子文件夹，最小${settings.value.minFileSize}MB）`
         : `开始监控文件夹（最小${settings.value.minFileSize}MB）`
     ElMessage.success(successMsg)
@@ -584,6 +613,11 @@ onUnmounted(() => {
 .status-info p {
     margin: 8px 0;
     color: #606266;
+}
+
+.auto-submit-info {
+    color: #67c23a !important;
+    font-weight: 500;
 }
 
 .last-check h4 {

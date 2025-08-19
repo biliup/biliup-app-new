@@ -470,6 +470,7 @@
                                             v-model:videos="videos"
                                             :is-drag-over="isDragOver"
                                             :uploading="uploading"
+                                            :template-title="currentTemplateName"
                                             @select-video="selectVideoWithTauri"
                                             @clear-all-videos="clearAllVideos"
                                             @remove-file="removeUploadedFile"
