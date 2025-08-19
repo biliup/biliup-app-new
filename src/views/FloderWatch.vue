@@ -10,13 +10,14 @@
     >
         <div class="folder-watch-content">
             <!-- 功能说明 -->
-            <el-alert title="功能说明" type="info" show-icon :closable="false" class="info-alert">
+            <el-alert title="功能说明" type="info" show-icon :closable="false" class="info-alert" v-if="!monitoring">
                 <div class="info-text">
                     <p>📁 <strong>文件夹监控功能：</strong></p>
                     <ul>
                         <li>选择监控文件夹，按设定间隔自动检测新增视频文件</li>
                         <li>文件需连续3次检测大小无变化才会被添加（确保文件完整）</li>
-                        <li>自动将大于1KB且稳定的视频文件添加到当前模板</li>
+                        <li>自动将符合大小要求且稳定的视频文件添加到当前模板</li>
+                        <li>支持设置最小文件大小过滤，跳过过小的文件</li>
                         <li>
                             连续{{
                                 settings.maxEmptyChecks
@@ -78,6 +79,20 @@
                             勾选后将递归监控所有子文件夹中的视频文件
                         </span>
                     </el-form-item>
+
+                    <el-form-item label="最小文件大小：">
+                        <el-input-number
+                            v-model="settings.minFileSize"
+                            :min="0"
+                            :max="999999"
+                            :step="1"
+                            controls-position="right"
+                            style="width: 200px"
+                        />
+                        <span class="setting-description">
+                            过滤小于此大小的文件（MB），0为不过滤
+                        </span>
+                    </el-form-item>
                 </el-form>
             </div>
 
@@ -91,6 +106,10 @@
 
                     <div class="status-info">
                         <p><strong>监控路径：</strong>{{ settings.folderPath }}</p>
+                        <p><strong>监控配置：</strong>
+                            {{ settings.includeSubfolders ? '包含子文件夹' : '仅当前文件夹' }}，
+                            最小文件大小 {{ settings.minFileSize }}MB
+                        </p>
                         <p>
                             <strong>检测轮数：</strong>{{ currentCheckRound }} /
                             {{ settings.maxEmptyChecks }}
@@ -174,7 +193,8 @@ const settings = ref({
     folderPath: '',
     maxEmptyChecks: 5,
     checkInterval: 60, // 检测间隔时间（秒），默认60秒
-    includeSubfolders: false // 是否包含子文件夹
+    includeSubfolders: false, // 是否包含子文件夹
+    minFileSize: 1 // 最小文件大小（MB），默认1MB
 })
 
 // 监控状态
@@ -312,11 +332,18 @@ const performCheck = async (): Promise<{
             try {
                 // 获取文件大小
                 const fileSize = await utilsStore.getFileSize(filePath)
+                const fileSizeMB = fileSize / (1024 * 1024) // 转换为MB
 
                 const isVideoFile = isSupportedVideoFormat(entry.name)
 
                 if (isVideoFile) {
-                    // 检查文件大小
+                    // 检查文件大小是否符合最小要求
+                    if (fileSizeMB < settings.value.minFileSize) {
+                        console.log(`文件 ${entry.name} 大小 ${fileSizeMB.toFixed(2)}MB 小于最小要求 ${settings.value.minFileSize}MB，跳过`)
+                        continue
+                    }
+
+                    // 检查文件大小（原有的小文件检查逻辑保留用于重置计数器）
                     if (fileSize <= 1024) {
                         resetCounter = true
                     } else {
@@ -333,6 +360,7 @@ const performCheck = async (): Promise<{
                                 // 文件大小稳定，可以添加
                                 newFiles.push(filePath)
                                 stableFiles.push(entry.name)
+                                console.log(`添加文件: ${entry.name} (${fileSizeMB.toFixed(2)}MB)`)
                             } else {
                                 resetCounter = true
                             }
@@ -429,7 +457,7 @@ const startMonitoring = async () => {
     const folderMsg = settings.value.includeSubfolders
         ? `开始监控文件夹: ${settings.value.folderPath} (包含子文件夹)`
         : `开始监控文件夹: ${settings.value.folderPath}`
-    console.log(folderMsg)
+    console.log(`${folderMsg}，最小文件大小: ${settings.value.minFileSize}MB`)
 
     // 立即执行第一次检测
     await performMonitoringCycle()
@@ -437,9 +465,10 @@ const startMonitoring = async () => {
     // 设置定时器，按配置的间隔检测
     monitorTimer = setInterval(performMonitoringCycle, settings.value.checkInterval * 1000)
 
-    ElMessage.success(
-        settings.value.includeSubfolders ? '开始监控文件夹（包含子文件夹）' : '开始监控文件夹'
-    )
+    const successMsg = settings.value.includeSubfolders 
+        ? `开始监控文件夹（包含子文件夹，最小${settings.value.minFileSize}MB）`
+        : `开始监控文件夹（最小${settings.value.minFileSize}MB）`
+    ElMessage.success(successMsg)
 }
 
 // 停止监控
