@@ -48,6 +48,7 @@ interface UserConfig {
     proxy?: string
     limit: number
     watermark: number
+    auto_edit: number
     templates: Record<string, TemplateConfig> // 模板名 -> 模板配置
 }
 
@@ -399,7 +400,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
     // 更新用户基础配置
     const updateUserConfig = async (
         userUid: number,
-        updates: Partial<Pick<UserConfig, 'line' | 'proxy' | 'limit' | 'watermark'>>
+        updates: Partial<Pick<UserConfig, 'line' | 'proxy' | 'limit' | 'watermark' | 'auto_edit'>>
     ) => {
         if (!configRoot.value) {
             throw new Error('配置未加载')
@@ -425,13 +426,18 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             userConfig.watermark = updates.watermark!
         }
 
+        if ('auto_edit' in updates) {
+            userConfig.auto_edit = updates.auto_edit!
+        }
+
         try {
             await invoke('save_user_config', {
                 uid: userUid,
                 line: userConfig.line,
                 proxy: userConfig.proxy,
                 limit: userConfig.limit,
-                watermark: userConfig.watermark
+                watermark: userConfig.watermark,
+                autoEdit: userConfig.auto_edit
             })
             // 保存配置
             await saveConfig()

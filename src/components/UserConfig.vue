@@ -109,6 +109,14 @@
                     开启
                 </el-checkbox>
             </el-form-item>
+            <el-form-item>
+                <template #label>
+                    <span class="multi-line-label"> 上传完成<br />自动编辑 </span>
+                </template>
+                <el-checkbox v-model="configForm.auto_edit" :true-value="1" :false-value="0">
+                    开启
+                </el-checkbox>
+            </el-form-item>
         </el-form>
 
         <template #footer>
@@ -138,6 +146,7 @@ interface UserConfigForm {
     proxy: string
     limit: number
     watermark: number
+    auto_edit: number
 }
 
 // 代理表单接口
@@ -177,7 +186,8 @@ const configForm = ref<UserConfigForm>({
     line: 'auto',
     proxy: '',
     limit: 3,
-    watermark: 0
+    watermark: 0,
+    auto_edit: 0
 })
 
 // 代理设置表单
@@ -290,7 +300,8 @@ const loadUserConfig = async () => {
                 line: userConfig.line || 'auto',
                 proxy: userConfig.proxy || '',
                 limit: userConfig.limit || 3,
-                watermark: userConfig.watermark || 0
+                watermark: userConfig.watermark || 0,
+                auto_edit: userConfig.auto_edit || 0
             }
             originalProxy.value = userConfig.proxy || ''
 
@@ -302,7 +313,8 @@ const loadUserConfig = async () => {
                 line: 'auto',
                 proxy: '',
                 limit: 3,
-                watermark: 0
+                watermark: 0,
+                auto_edit: 0
             }
             originalProxy.value = ''
             parseProxyUrl('')
@@ -342,11 +354,11 @@ const handleSave = async () => {
             throw new Error('用户配置不存在')
         }
 
-        // 处理线路设置，如果是 auto 则设为 null
         userConfig.line = configForm.value.line === 'auto' ? undefined : configForm.value.line
         userConfig.proxy = proxyUrl || undefined
         userConfig.limit = configForm.value.limit
         userConfig.watermark = configForm.value.watermark || 0
+        userConfig.auto_edit = configForm.value.auto_edit || 0
 
         // 保存配置
         await userConfigStore.updateUserConfig(props.user.uid, userConfig)
@@ -404,7 +416,8 @@ const handleDialogClose = () => {
         line: 'auto',
         proxy: '',
         limit: 3,
-        watermark: 0
+        watermark: 0,
+        auto_edit: 0
     }
     proxyForm.value = {
         enabled: false,
@@ -490,5 +503,11 @@ const hasUnsavedChanges = (): boolean => {
     margin-left: 20px;
     padding: 10px;
     border-left: 2px solid #f0f0f0;
+}
+
+.multi-line-label {
+    line-height: 1.3;
+    display: inline-block;
+    text-align: center;
 }
 </style>

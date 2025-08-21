@@ -817,7 +817,11 @@
         </el-container>
 
         <!-- 新建模板组件 -->
-        <NewTemplete v-model="showNewTemplateDialog" @template-created="handleTemplateCreated" />
+        <NewTemplete 
+            ref="newTemplateRef" 
+            v-model="showNewTemplateDialog" 
+            @template-created="handleTemplateCreated" 
+        />
 
         <!-- 登录对话框 -->
         <el-dialog
@@ -905,6 +909,9 @@ const showGlobalConfigDialog = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
+
+// 组件引用
+const newTemplateRef = ref<InstanceType<typeof NewTemplete> | null>(null)
 // 自动提交状态记录 - 记录每个模板的自动提交状态
 const autoSubmittingRecord = ref<Record<string, boolean>>({})
 // 全局自动提交检查间隔
@@ -969,14 +976,13 @@ const checkAutoSubmitAll = async () => {
         if (template.videos && template.videos.length > 0) {
             const allUploaded = template.videos.every(video => video.complete && video.path === '')
 
-            if (allUploaded) {
+            if (allUploaded && autoSubmittingRecord.value[templateKey]) {
                 // 文件已全部上传完成，执行提交
+                setAutoSubmitting(uid, templateName, false)
                 try {
                     await performTemplateSubmit(uid, templateName, template)
-                    setAutoSubmitting(uid, templateName, false)
                 } catch (error) {
                     console.error(`模板 ${templateKey} 自动提交失败:`, error)
-                    setAutoSubmitting(uid, templateName, false)
                 }
             }
         } else {
@@ -995,7 +1001,7 @@ const checkAutoSubmitAll = async () => {
 // 启动全局自动提交检查
 const startAutoSubmitCheck = () => {
     if (!autoSubmitInterval) {
-        autoSubmitInterval = setInterval(checkAutoSubmitAll, 500)
+        autoSubmitInterval = setInterval(checkAutoSubmitAll, 1000)
     }
 }
 
@@ -1041,6 +1047,13 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
                 console.error('设置合集失败: ', error)
                 utilsStore.showMessage(`设置合集失败: ${error}`, 'error')
             }
+        }
+        
+        const userConfig = userConfigStore.configRoot?.config[selectedUser.value.uid]
+        if (!template.aid && userConfig && userConfig.auto_edit && newTemplateRef.value) {
+            // 新增稿件且auto_edit开启，创建编辑模板
+            await newTemplateRef.value.createTemplateFromBV(selectedUser.value.uid, resp.bvid, resp.bvid, true)
+            utilsStore.showMessage('从BV号创建模板成功', 'success')
         }
     } finally {
         submitting.value = false

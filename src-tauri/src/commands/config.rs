@@ -45,6 +45,7 @@ pub async fn save_user_config(
     proxy: Option<String>,
     limit: u32,
     watermark: u8,
+    auto_edit: u8,
 ) -> Result<bool, String> {
     let data = app.state::<Mutex<AppData>>();
 
@@ -53,7 +54,7 @@ pub async fn save_user_config(
         .config
         .lock()
         .await
-        .save_user_config(uid, line, proxy, limit, watermark)
+        .save_user_config(uid, line, proxy, limit, watermark, auto_edit)
         .map_err(|e| format!("保存用户配置失败: {e}"))?;
     Ok(true)
 }

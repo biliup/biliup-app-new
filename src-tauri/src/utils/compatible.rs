@@ -196,6 +196,7 @@ impl CompatibilityConverter {
             line: legacy.line,
             limit: legacy.limit,
             watermark: 0,
+            auto_edit: 0,
             templates: template,
         };
 

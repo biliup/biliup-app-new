@@ -292,6 +292,11 @@ const createTemplateFromBV = async (
         throw error
     }
 }
+
+// 暴露函数供父组件调用
+defineExpose({
+    createTemplateFromBV
+})
 </script>
 
 <style scoped>

@@ -182,6 +182,16 @@
                             开启
                         </el-checkbox>
                     </el-form-item>
+
+                    <el-form-item label="上传完成自动编辑">
+                        <el-checkbox
+                            v-model="userConfigForm.auto_edit"
+                            :true-value="1"
+                            :false-value="0"
+                        >
+                            开启
+                        </el-checkbox>
+                    </el-form-item>
                 </el-form>
             </div>
         </el-form>
@@ -237,7 +247,8 @@ const userConfigLoading = ref(false)
 const userConfigForm = ref({
     line: 'auto',
     limit: 0,
-    watermark: 0
+    watermark: 0,
+    auto_edit: 0
 })
 
 const userProxyForm = ref({
@@ -373,7 +384,8 @@ const handleSave = async () => {
                 line: userConfigForm.value.line === 'auto' ? undefined : userConfigForm.value.line,
                 proxy: proxyUrl || undefined,
                 limit: userConfigForm.value.limit,
-                watermark: userConfigForm.value.watermark
+                watermark: userConfigForm.value.watermark,
+                auto_edit: userConfigForm.value.auto_edit
             })
         }
 
@@ -413,7 +425,8 @@ const loadUserConfig = async (uid: number) => {
             userConfigForm.value = {
                 line: userConfig.line || 'auto',
                 limit: userConfig.limit || 0,
-                watermark: userConfig.watermark || 0
+                watermark: userConfig.watermark || 0,
+                auto_edit: userConfig.auto_edit || 0
             }
 
             // 解析代理设置
@@ -455,7 +468,8 @@ const loadUserConfig = async (uid: number) => {
             userConfigForm.value = {
                 line: 'auto',
                 limit: 0,
-                watermark: 0
+                watermark: 0,
+                auto_edit: 0
             }
 
             userProxyForm.value = {
