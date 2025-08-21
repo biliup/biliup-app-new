@@ -1,8 +1,9 @@
 # Biliup App - B站视频上传管理工具
 
-![Version](https://img.shields.io/badge/version-0.2.2-blue)
+![Version](https://img.shields.io/badge/version-0.2.3-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
-![License](https://img.shields.io/badge/license-MIT-green)
+![License-MIT](https://img.shields.io/badge/license-MIT-green)
+![License-Apache2.0](https://img.shields.io/badge/license-Apache2.0-green)
 
 一个基于 Tauri + Vue 3 构建的现代化 B站视频上传管理桌面应用程序，提供直观的用户界面和强大的批量上传功能。
 
@@ -231,7 +232,12 @@ npm run tauri build
 
 ## 📄 许可证
 
-本项目基于 MIT 许可证开源 - 查看 [LICENSE](LICENSE) 文件了解详情。
+本项目依据以下任一开源协议授权使用：
+
+- ([LICENSE-APACHE](LICENSE-APACHE) 或 http://www.apache.org/licenses/LICENSE-2.0)
+- ([LICENSE-MIT](LICENSE-MIT) 或 http://opensource.org/licenses/MIT)
+
+您可自由选择其中之一进行使用。
 
 ## 🙏 致谢
 

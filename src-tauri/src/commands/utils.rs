@@ -426,7 +426,7 @@ pub async fn check_update() -> Result<Option<String>, String> {
 
     let client = reqwest::Client::new();
     let response = client
-        .get("https://api.github.com/repos/HsuJv/biliup-app-new/releases/latest")
+        .get("https://api.github.com/repos/biliup/biliup-app-new/releases/latest")
         .header("User-Agent", "biliup-app")
         .send()
         .await

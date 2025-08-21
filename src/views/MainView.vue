@@ -2834,7 +2834,7 @@ const checkUpdate = async () => {
                     type: 'info'
                 })
                 // 用户确认后打开下载页面
-                await openUrl(`https://github.com/HsuJv/biliup-app-new/releases/tag/${updateInfo}`)
+                await openUrl(`https://github.com/biliup/biliup-app-new/releases/tag/${updateInfo}`)
             } catch {
                 // 用户取消，不做任何操作
             }
