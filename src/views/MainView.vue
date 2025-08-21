@@ -139,7 +139,10 @@
                                             !highlightAutoSubmitting &&
                                             autoSubmittingRecord[
                                                 getTemplateKey(userTemplate.user.uid, template.name)
-                                            ]
+                                            ],
+                                        'template-loading': templateLoading && 
+                                            selectedUser?.uid === userTemplate.user.uid &&
+                                            currentTemplateName === template.name
                                     }"
                                     @click="selectTemplate(userTemplate.user, template.name)"
                                 >
@@ -939,6 +942,7 @@ const showGlobalConfigDialog = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
+const templateLoading = ref(false) // 模板加载状态锁
 
 // 视频状态对话框
 const showVideoStatusDialog = ref(false)
@@ -1085,11 +1089,11 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
         setTimeout(async () => {
             try {
                 if (!template.aid) {
-                    const userConfig = userConfigStore.configRoot?.config[selectedUser.value.uid]
+                    const userConfig = userConfigStore.configRoot?.config[uid]
                     if (userConfig && userConfig.auto_edit && newTemplateRef.value) {
                         // 新增稿件且auto_edit开启，创建编辑模板
                         await newTemplateRef.value.createTemplateFromBV(
-                            selectedUser.value.uid,
+                            uid,
                             resp.bvid,
                             resp.bvid,
                             true
@@ -1097,14 +1101,17 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
                         utilsStore.showMessage('从BV号创建模板成功', 'success')
                     }
                 } else {
-                    reloadTemplateFromAV(selectedUser.value.uid, template.aid)
+                    reloadTemplateFromAV(uid, template.aid)
                 }
             } catch (error) {
                 utilsStore.showMessage(`${error}`, 'error')
+            } finally {
+                submitting.value = false
             }
         }, 500)
-    } finally {
-        submitting.value = false
+    } catch (error) {
+        console.error('模板提交失败:', error)
+        utilsStore.showMessage(`模板提交失败: ${error}`, 'error')
     }
 }
 const lastSubmit = ref<string>('')
@@ -1419,6 +1426,9 @@ const hasUnsavedChanges = (uid: number, template: string, currentTemplateData: T
         }
 
         if (JSON.stringify(currentValue) !== JSON.stringify(baseValue)) {
+            // console.log(field, '有改动')
+            // console.log(JSON.stringify(currentValue))
+            // console.log(JSON.stringify(baseValue))
             return true
         }
     }
@@ -1462,7 +1472,7 @@ const setupDragAndDrop = async () => {
 
         // 监听拖拽悬停事件
         await listen('tauri://drag-over', event => {
-            console.log('文件拖拽悬停:', event.payload)
+            if (!isDragOver.value) console.log('文件拖拽悬停:', event.payload, '，忽略后续日志')
             isDragOver.value = true
         })
 
@@ -1540,13 +1550,16 @@ const addVideoToCurrentForm = async (videoPath: string) => {
         return 0 // 不支持的格式，跳过添加
     }
 
+    templateLoading.value = true
     // 检查文件是否已经存在
     if (!currentForm.value) {
+        templateLoading.value = false
         return 0 // 没有当前模板，跳过添加
     }
 
     const existingFile = currentForm.value.videos.find(f => f.path === videoPath)
     if (existingFile) {
+        templateLoading.value = false
         return 0 // 跳过已存在的文件
     }
 
@@ -1588,6 +1601,7 @@ const addVideoToCurrentForm = async (videoPath: string) => {
         }
     }
 
+    templateLoading.value = false
     return 1
 }
 
@@ -1648,38 +1662,61 @@ const toggleUserExpanded = (userUid: number) => {
 
 // 选择模板
 const selectTemplate = async (user: any, templateName: string) => {
+    // 如果正在加载模板，禁止切换
+    if (templateLoading.value) {
+        return
+    }
+
     if (selectedUser.value === user && currentTemplateName.value === templateName) {
         // 如果已经选择了相同的用户和模板，则不需要切换
         return
     }
 
-    lastSubmit.value = ''
+    templateLoading.value = true
+    try {
+        lastSubmit.value = ''
 
-    selectedUser.value = user
-    currentTemplateName.value = templateName
+        selectedUser.value = user
+        currentTemplateName.value = templateName
 
-    // 滚动到顶部
-    nextTick(() => {
-        if (contentWrapperRef.value) {
-            contentWrapperRef.value.scrollTop = 0
-        }
-    })
+        // 滚动到顶部
+        nextTick(() => {
+            if (contentWrapperRef.value) {
+                contentWrapperRef.value.scrollTop = 0
+            }
+        })
 
-    // 加载模板数据到表单
-    await loadTemplate()
+        // 加载模板数据到表单
+        await loadTemplate()
 
-    if (currentTemplate.value?.aid) {
-        try {
-            await reloadTemplateFromAV(user.uid, currentTemplate.value.aid)
-        } catch (error) {
-            console.error('自动刷新模板数据失败:', error)
-        }
+        // 如果模板有 aid，主动刷新模板数据
+        const aid = currentTemplate.value?.aid
+        setTimeout(async () => {
+            if (aid) {
+                try {
+                    await reloadTemplateFromAV(user.uid, aid)
+                } catch (error) {
+                    console.error('自动刷新模板数据失败:', error)
+                }
+            }
+        }, 666)
+    } catch (error) {
+        console.error('切换模板失败:', error)
+        utilsStore.showMessage(`切换模板失败: ${error}`, 'error')
+    } finally {
+        templateLoading.value = false
     }
 }
 
 const resetTemplate = async () => {
     if (!selectedUser.value || !currentTemplateName.value) {
         utilsStore.showMessage('请先选择用户和模板', 'warning')
+        return
+    }
+
+    // 如果正在加载模板，禁止重置
+    if (templateLoading.value) {
+        utilsStore.showMessage('模板正在加载中，请稍后再试', 'warning')
         return
     }
 
@@ -1690,15 +1727,21 @@ const resetTemplate = async () => {
             cancelButtonText: '取消',
             type: 'warning'
         })
-        currentForm.value =
-            JSON.parse(
-                JSON.stringify(
-                    userConfigStore.configBase?.config[selectedUser.value.uid]?.templates[
-                        currentTemplateName.value
-                    ]
-                )
-            ) || userConfigStore.createDefaultTemplate()
-        utilsStore.showMessage('模板已重置', 'success')
+        
+        templateLoading.value = true
+        try {
+            currentForm.value =
+                JSON.parse(
+                    JSON.stringify(
+                        userConfigStore.configBase?.config[selectedUser.value.uid]?.templates[
+                            currentTemplateName.value
+                        ]
+                    )
+                ) || userConfigStore.createDefaultTemplate()
+            utilsStore.showMessage('模板已重置', 'success')
+        } finally {
+            templateLoading.value = false
+        }
     } catch (error) {
         // 用户取消了重置
         console.log('重置操作已取消')
@@ -1706,6 +1749,12 @@ const resetTemplate = async () => {
 }
 
 const reloadTemplateFromAV = async (userUid: number, aid: number) => {
+    // 如果正在加载模板，禁止重新加载
+    if (templateLoading.value) {
+        return
+    }
+
+    templateLoading.value = true
     try {
         const newTemplate = (await utilsStore.getVideoDetail(userUid, aid.toString())) as any
 
@@ -1735,6 +1784,8 @@ const reloadTemplateFromAV = async (userUid: number, aid: number) => {
         console.error('刷新失败: ', error)
         utilsStore.showMessage(`刷新失败: ${error}`, 'error')
         throw error
+    } finally {
+        templateLoading.value = false
     }
 }
 
@@ -1920,7 +1971,9 @@ const handleTemplateCreated = async (userUid: number, templateName: string) => {
             }
         })
 
+        templateLoading.value = true
         await loadTemplate()
+        templateLoading.value = false
     }
 }
 
@@ -2028,6 +2081,7 @@ const selectCoverWithTauri = async () => {
 
         if (selectedUser.value && currentTemplate.value && currentForm.value) {
             coverLoading.value = true
+            templateLoading.value = true
             const url = await utilsStore.uploadCover(selectedUser.value.uid, selected)
             if (url) {
                 currentTemplate.value.cover = url
@@ -2044,6 +2098,7 @@ const selectCoverWithTauri = async () => {
         return
     } finally {
         coverLoading.value = false
+        templateLoading.value = false
     }
 }
 
@@ -2101,6 +2156,7 @@ const clearAllVideos = async () => {
     const videoCount = currentForm.value.videos.length
     const videoText = videoCount === 1 ? '1 个文件' : `${videoCount} 个文件`
 
+    templateLoading.value = true
     try {
         await ElMessageBox.confirm(`确定要清空所有已选择的 ${videoText} 吗？`, '确认清空文件', {
             confirmButtonText: '确定清空',
@@ -2130,6 +2186,8 @@ const clearAllVideos = async () => {
         utilsStore.showMessage(`已清空 ${videoText}`, 'success')
     } catch {
         // 用户取消了操作
+    } finally {
+        templateLoading.value = false
     }
 }
 
@@ -2139,6 +2197,7 @@ const removeUploadedFile = async (videoId: string) => {
         return
     }
 
+    templateLoading.value = true
     const videoIndex = currentForm.value.videos.findIndex(f => f.id === videoId)
     if (videoIndex > -1) {
         const video = currentForm.value.videos[videoIndex]
@@ -2181,6 +2240,7 @@ const removeUploadedFile = async (videoId: string) => {
             }
         }
     }
+    templateLoading.value = false
 }
 
 // 上传相关
@@ -2804,6 +2864,64 @@ const checkUpdate = async () => {
     color: #409eff;
     font-weight: bold;
     z-index: 3;
+}
+
+.template-item.template-loading {
+    position: relative;
+    background: #f5f7fa;
+    border: 2px solid #e4e7ed;
+    cursor: not-allowed;
+    opacity: 0.8;
+}
+
+.template-item.template-loading::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(230, 244, 255, 0.8), transparent);
+    animation: loading-shimmer 1.5s infinite;
+    z-index: 1;
+}
+
+.template-item.template-loading::after {
+    content: '🔄 加载中...';
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    font-size: 10px;
+    color: #909399;
+    font-weight: bold;
+    z-index: 3;
+    animation: loading-spin 1s linear infinite;
+}
+
+.template-item.template-loading .template-main {
+    position: relative;
+    z-index: 2;
+}
+
+@keyframes loading-shimmer {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+@keyframes loading-spin {
+    0% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
+    }
+    100% {
+        opacity: 1;
+    }
 }
 
 .template-main {

@@ -108,7 +108,6 @@ const utilsStore = useUtilsStore()
 // 计算属性
 const loginUsers = computed(() => {
     const users = authStore.loginUsers
-    console.log('UserList - 登录用户数量:', users.length)
     return users
 })
 
