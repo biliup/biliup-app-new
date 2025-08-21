@@ -140,7 +140,8 @@
                                             autoSubmittingRecord[
                                                 getTemplateKey(userTemplate.user.uid, template.name)
                                             ],
-                                        'template-loading': templateLoading && 
+                                        'template-loading':
+                                            templateLoading &&
                                             selectedUser?.uid === userTemplate.user.uid &&
                                             currentTemplateName === template.name
                                     }"
@@ -1727,7 +1728,7 @@ const resetTemplate = async () => {
             cancelButtonText: '取消',
             type: 'warning'
         })
-        
+
         templateLoading.value = true
         try {
             currentForm.value =

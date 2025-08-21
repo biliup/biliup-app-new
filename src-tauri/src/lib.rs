@@ -93,7 +93,6 @@ fn setup_logs() -> Result<()> {
         .with_file(true)
         .with_line_number(true);
 
-    #[cfg(debug_assertions)]
     let console_layer = tracing_subscriber::fmt::layer()
         .with_writer(std::io::stdout)
         .with_ansi(true) // 启用 ANSI 颜色代码
