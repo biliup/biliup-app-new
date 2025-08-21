@@ -204,6 +204,17 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
+    const log = async (level: string, ...messages: any[]) => {
+        try {
+            await invoke('console_log', {
+                level,
+                messages: messages.map(msg => (typeof msg === 'string' ? msg : JSON.stringify(msg)))
+            })
+        } catch (error) {
+            console.error('日志转发失败:', error)
+        }
+    }
+
     return {
         typelist: computed(() => typelist.value),
         topiclist: computed(() => topiclist.value),
@@ -223,6 +234,7 @@ export const useUtilsStore = defineStore('template', () => {
         switchSeason,
         showMessage,
         exportLogs,
-        checkUpdate
+        checkUpdate,
+        log
     }
 })

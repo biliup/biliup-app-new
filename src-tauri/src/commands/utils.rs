@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::{fs::File, io::Read, path::Path};
 use tauri::Manager;
 use tokio::sync::Mutex;
-use tracing::info;
+use tracing::{error, info, warn};
 
 use crate::utils::crypto::encode_base64;
 use crate::utils::file_utils::{self, FileEntry};
@@ -413,15 +413,9 @@ pub async fn export_logs() -> Result<String, String> {
         }
     }
 
-    // TODO: 添加web console内容 - 需要从前端传递
-    // zip.start_file("web_console.log", options.clone())
-    //     .map_err(|e| format!("创建web console条目失败: {e}"))?;
-    // zip.write_all(b"Web console logs would be added here")
-    //     .map_err(|e| format!("写入web console失败: {e}"))?;
-
     zip.finish().map_err(|e| format!("完成ZIP文件失败: {e}"))?;
 
-    Ok(log_dir.to_string_lossy().to_string())
+    Ok(zip_path.to_string_lossy().to_string())
 }
 
 /// 检查更新
@@ -483,4 +477,21 @@ fn is_newer_version(latest: &str, current: &str) -> Result<bool, String> {
 
     // 如果前面的部分都相等，比较长度
     Ok(latest_parts.len() > current_parts.len())
+}
+
+/// 检查更新
+#[tauri::command]
+pub async fn console_log(
+    _app: tauri::AppHandle,
+    level: String,
+    messages: Vec<String>,
+) -> Result<(), String> {
+    let message = messages.join(" ");
+    match level.as_str() {
+        "log" => info!("Webconsole: {}", message),
+        "error" => error!("Webconsole: {}", message),
+        "warn" => warn!("Webconsole: {}", message),
+        _ => info!("Webconsole: {}", message),
+    }
+    Ok(())
 }

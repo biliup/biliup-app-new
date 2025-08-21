@@ -201,6 +201,7 @@ pub async fn run() {
             switch_season,
             export_logs,
             check_update,
+            console_log
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -872,7 +872,9 @@ import {
     Setting,
     Refresh
 } from '@element-plus/icons-vue'
-import { open } from '@tauri-apps/plugin-dialog'
+import { open, save } from '@tauri-apps/plugin-dialog'
+import { copyFile, remove } from '@tauri-apps/plugin-fs'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { listen } from '@tauri-apps/api/event'
 import LoginView from '../components/LoginView.vue'
 import UserConfig from '../components/UserConfig.vue'
@@ -1247,13 +1249,24 @@ watch(
     }
 )
 
-// 键盘快捷键清理函数
 let keyboardCleanup: (() => void) | null = null
+
+const forwardConsole = (fnName: keyof Console, logger: (level: string, ...args: any[]) => void) => {
+    const original = console[fnName] as (...args: any[]) => void
+    ;(console as any)[fnName] = (...args: any[]) => {
+        original(...args)
+        logger(fnName as string, ...args)
+    }
+}
 
 onMounted(async () => {
     await initializeData()
     await setupDragAndDrop()
     keyboardCleanup = await setupKeyboardShortcuts()
+
+    forwardConsole('log', utilsStore.log)
+    forwardConsole('error', utilsStore.log)
+    forwardConsole('warn', utilsStore.log)
 
     // 禁用右键菜单刷新
     document.addEventListener('contextmenu', (event: MouseEvent) => {
@@ -2376,8 +2389,20 @@ const refreshAllData = async () => {
 // 导出日志
 const exportLogs = async () => {
     try {
-        const log_path = await utilsStore.exportLogs()
-        await import('@tauri-apps/plugin-opener').then(({ openPath }) => openPath(log_path))
+        const zipPath = await utilsStore.exportLogs()
+        const zipName = zipPath.split(/[/\\]/).pop() || zipPath
+
+        const savePath = await save({
+            defaultPath: zipName,
+            filters: [{ name: 'ZIP', extensions: ['zip'] }]
+        })
+
+        if (savePath) {
+            // 复制 ZIP 文件到用户指定位置
+            await copyFile(zipPath, savePath)
+            await remove(zipPath)
+            console.log('文件已保存到：', savePath)
+        }
     } catch (error) {
         console.error('导出日志失败:', error)
     }
@@ -2396,9 +2421,7 @@ const checkUpdate = async () => {
                     type: 'info'
                 })
                 // 用户确认后打开下载页面
-                await import('@tauri-apps/plugin-opener').then(({ openUrl }) =>
-                    openUrl(`https://github.com/HsuJv/biliup-app-new/releases/tag/${updateInfo}`)
-                )
+                await openUrl(`https://github.com/HsuJv/biliup-app-new/releases/tag/${updateInfo}`)
             } catch {
                 // 用户取消，不做任何操作
             }
