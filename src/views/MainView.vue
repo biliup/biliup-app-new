@@ -470,17 +470,42 @@
                                 }"
                             >
                                 <template #header>
-                                    <div class="card-header" @click="toggleCardCollapsed('videos')">
-                                        <span>视频文件</span>
-                                        <span v-if="isDragOver" class="drag-hint"
-                                            >拖拽文件到此处添加</span
+                                    <div class="card-header">
+                                        <div
+                                            style="
+                                                display: flex;
+                                                align-items: center;
+                                                gap: 12px;
+                                                flex: 1;
+                                            "
+                                            @click="toggleCardCollapsed('videos')"
                                         >
-                                        <el-icon
-                                            class="collapse-icon"
-                                            :class="{ collapsed: cardCollapsed.videos }"
-                                        >
-                                            <arrow-down />
-                                        </el-icon>
+                                            <span style="cursor: pointer">视频文件</span>
+                                            <el-button
+                                                type="success"
+                                                size="small"
+                                                @click.stop="checkVideoStatus"
+                                                v-if="
+                                                    currentForm.videos &&
+                                                    currentForm.videos.length > 0 &&
+                                                    currentTemplate?.aid
+                                                "
+                                            >
+                                                视频转码状态
+                                            </el-button>
+                                        </div>
+                                        <div class="header-actions">
+                                            <span v-if="isDragOver" class="drag-hint"
+                                                >拖拽文件到此处添加</span
+                                            >
+                                            <el-icon
+                                                class="collapse-icon"
+                                                :class="{ collapsed: cardCollapsed.videos }"
+                                                @click="toggleCardCollapsed('videos')"
+                                            >
+                                                <arrow-down />
+                                            </el-icon>
+                                        </div>
                                     </div>
                                 </template>
 
@@ -836,6 +861,20 @@
         <!-- 用户配置对话框 -->
         <UserConfig v-model="userConfigVisible" :user="configUser" />
 
+        <!-- 视频状态对话框 -->
+        <VideoStatus
+            v-model="showVideoStatusDialog"
+            :videos="currentForm?.videos || []"
+            :user="selectedUser"
+            :template-aid="currentTemplate?.aid"
+            @reload-template="
+                () =>
+                    selectedUser &&
+                    currentTemplate?.aid &&
+                    reloadTemplateFromAV(selectedUser.uid, currentTemplate.aid)
+            "
+        />
+
         <!-- 全局配置对话框 -->
         <GlobalConfigView v-model="showGlobalConfigDialog" />
     </div>
@@ -873,6 +912,7 @@ import GlobalConfigView from '../components/GlobalConfig.vue'
 import NewTemplete from '../components/NewTemplete.vue'
 import VideoList from '../components/VideoList.vue'
 import UserList from '../components/UserList.vue'
+import VideoStatus from '../components/VideoStatus.vue'
 
 const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
@@ -899,6 +939,9 @@ const showGlobalConfigDialog = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
+
+// 视频状态对话框
+const showVideoStatusDialog = ref(false)
 
 // 组件引用
 const newTemplateRef = ref<InstanceType<typeof NewTemplete> | null>(null)
@@ -1624,6 +1667,14 @@ const selectTemplate = async (user: any, templateName: string) => {
 
     // 加载模板数据到表单
     await loadTemplate()
+
+    if (currentTemplate.value?.aid) {
+        try {
+            await reloadTemplateFromAV(user.uid, currentTemplate.value.aid)
+        } catch (error) {
+            console.error('自动刷新模板数据失败:', error)
+        }
+    }
 }
 
 const resetTemplate = async () => {
@@ -2396,6 +2447,22 @@ const exportLogs = async () => {
     }
 }
 
+// 检查视频转码状态
+const checkVideoStatus = async () => {
+    if (!selectedUser.value || !currentTemplate.value?.aid) return
+
+    try {
+        // 先刷新模板数据
+        await reloadTemplateFromAV(selectedUser.value.uid, currentTemplate.value.aid)
+        // 然后显示状态对话框
+        showVideoStatusDialog.value = true
+    } catch (error) {
+        console.error('刷新模板数据失败:', error)
+        // 即使刷新失败也显示对话框
+        showVideoStatusDialog.value = true
+    }
+}
+
 // 检查更新
 const checkUpdate = async () => {
     try {
@@ -2921,6 +2988,12 @@ const checkUpdate = async () => {
 
 .card-header:hover {
     color: #409eff;
+}
+
+.card-header .header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
 }
 
 .collapse-icon {

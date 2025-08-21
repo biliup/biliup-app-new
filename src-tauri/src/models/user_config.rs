@@ -33,6 +33,10 @@ pub struct VideoInfo {
     pub path: String,
     #[serde(default)]
     pub finished_at: u64,
+    #[serde(default)]
+    pub encoding_status: i64,
+    #[serde(default)]
+    pub status_desc: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

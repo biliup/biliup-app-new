@@ -87,7 +87,17 @@ impl TemplateConfig {
             .as_array()
             .ok_or_else(|| anyhow::anyhow!("videos should be an array"))?
             .iter()
-            .map(|v| Ok(serde_json::from_value(v.clone())?))
+            .map(|v| {
+                let mut v = v.clone();
+                let status = v.get("status").cloned();
+                if let Some(status) = status {
+                    if let Some(obj) = v.as_object_mut() {
+                        obj.insert("encoding_status".to_string(), status);
+                        obj.remove("status");
+                    }
+                }
+                Ok(serde_json::from_value(v)?)
+            })
             .collect::<Result<Vec<_>>>()?;
         Ok(template_config)
     }
