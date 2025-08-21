@@ -11,7 +11,13 @@
     >
         <div class="folder-watch-content">
             <!-- 功能说明 -->
-            <el-alert type="info" show-icon :closable="false" class="info-alert" v-if="!monitoring">
+            <el-alert
+                type="info"
+                show-icon
+                :closable="false"
+                class="info-alert"
+                v-if="!monitoring && !waitingForStart"
+            >
                 <div class="info-text">
                     <p>📁 <strong>文件夹监控功能：</strong></p>
                     <ul>
@@ -19,6 +25,7 @@
                         <li>文件需连续3次检测大小无变化才会被添加（确保文件完整）</li>
                         <li>自动将符合大小要求且稳定的视频文件添加到当前模板</li>
                         <li>支持设置最小文件大小过滤，跳过过小的文件</li>
+                        <li>支持定时开始功能，在指定时间自动开始监控</li>
                         <li v-if="settings.autoSubmit">
                             启用自动提交后，连续{{
                                 settings.maxEmptyChecks
@@ -103,13 +110,45 @@
                             }}"
                         </span>
                     </el-form-item>
+
+                    <el-form-item label="定时开始：">
+                        <el-checkbox v-model="settings.delayedStart"> 启用定时开始 </el-checkbox>
+                        <span class="setting-description"> 启用后，将在指定时间开始监控 </span>
+                    </el-form-item>
+
+                    <el-form-item v-if="settings.delayedStart" label="开始时间：">
+                        <el-date-picker
+                            v-model="settings.startTime"
+                            type="datetime"
+                            placeholder="选择开始时间"
+                            format="YYYY-MM-DD HH:mm:ss"
+                            value-format="YYYY-MM-DD HH:mm:ss"
+                            :disabled-date="
+                                (date: Date) => {
+                                    const now = new Date()
+                                    return date < now
+                                }
+                            "
+                            style="width: 300px"
+                        />
+                        <div class="setting-description" style="margin-top: 8px">
+                            选择监控开始的具体时间，不能早于当前时间
+                        </div>
+                    </el-form-item>
                 </el-form>
             </div>
 
             <!-- 监控状态区域 -->
-            <div v-if="monitoring" class="monitoring-section">
+            <div v-if="monitoring || waitingForStart" class="monitoring-section">
                 <div class="status-card">
-                    <div class="status-header">
+                    <!-- 等待定时开始状态 -->
+                    <div v-if="waitingForStart && !monitoring" class="status-header">
+                        <el-icon class="status-icon waiting"><clock /></el-icon>
+                        <h3>等待定时开始...</h3>
+                    </div>
+
+                    <!-- 正在监控状态 -->
+                    <div v-else-if="monitoring" class="status-header">
                         <el-icon class="status-icon rotating"><loading /></el-icon>
                         <h3>正在监控中...</h3>
                     </div>
@@ -127,15 +166,30 @@
                                 templateTitle || '当前模板'
                             }}"
                         </p>
-                        <p>
-                            <strong>检测轮数：</strong>{{ currentCheckRound }} /
-                            {{ settings.maxEmptyChecks }}
+
+                        <!-- 等待定时开始时显示倒计时 -->
+                        <p v-if="waitingForStart && !monitoring">
+                            <strong>预定开始时间：</strong>{{ settings.startTime }}
                         </p>
-                        <p><strong>下次检测：</strong>{{ nextCheckTime }}</p>
-                        <p><strong>已添加文件：</strong>{{ addedFilesCount }} 个</p>
+                        <p
+                            v-if="waitingForStart && !monitoring && timeUntilStart"
+                            class="countdown-info"
+                        >
+                            <strong>距离开始还有：</strong>{{ timeUntilStart }}
+                        </p>
+
+                        <!-- 监控进行中时显示检测信息 -->
+                        <template v-if="monitoring">
+                            <p>
+                                <strong>检测轮数：</strong>{{ currentCheckRound }} /
+                                {{ settings.maxEmptyChecks }}
+                            </p>
+                            <p><strong>下次检测：</strong>{{ nextCheckTime }}</p>
+                            <p><strong>已添加文件：</strong>{{ addedFilesCount }} 个</p>
+                        </template>
                     </div>
 
-                    <div v-if="lastCheckResult" class="last-check">
+                    <div v-if="lastCheckResult && monitoring" class="last-check">
                         <h4>最近检测结果：</h4>
                         <ul>
                             <li v-if="lastCheckResult.newFiles.length > 0">
@@ -158,15 +212,21 @@
         <!-- 按钮区域 -->
         <template #footer>
             <div class="dialog-footer">
-                <template v-if="!monitoring">
+                <template v-if="!monitoring && !waitingForStart">
                     <el-button @click="closeDialog">取消</el-button>
                     <el-button
                         type="primary"
-                        :disabled="!settings.folderPath"
+                        :disabled="
+                            !settings.folderPath || (settings.delayedStart && !settings.startTime)
+                        "
                         @click="startMonitoring"
                     >
-                        开始监控
+                        {{ settings.delayedStart ? '设置定时开始' : '开始监控' }}
                     </el-button>
+                </template>
+                <template v-else-if="waitingForStart && !monitoring">
+                    <el-button type="warning" @click="cancelDelayedStart">取消定时</el-button>
+                    <el-button type="primary" @click="startMonitoringNow">立即开始</el-button>
                 </template>
                 <template v-else>
                     <el-button type="danger" @click="stopMonitoring">停止监控</el-button>
@@ -178,7 +238,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted, watch } from 'vue'
-import { FolderOpened, Loading } from '@element-plus/icons-vue'
+import { FolderOpened, Loading, Clock } from '@element-plus/icons-vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useUtilsStore } from '../stores/utils'
 
@@ -215,11 +275,14 @@ const settings = ref({
     checkInterval: 60, // 检测间隔时间（秒），默认60秒
     includeSubfolders: false, // 是否包含子文件夹
     minFileSize: 0, // 最小文件大小（MB），默认1MB
-    autoSubmit: true // 是否自动提交稿件
+    autoSubmit: true, // 是否自动提交稿件
+    delayedStart: false, // 是否启用定时开始
+    startTime: null as string | null // 开始时间
 })
 
 // 监控状态
 const monitoring = ref(false)
+const waitingForStart = ref(false) // 等待定时开始状态
 const currentCheckRound = ref(0)
 const nextCheckTime = ref('')
 const addedFilesCount = ref(0)
@@ -228,6 +291,10 @@ const lastCheckResult = ref<{
     resetCounter: boolean
     stableFiles: string[]
 } | null>(null)
+
+// 定时开始相关状态
+const timeUntilStart = ref('')
+const startCountdownTimer = ref<number | null>(null)
 
 // 文件大小跟踪：存储每个文件最近3次的大小记录
 const fileSizeHistory = ref<Map<string, number[]>>(new Map())
@@ -479,9 +546,53 @@ const startMonitoring = async () => {
         return
     }
 
+    // 如果启用了定时开始
+    if (settings.value.delayedStart && settings.value.startTime) {
+        const startTime = new Date(settings.value.startTime)
+        const now = new Date()
+
+        if (startTime <= now) {
+            utilsStore.showMessage('开始时间不能早于当前时间', 'error')
+            return
+        }
+
+        // 设置等待状态
+        waitingForStart.value = true
+
+        // 开始倒计时
+        startCountdown()
+
+        // 设置定时器，在指定时间开始监控
+        const delay = startTime.getTime() - now.getTime()
+        setTimeout(() => {
+            if (waitingForStart.value) {
+                startMonitoringNow()
+            }
+        }, delay)
+
+        utilsStore.showMessage(
+            `已设置定时开始，将在 ${settings.value.startTime} 开始监控`,
+            'success'
+        )
+        return
+    }
+
+    // 立即开始监控
+    startMonitoringNow()
+}
+
+// 立即开始监控（实际的监控逻辑）
+const startMonitoringNow = async () => {
     monitoring.value = true
+    waitingForStart.value = false
     currentCheckRound.value = 0
     addedFilesCount.value = 0
+
+    // 清除倒计时定时器
+    if (startCountdownTimer.value) {
+        clearInterval(startCountdownTimer.value)
+        startCountdownTimer.value = null
+    }
 
     // 清空文件大小历史记录
     fileSizeHistory.value.clear()
@@ -503,13 +614,76 @@ const startMonitoring = async () => {
     utilsStore.showMessage(successMsg, 'success')
 }
 
+// 取消定时开始
+const cancelDelayedStart = () => {
+    waitingForStart.value = false
+
+    if (startCountdownTimer.value) {
+        clearInterval(startCountdownTimer.value)
+        startCountdownTimer.value = null
+    }
+
+    utilsStore.showMessage('已取消定时开始', 'info')
+}
+
+// 开始倒计时显示
+const startCountdown = () => {
+    if (!settings.value.startTime) return
+
+    const updateCountdown = () => {
+        const startTime = new Date(settings.value.startTime!)
+        const now = new Date()
+        const diff = startTime.getTime() - now.getTime()
+
+        if (diff <= 0) {
+            timeUntilStart.value = '即将开始...'
+            if (startCountdownTimer.value) {
+                clearInterval(startCountdownTimer.value)
+                startCountdownTimer.value = null
+            }
+            return
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24))
+        const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60))
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60))
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000)
+
+        let countdownText = ''
+        if (days > 0) {
+            countdownText += `${days}天 `
+        }
+        if (hours > 0 || days > 0) {
+            countdownText += `${hours}小时 `
+        }
+        if (minutes > 0 || hours > 0 || days > 0) {
+            countdownText += `${minutes}分钟 `
+        }
+        countdownText += `${seconds}秒`
+
+        timeUntilStart.value = countdownText
+    }
+
+    // 立即更新一次
+    updateCountdown()
+
+    // 每秒更新倒计时
+    startCountdownTimer.value = setInterval(updateCountdown, 1000)
+}
+
 // 停止监控
 const stopMonitoring = () => {
     monitoring.value = false
+    waitingForStart.value = false
 
     if (monitorTimer) {
         clearInterval(monitorTimer)
         monitorTimer = null
+    }
+
+    if (startCountdownTimer.value) {
+        clearInterval(startCountdownTimer.value)
+        startCountdownTimer.value = null
     }
 
     utilsStore.showMessage('已停止文件夹监控', 'info')
@@ -517,7 +691,7 @@ const stopMonitoring = () => {
 
 // 关闭对话框
 const closeDialog = () => {
-    if (monitoring.value) {
+    if (monitoring.value || waitingForStart.value) {
         stopMonitoring()
     }
     visible.value = false
@@ -527,6 +701,9 @@ const closeDialog = () => {
 onUnmounted(() => {
     if (monitorTimer) {
         clearInterval(monitorTimer)
+    }
+    if (startCountdownTimer.value) {
+        clearInterval(startCountdownTimer.value)
     }
 })
 </script>
@@ -591,6 +768,11 @@ onUnmounted(() => {
     margin-right: 8px;
 }
 
+.status-icon.waiting {
+    color: #e6a23c;
+    animation: pulse 2s ease-in-out infinite;
+}
+
 .rotating {
     animation: rotate 2s linear infinite;
 }
@@ -601,6 +783,16 @@ onUnmounted(() => {
     }
     to {
         transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.5;
     }
 }
 
@@ -621,6 +813,12 @@ onUnmounted(() => {
 .auto-submit-info {
     color: #67c23a !important;
     font-weight: 500;
+}
+
+.countdown-info {
+    color: #e6a23c !important;
+    font-weight: 500;
+    font-size: 16px;
 }
 
 .last-check h4 {
