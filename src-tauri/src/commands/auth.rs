@@ -55,6 +55,8 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, Stri
     );
     app_data.auth_service.destroy();
 
+    info!("用户：{} - {} 通过二维码登录成功", user.uid, user.username);
+
     Ok(LoginResponse {
         success: true,
         message: "登录成功".to_string(),

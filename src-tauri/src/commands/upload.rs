@@ -8,6 +8,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
+use tracing::info;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct UploadProgress {
@@ -98,18 +99,6 @@ pub async fn get_upload_queue(app: AppHandle) -> Result<Vec<UploadTask>, String>
         .map_err(|e| e.to_string())
 }
 
-/// 获取上传进度
-#[tauri::command]
-pub async fn get_upload_progress(task_id: String) -> Result<UploadProgress, String> {
-    // TODO: 获取指定任务的上传进度
-    Ok(UploadProgress {
-        task_id,
-        progress: 0.0,
-        status: "waiting".to_string(),
-        message: "等待上传".to_string(),
-    })
-}
-
 /// 重新上传失败的任务
 #[tauri::command]
 pub async fn retry_upload(app: AppHandle, task_id: String) -> Result<bool, String> {
@@ -159,7 +148,10 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
             .submit_by_app(&studio, proxy.as_deref())
             .await
         {
-            Ok(resp) => Ok(resp.data.ok_or("返回值错误").map_err(|e| e.to_string())?),
+            Ok(resp) => {
+                info!("添加稿件成功：{resp}");
+                Ok(resp.data.ok_or("返回值错误").map_err(|e| e.to_string())?)
+            }
             Err(e) => Err(e.to_string()),
         }
     } else {
@@ -175,7 +167,10 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
             .edit_by_web(&studio)
             .await
         {
-            Ok(resp) => Ok(resp["data"].clone()),
+            Ok(resp) => {
+                info!("编辑稿件成功：{resp}");
+                Ok(resp["data"].clone())
+            }
             Err(e) => Err(e.to_string()),
         }
     }

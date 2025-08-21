@@ -181,7 +181,7 @@ impl UploadService {
                 info!("结束后台任务: {}", task_title!(task_mutex));
             }
             task_mutex.lock().await.retry();
-            info!("任务切换重试: {}", task_title!(task_mutex));
+            info!("任务重试: {}", task_title!(task_mutex));
             Ok(true)
         } else {
             Err(anyhow::anyhow!("任务ID不存在: {}", task_id))

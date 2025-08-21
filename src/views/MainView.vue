@@ -1103,6 +1103,7 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
         }
 
         utilsStore.showMessage(`视频${resp.bvid}提交成功 (模板: ${templateName})`, 'success')
+        console.log(`视频${resp.bvid}提交成功 (模板: ${templateName})`, 'success')
 
         if (resp && resp.aid && utilsStore.hasSeason) {
             try {
@@ -1125,6 +1126,7 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
                         utilsStore.seasonlist.find((s: any) => s.season_id === template.season_id)
                             ?.title || template.season_id
                     utilsStore.showMessage(`视频${resp.bvid}加入合集${season_title}`, 'success')
+                    console.log(`视频${resp.bvid}加入合集${season_title}`, 'success')
                 }
             } catch (error) {
                 console.error('设置合集失败: ', error)

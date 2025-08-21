@@ -178,7 +178,6 @@ pub async fn run() {
             pause_upload,
             cancel_upload,
             get_upload_queue,
-            get_upload_progress,
             retry_upload,
             submit,
             // 配置相关命令

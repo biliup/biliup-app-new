@@ -74,14 +74,14 @@ pub struct BilibiliForm {
 
 impl TemplateConfig {
     pub fn from_bilibili_res(value: Value) -> Result<Self> {
-        trace!("{}", serde_json::to_string(&value)?);
+        debug!("{}", serde_json::to_string(&value)?);
 
         let archive = value["archive"].clone();
-        debug!("{}", serde_json::to_string(&value)?);
+        trace!("{}", serde_json::to_string(&value)?);
         let mut template_config: Self = serde_json::from_value(archive)?;
 
         let videos = value["videos"].clone();
-        debug!("{}", serde_json::to_string(&videos)?);
+        trace!("{}", serde_json::to_string(&videos)?);
 
         template_config.videos = videos
             .as_array()

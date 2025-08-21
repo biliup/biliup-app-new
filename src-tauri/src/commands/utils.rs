@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::{fs::File, io::Read, path::Path};
 use tauri::Manager;
 use tokio::sync::Mutex;
-use tracing::{error, info, warn};
+use tracing::{debug, error, info, warn};
 
 use crate::utils::crypto::encode_base64;
 use crate::utils::file_utils::{self, FileEntry};
@@ -57,7 +57,10 @@ pub async fn upload_cover(app: tauri::AppHandle, uid: u64, file: String) -> Resu
         .cover_up(&cover_buf)
         .await
     {
-        Ok(url) => Ok(url),
+        Ok(url) => {
+            info!("封面上传成功: {}", url);
+            Ok(url)
+        }
         Err(e) => Err(e.to_string()),
     }
 }
@@ -107,7 +110,10 @@ pub async fn get_type_list(app: tauri::AppHandle, uid: u64) -> Result<Value, Str
         .archive_pre()
         .await
     {
-        Ok(res) => Ok(res["data"]["typelist"].clone()),
+        Ok(res) => {
+            debug!("获取分区列表成功: {}", res);
+            Ok(res["data"]["typelist"].clone())
+        }
         Err(e) => Err(e.to_string()),
     }
 }
@@ -132,7 +138,10 @@ pub async fn get_topic_list(app: tauri::AppHandle, uid: u64) -> Result<Value, St
         .json::<Value>()
         .await
     {
-        Ok(res) => Ok(res["data"]["topics"].clone()),
+        Ok(res) => {
+            debug!("获取话题列表成功: {}", res);
+            Ok(res["data"]["topics"].clone())
+        }
         Err(e) => Err(e.to_string()),
     }
 }
@@ -156,7 +165,10 @@ pub async fn search_topics(
             .json::<Value>()
             .await
         {
-            Ok(res) => Ok(res["data"]["result"]["topics"].clone()),
+            Ok(res) => {
+                debug!("搜索话题成功: {}", res);
+                Ok(res["data"]["result"]["topics"].clone())
+            },
             Err(e) => Err(e.to_string()),
         }
 }
@@ -177,6 +189,7 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, S
             .await
         {
             Ok(res) => {
+                debug!("获取合集列表成功: {}", res);
                 let mut season_vec = Vec::new();
 
                 let seasons = res["data"]["seasons"].as_array()
@@ -259,7 +272,10 @@ pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Resu
         .json::<Value>()
         .await
     {
-        Ok(res) => Ok(res["data"]["id"].as_u64().unwrap_or(0)),
+        Ok(res) => {
+            debug!("获取稿件合集信息成功: {}", res);
+            Ok(res["data"]["id"].as_u64().unwrap_or(0))
+        }
         Err(e) => Err(e.to_string()),
     }
 }
@@ -335,7 +351,10 @@ pub async fn switch_season(
         .json::<Value>()
         .await
         {
-            Ok(_) => Ok(true),
+            Ok(res) => {
+                debug!("设置合集成功：{res}");
+                Ok(true)
+            },
             Err(e) => Err(e.to_string()),
         }
     } else {
@@ -366,7 +385,7 @@ pub async fn switch_season(
             .await
         {
             Ok(res) => {
-                info!("{res}");
+                debug!("修改合集成功：{res}");
                 if res["code"].as_i64() != Some(0) {
                     return Err(serde_json::to_string(&res).unwrap_or("未知错误".to_string()));
                 }
@@ -441,6 +460,7 @@ pub async fn check_update() -> Result<Option<String>, String> {
         .as_str()
         .ok_or("无法获取最新版本标签")?;
 
+    info!("最新版本：{latest_tag}");
     // 解析版本号 (格式: app-va.b.c)
     let latest_version = latest_tag.strip_prefix("app-v").ok_or("版本标签格式错误")?;
 

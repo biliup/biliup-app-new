@@ -48,6 +48,7 @@ pub async fn save_user_config(
     auto_edit: u8,
 ) -> Result<bool, String> {
     let data = app.state::<Mutex<AppData>>();
+    info!("User({uid}) config saved");
 
     data.lock()
         .await
@@ -67,6 +68,8 @@ pub async fn save_global_config(
     auto_upload: bool,
 ) -> Result<bool, String> {
     let data = app.state::<Mutex<AppData>>();
+
+    info!("Global config saved");
 
     data.lock()
         .await
