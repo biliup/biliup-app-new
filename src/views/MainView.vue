@@ -63,9 +63,7 @@
                             size="small"
                             class="highlight-checkbox"
                         >
-                            <span class="highlight-checkbox-text">
-                                高亮显示<br>自动提交
-                            </span>
+                            <span class="highlight-checkbox-text"> 高亮显示<br />自动提交 </span>
                         </el-checkbox>
                         <el-button type="success" size="small" @click="showLoginDialog = true">
                             <el-icon><user /></el-icon>
@@ -918,7 +916,7 @@ const highlightAutoSubmitting = ref<boolean>(
 )
 
 // 监听高亮开关变化，保存到localStorage
-watch(highlightAutoSubmitting, (newValue) => {
+watch(highlightAutoSubmitting, newValue => {
     localStorage.setItem('highlightAutoSubmitting', String(newValue))
 })
 
@@ -1081,6 +1079,7 @@ const configUser = ref<any>(null)
 const selectedCategory = ref<any>(null)
 const selectedSubCategory = ref<any>(null)
 const categoryPopoverVisible = ref(false)
+let generalUpdateTimer: number | null = null
 
 const currentTemplate = computed(() => {
     if (!selectedUser.value || !currentTemplateName.value || !userConfigStore.configRoot?.config) {
@@ -1246,6 +1245,11 @@ onUnmounted(() => {
         autoSubmitInterval = null
     }
 
+    if (generalUpdateTimer) {
+        clearInterval(generalUpdateTimer)
+        generalUpdateTimer = null
+    }
+
     // 清理所有自动提交状态
     autoSubmittingRecord.value = {}
 })
@@ -1263,28 +1267,30 @@ const initializeData = async () => {
             await utilsStore.initTopicList(loginUsers.value[0].uid)
             await userConfigStore.buildUserTemplates(loginUsers.value)
             await uploadStore.getUploadQueue()
-            setInterval(() => {
-                if (authStore.loginUsers.length > 0) {
-                    uploadStore.getUploadQueue()
-                }
-                for (const task of uploadStore.uploadQueue) {
-                    if (task.status === 'Completed') {
-                        const templateName = task.template
-                        const uid = task.user.uid
-                        const videos =
-                            userConfigStore.configRoot?.config[uid]?.templates[templateName]
-                                ?.videos || []
+            if (!generalUpdateTimer) {
+                generalUpdateTimer = setInterval(() => {
+                    if (authStore.loginUsers.length > 0) {
+                        uploadStore.getUploadQueue()
+                    }
+                    for (const task of uploadStore.uploadQueue) {
+                        if (task.status === 'Completed') {
+                            const templateName = task.template
+                            const uid = task.user.uid
+                            const videos =
+                                userConfigStore.configRoot?.config[uid]?.templates[templateName]
+                                    ?.videos || []
 
-                        const video = videos.find(v => v.id === task.video?.id)
-                        if (video && video.filename !== task.video?.filename) {
-                            video.filename = task.video.filename
-                            video.path = task.video.path
-                            video.complete = true
-                            video.finished_at = task.finished_at
+                            const video = videos.find(v => v.id === task.video?.id)
+                            if (video && video.filename !== task.video?.filename) {
+                                video.filename = task.video.filename
+                                video.path = task.video.path
+                                video.complete = true
+                                video.finished_at = task.finished_at
+                            }
                         }
                     }
-                }
-            }, 1000) // 每秒更新一次上传队列
+                }, 666) // 更新上传队列
+            }
         }
     } catch (error) {
         console.error('初始化数据失败: ', error)
