@@ -1417,6 +1417,11 @@ const initializeData = async () => {
                 }, 666) // 更新上传队列
             }
         }
+
+        setTimeout(async () => {
+            await restoreTemplateSelection()
+            restoreCardCollapsedState()
+        }, 100)
     } catch (error) {
         console.error('初始化数据失败: ', error)
         utilsStore.showMessage(`'初始化数据失败: ${error}'`, 'error')
@@ -1568,6 +1573,113 @@ const setupKeyboardShortcuts = async () => {
 // 切换卡片折叠状态
 const toggleCardCollapsed = (cardKey: keyof typeof cardCollapsed.value) => {
     cardCollapsed.value[cardKey] = !cardCollapsed.value[cardKey]
+    // 保存折叠状态到localStorage
+    saveCardCollapsedState()
+}
+
+// 模板选择记忆功能
+const TEMPLATE_SELECTION_KEY = 'last-selected-template'
+const CARD_COLLAPSED_KEY = 'card-collapsed-state'
+
+// 是否正在恢复模板选择（避免递归保存）
+const isRestoringTemplate = ref(false)
+
+// 保存模板选择到localStorage
+const saveTemplateSelection = (userUid: number, templateName: string) => {
+    // 如果正在恢复模板，不保存（避免递归）
+    if (isRestoringTemplate.value) return
+
+    try {
+        const selection = {
+            userUid,
+            templateName,
+            timestamp: Date.now()
+        }
+        localStorage.setItem(TEMPLATE_SELECTION_KEY, JSON.stringify(selection))
+    } catch (error) {
+        console.error('保存模板选择失败:', error)
+    }
+}
+
+// 保存卡片折叠状态
+const saveCardCollapsedState = () => {
+    try {
+        localStorage.setItem(CARD_COLLAPSED_KEY, JSON.stringify(cardCollapsed.value))
+    } catch (error) {
+        console.error('保存卡片折叠状态失败:', error)
+    }
+}
+
+// 恢复卡片折叠状态
+const restoreCardCollapsedState = () => {
+    try {
+        const saved = localStorage.getItem(CARD_COLLAPSED_KEY)
+        if (saved) {
+            const savedState = JSON.parse(saved)
+            Object.assign(cardCollapsed.value, savedState)
+        }
+    } catch (error) {
+        console.error('恢复卡片折叠状态失败:', error)
+    }
+}
+
+// 从localStorage恢复模板选择
+const restoreTemplateSelection = async () => {
+    try {
+        const saved = localStorage.getItem(TEMPLATE_SELECTION_KEY)
+        if (!saved) return
+
+        const selection = JSON.parse(saved)
+        const { userUid, templateName, timestamp } = selection
+
+        // 检查数据有效性（超过30天的记录自动失效）
+        const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+        if (timestamp && timestamp < thirtyDaysAgo) {
+            localStorage.removeItem(TEMPLATE_SELECTION_KEY)
+            return
+        }
+
+        // 检查用户是否仍然登录
+        const targetUser = loginUsers.value.find(user => user.uid === userUid)
+        if (!targetUser) {
+            // 用户已不存在，清除记录
+            localStorage.removeItem(TEMPLATE_SELECTION_KEY)
+            return
+        }
+
+        // 检查模板是否仍然存在
+        const userTemplate = userTemplates.value.find(ut => ut.user.uid === userUid)
+        const template = userTemplate?.templates.find(t => t.name === templateName)
+        if (!template) {
+            // 模板已不存在，清除记录
+            localStorage.removeItem(TEMPLATE_SELECTION_KEY)
+            return
+        }
+
+        // 确保用户是展开状态
+        if (userTemplate && !userTemplate.expanded) {
+            toggleUserExpanded(userUid)
+        }
+
+        // 设置恢复状态标志
+        isRestoringTemplate.value = true
+
+        // 自动选择模板
+        await selectTemplate(targetUser, templateName)
+
+        // 恢复完成后重置标志
+        isRestoringTemplate.value = false
+
+        console.log(`自动恢复模板选择: ${targetUser.username} - ${templateName}`)
+        utilsStore.showMessage(`已恢复上次选择的模板: ${templateName}`, 'success')
+    } catch (error) {
+        console.error('恢复模板选择失败:', error)
+        // 如果恢复失败，清除无效的存储数据
+        localStorage.removeItem(TEMPLATE_SELECTION_KEY)
+    } finally {
+        // 确保标志被重置
+        isRestoringTemplate.value = false
+    }
 }
 
 // 清空卡片内容
@@ -1820,6 +1932,9 @@ const selectTemplate = async (user: any, templateName: string) => {
         // 加载模板数据到表单
         await loadTemplate()
 
+        // 保存模板选择到localStorage
+        saveTemplateSelection(user.uid, templateName)
+
         // 如果模板有 aid，主动刷新模板数据
         const aid = currentTemplate.value?.aid
         setTimeout(async () => {
@@ -2039,7 +2154,8 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                     currentTemplateName.value === template.name
                 ) {
                     currentTemplateName.value = trimmedName
-                    // 模板数据已直接操作，无需额外状态管理
+                    // 更新localStorage中的模板选择记录
+                    saveTemplateSelection(user.uid, trimmedName)
                 }
 
                 utilsStore.showMessage('模板重命名成功', 'success')
@@ -2069,7 +2185,8 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                 ) {
                     currentTemplateName.value = ''
                     selectedUser.value = null
-                    // 模板数据已直接操作，无需额外状态管理
+                    // 清除localStorage中的模板选择记录
+                    localStorage.removeItem(TEMPLATE_SELECTION_KEY)
                 }
 
                 utilsStore.showMessage('模板删除成功', 'success')
@@ -2105,6 +2222,9 @@ const handleTemplateCreated = async (userUid: number, templateName: string) => {
         templateLoading.value = true
         await loadTemplate()
         templateLoading.value = false
+
+        // 保存新创建的模板选择
+        saveTemplateSelection(userUid, templateName)
     }
 }
 
@@ -2585,6 +2705,26 @@ const handleLogoutUser = async (uid: number) => {
     try {
         const success = await authStore.logoutUser(uid)
         if (success) {
+            // 如果登出的用户正是当前选择的用户，清除相关记录
+            if (selectedUser.value?.uid === uid) {
+                selectedUser.value = null
+                currentTemplateName.value = ''
+                localStorage.removeItem(TEMPLATE_SELECTION_KEY)
+            } else {
+                // 检查localStorage中记录的用户是否是被登出的用户
+                try {
+                    const saved = localStorage.getItem(TEMPLATE_SELECTION_KEY)
+                    if (saved) {
+                        const selection = JSON.parse(saved)
+                        if (selection.userUid === uid) {
+                            localStorage.removeItem(TEMPLATE_SELECTION_KEY)
+                        }
+                    }
+                } catch (error) {
+                    console.error('清理localStorage记录失败:', error)
+                }
+            }
+
             utilsStore.showMessage('用户已登出', 'success')
             // 刷新前端数据
             await refreshAllData()
