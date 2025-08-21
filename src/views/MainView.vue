@@ -1049,17 +1049,27 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
             }
         }
 
-        const userConfig = userConfigStore.configRoot?.config[selectedUser.value.uid]
-        if (!template.aid && userConfig && userConfig.auto_edit && newTemplateRef.value) {
-            // 新增稿件且auto_edit开启，创建编辑模板
-            await newTemplateRef.value.createTemplateFromBV(
-                selectedUser.value.uid,
-                resp.bvid,
-                resp.bvid,
-                true
-            )
-            utilsStore.showMessage('从BV号创建模板成功', 'success')
-        }
+        setTimeout(async () => {
+            try {
+                if (!template.aid) {
+                    const userConfig = userConfigStore.configRoot?.config[selectedUser.value.uid]
+                    if (userConfig && userConfig.auto_edit && newTemplateRef.value) {
+                        // 新增稿件且auto_edit开启，创建编辑模板
+                        await newTemplateRef.value.createTemplateFromBV(
+                            selectedUser.value.uid,
+                            resp.bvid,
+                            resp.bvid,
+                            true
+                        )
+                        utilsStore.showMessage('从BV号创建模板成功', 'success')
+                    }
+                } else {
+                    reloadTemplateFromAV(selectedUser.value.uid, template.aid)
+                }
+            } catch (error) {
+                utilsStore.showMessage(`${error}`, 'error')
+            }
+        }, 500)
     } finally {
         submitting.value = false
     }
@@ -1668,6 +1678,7 @@ const reloadTemplateFromAV = async (userUid: number, aid: number) => {
         }
 
         currentForm.value = newTemplate
+        utilsStore.showMessage('模板数据已刷新', 'success')
     } catch (error) {
         console.error('刷新失败: ', error)
         utilsStore.showMessage(`刷新失败: ${error}`, 'error')
