@@ -295,12 +295,23 @@
                                 <template #header>
                                     <div class="card-header" @click="toggleCardCollapsed('basic')">
                                         <span>基本信息</span>
-                                        <el-icon
-                                            class="collapse-icon"
-                                            :class="{ collapsed: cardCollapsed.basic }"
-                                        >
-                                            <arrow-down />
-                                        </el-icon>
+                                        <div class="header-actions">
+                                            <el-button
+                                                type="danger"
+                                                text
+                                                size="small"
+                                                @click.stop="clearCardContent('basic')"
+                                                title="清空基本信息"
+                                            >
+                                                <el-icon><delete /></el-icon>
+                                            </el-button>
+                                            <el-icon
+                                                class="collapse-icon"
+                                                :class="{ collapsed: cardCollapsed.basic }"
+                                            >
+                                                <arrow-down />
+                                            </el-icon>
+                                        </div>
                                     </div>
                                 </template>
 
@@ -539,12 +550,23 @@
                                 <template #header>
                                     <div class="card-header" @click="toggleCardCollapsed('tags')">
                                         <span>标签设置</span>
-                                        <el-icon
-                                            class="collapse-icon"
-                                            :class="{ collapsed: cardCollapsed.tags }"
-                                        >
-                                            <arrow-down />
-                                        </el-icon>
+                                        <div class="header-actions">
+                                            <el-button
+                                                type="danger"
+                                                text
+                                                size="small"
+                                                @click.stop="clearCardContent('tags')"
+                                                title="清空标签设置"
+                                            >
+                                                <el-icon><delete /></el-icon>
+                                            </el-button>
+                                            <el-icon
+                                                class="collapse-icon"
+                                                :class="{ collapsed: cardCollapsed.tags }"
+                                            >
+                                                <arrow-down />
+                                            </el-icon>
+                                        </div>
                                     </div>
                                 </template>
 
@@ -596,12 +618,23 @@
                                         @click="toggleCardCollapsed('description')"
                                     >
                                         <span>视频描述</span>
-                                        <el-icon
-                                            class="collapse-icon"
-                                            :class="{ collapsed: cardCollapsed.description }"
-                                        >
-                                            <arrow-down />
-                                        </el-icon>
+                                        <div class="header-actions">
+                                            <el-button
+                                                type="danger"
+                                                text
+                                                size="small"
+                                                @click.stop="clearCardContent('description')"
+                                                title="清空视频描述"
+                                            >
+                                                <el-icon><delete /></el-icon>
+                                            </el-button>
+                                            <el-icon
+                                                class="collapse-icon"
+                                                :class="{ collapsed: cardCollapsed.description }"
+                                            >
+                                                <arrow-down />
+                                            </el-icon>
+                                        </div>
                                     </div>
                                 </template>
 
@@ -641,12 +674,23 @@
                                         @click="toggleCardCollapsed('advanced')"
                                     >
                                         <span>高级选项</span>
-                                        <el-icon
-                                            class="collapse-icon"
-                                            :class="{ collapsed: cardCollapsed.advanced }"
-                                        >
-                                            <arrow-down />
-                                        </el-icon>
+                                        <div class="header-actions">
+                                            <el-button
+                                                type="danger"
+                                                text
+                                                size="small"
+                                                @click.stop="clearCardContent('advanced')"
+                                                title="清空高级选项"
+                                            >
+                                                <el-icon><delete /></el-icon>
+                                            </el-button>
+                                            <el-icon
+                                                class="collapse-icon"
+                                                :class="{ collapsed: cardCollapsed.advanced }"
+                                            >
+                                                <arrow-down />
+                                            </el-icon>
+                                        </div>
                                     </div>
                                 </template>
 
@@ -901,7 +945,8 @@ import {
     Check,
     Edit,
     Setting,
-    Refresh
+    Refresh,
+    Delete
 } from '@element-plus/icons-vue'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { copyFile, remove } from '@tauri-apps/plugin-fs'
@@ -1523,6 +1568,91 @@ const setupKeyboardShortcuts = async () => {
 // 切换卡片折叠状态
 const toggleCardCollapsed = (cardKey: keyof typeof cardCollapsed.value) => {
     cardCollapsed.value[cardKey] = !cardCollapsed.value[cardKey]
+}
+
+// 清空卡片内容
+const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'advanced') => {
+    if (!currentForm.value) {
+        utilsStore.showMessage('请先选择模板', 'warning')
+        return
+    }
+
+    // 如果正在加载模板，禁止清空
+    if (templateLoading.value) {
+        utilsStore.showMessage('模板正在加载中，请稍后再试', 'warning')
+        return
+    }
+
+    try {
+        // 确认清空
+        await ElMessageBox.confirm(
+            `确定要清空"${getCardDisplayName(cardType)}"的所有内容吗？`,
+            '确认清空',
+            {
+                confirmButtonText: '确定',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }
+        )
+
+        // 根据卡片类型清空相应内容
+        switch (cardType) {
+            case 'basic':
+                currentForm.value.title = ''
+                currentForm.value.cover = ''
+                currentForm.value.tid = 0
+                currentForm.value.copyright = 1
+                currentForm.value.source = ''
+                // 清空分区选择
+                selectedCategory.value = null
+                selectedSubCategory.value = null
+                // 清空封面显示
+                coverDisplayUrl.value = ''
+                break
+
+            case 'tags':
+                currentForm.value.tag = ''
+                tags.value = []
+                break
+
+            case 'description':
+                currentForm.value.desc = ''
+                currentForm.value.dynamic = ''
+                break
+
+            case 'advanced':
+                currentForm.value.watermark =
+                    userConfigStore?.configRoot?.config[selectedUser.value.uid]?.watermark || 0
+                currentForm.value.dtime = undefined
+                currentForm.value.interactive = 0
+                currentForm.value.dolby = 0
+                currentForm.value.lossless_music = 0
+                currentForm.value.no_reprint = 0
+                currentForm.value.open_elec = 0
+                currentForm.value.up_selection_reply = 0
+                currentForm.value.up_close_reply = 0
+                currentForm.value.up_close_danmu = 0
+                currentForm.value.atomic_int = 0
+                currentForm.value.is_only_self = 0
+                break
+        }
+
+        utilsStore.showMessage(`已清空"${getCardDisplayName(cardType)}"的内容`, 'success')
+    } catch (error) {
+        // 用户取消了操作
+    }
+}
+
+// 获取卡片显示名称
+const getCardDisplayName = (cardType: string): string => {
+    const cardNames: Record<string, string> = {
+        basic: '基本信息',
+        tags: '标签设置',
+        description: '视频描述',
+        videos: '视频文件',
+        advanced: '高级选项'
+    }
+    return cardNames[cardType] || cardType
 }
 
 const addVideoToCurrentForm = async (videoPath: string) => {
@@ -3113,6 +3243,24 @@ const checkUpdate = async () => {
     display: flex;
     gap: 8px;
     align-items: center;
+}
+
+.card-header .header-actions .el-button {
+    margin: 0;
+    padding: 4px;
+    border: none;
+    background: transparent;
+    transition: all 0.3s ease;
+}
+
+.card-header .header-actions .el-button:hover {
+    background: rgba(245, 108, 108, 0.1);
+    color: #f56c6c;
+    transform: scale(1.1);
+}
+
+.card-header .header-actions .el-button .el-icon {
+    font-size: 14px;
 }
 
 .collapse-icon {
