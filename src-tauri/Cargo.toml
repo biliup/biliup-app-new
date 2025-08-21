@@ -28,7 +28,7 @@ tauri-plugin-http = "2"
 tauri-plugin-shell = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["full", "tracing"] }
 futures = "0.3.30"
 reqwest = { version = "0.12", features = ["json", "multipart", "stream"] }
 anyhow = "1.0"
@@ -39,7 +39,7 @@ qrcode = "0.14"
 image = "0.25"
 chrono = "0.4.41"
 serde_yaml = "0.9"
-tracing = { version = "0.1", features = ["release_max_level_off"] }
+tracing = "0.1"
 tracing-subscriber = "0.3.18"
 tracing-appender = "0.2"
 indexmap = "2"
@@ -50,7 +50,6 @@ zip = "2.2"
 
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full", "tracing"] }
 console-subscriber = "0.4"
 
 
