@@ -58,6 +58,15 @@
                 <div class="sidebar-header">
                     <h3></h3>
                     <div class="header-buttons">
+                        <el-checkbox
+                            v-model="highlightAutoSubmitting"
+                            size="small"
+                            class="highlight-checkbox"
+                        >
+                            <span class="highlight-checkbox-text">
+                                高亮显示<br>自动提交
+                            </span>
+                        </el-checkbox>
                         <el-button type="success" size="small" @click="showLoginDialog = true">
                             <el-icon><user /></el-icon>
                             登录用户
@@ -133,6 +142,12 @@
                                             selectedUser?.uid === userTemplate.user.uid &&
                                             currentTemplateName === template.name,
                                         'auto-submitting':
+                                            highlightAutoSubmitting &&
+                                            autoSubmittingRecord[
+                                                getTemplateKey(userTemplate.user.uid, template.name)
+                                            ],
+                                        'auto-submitting-simple':
+                                            !highlightAutoSubmitting &&
                                             autoSubmittingRecord[
                                                 getTemplateKey(userTemplate.user.uid, template.name)
                                             ]
@@ -896,6 +911,16 @@ const submitting = ref(false)
 const autoSubmittingRecord = ref<Record<string, boolean>>({})
 // 全局自动提交检查间隔
 let autoSubmitInterval: number | null = null
+
+// 高亮显示自动提交状态的开关
+const highlightAutoSubmitting = ref<boolean>(
+    localStorage.getItem('highlightAutoSubmitting') === 'true'
+)
+
+// 监听高亮开关变化，保存到localStorage
+watch(highlightAutoSubmitting, (newValue) => {
+    localStorage.setItem('highlightAutoSubmitting', String(newValue))
+})
 
 // 生成模板键名
 const getTemplateKey = (uid: number, templateName: string) => `${uid}-${templateName}`
@@ -2455,6 +2480,22 @@ const checkUpdate = async () => {
 .header-buttons {
     display: flex;
     gap: 8px;
+    align-items: center;
+}
+
+.highlight-checkbox {
+    margin-right: 8px;
+    font-size: 12px;
+}
+
+.highlight-checkbox :deep(.el-checkbox__label) {
+    font-size: 12px;
+    color: #606266;
+}
+
+.highlight-checkbox-text {
+    line-height: 1.2;
+    text-align: center;
 }
 
 .user-section {
@@ -2633,6 +2674,23 @@ const checkUpdate = async () => {
     100% {
         opacity: 0.3;
     }
+}
+
+.template-item.auto-submitting-simple {
+    border: 2px solid #409eff !important;
+    background: rgba(64, 158, 255, 0.05) !important;
+    position: relative;
+}
+
+.template-item.auto-submitting-simple::after {
+    content: '⚡ 自动上传中...';
+    position: absolute;
+    top: 2px;
+    right: 6px;
+    font-size: 10px;
+    color: #409eff;
+    font-weight: bold;
+    z-index: 3;
 }
 
 .template-main {
