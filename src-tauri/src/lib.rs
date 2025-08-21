@@ -75,8 +75,58 @@ async fn startup() -> Result<AppData> {
     })
 }
 
+fn setup_logs() -> Result<()> {
+    let log_dir = get_log_path()?;
+    let log_file = format!(
+        "biliup-{}.log",
+        chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S")
+    );
+    let file_appender = tracing_appender::rolling::never(log_dir, &log_file);
+
+    use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
+
+    let file_layer = tracing_subscriber::fmt::layer()
+        .with_writer(file_appender)
+        .with_ansi(false) // 禁用 ANSI 颜色代码
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(true)
+        .with_line_number(true);
+
+    #[cfg(debug_assertions)]
+    let console_layer = tracing_subscriber::fmt::layer()
+        .with_writer(std::io::stdout)
+        .with_ansi(true) // 启用 ANSI 颜色代码
+        .with_target(false)
+        .with_thread_ids(false)
+        .with_file(true)
+        .with_line_number(true);
+
+    // !!!!!!
+    // !!!!!! Attention
+    // Tauri #9453提出启用tracing后traui应用有概率卡死
+    // 在发行版本中尽量少的输出日志
+
+    #[cfg(debug_assertions)]
+    tracing_subscriber::registry()
+        .with(file_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
+        .with(console_layer.with_filter(tracing_subscriber::filter::LevelFilter::TRACE))
+        .init();
+
+    #[cfg(not(debug_assertions))]
+    tracing_subscriber::registry()
+        .with(file_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
+        .with(console_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
+        .init();
+
+    info!("日志已输出到: {:?} {}", get_log_path()?, log_file);
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
+    setup_logs().expect("日志初始化失败");
     // 启动时进行兼容性检查
     if let Err(e) = CompatibilityConverter::startup_with_compatibility().await {
         info!("无旧biliup配置: {}", e);
@@ -101,52 +151,6 @@ pub async fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
         .setup(move |app: &mut tauri::App| {
-            info!("Tauri app is starting...");
-            let log_dir = get_log_path()?;
-            let log_file = format!(
-                "biliup-{}.log",
-                chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S")
-            );
-            let file_appender = tracing_appender::rolling::never(log_dir, &log_file);
-            let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-            use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
-
-            let file_layer = tracing_subscriber::fmt::layer()
-                .with_writer(non_blocking)
-                .with_ansi(false) // 禁用 ANSI 颜色代码
-                .with_target(false)
-                .with_thread_ids(false)
-                .with_file(true)
-                .with_line_number(true);
-
-            #[cfg(debug_assertions)]
-            let console_layer = tracing_subscriber::fmt::layer()
-                .with_writer(std::io::stdout)
-                .with_ansi(true) // 启用 ANSI 颜色代码
-                .with_target(false)
-                .with_thread_ids(false)
-                .with_file(true)
-                .with_line_number(true);
-
-            // !!!!!!
-            // !!!!!! Attention
-            // Tauri #9453提出启用tracing后traui应用有概率卡死
-            // 在发行版本中尽量少的输出日志
-
-            #[cfg(debug_assertions)]
-            tracing_subscriber::registry()
-                .with(file_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
-                .with(console_layer.with_filter(tracing_subscriber::filter::LevelFilter::TRACE))
-                .init();
-
-            #[cfg(not(debug_assertions))]
-            tracing_subscriber::registry()
-                .with(file_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
-                .init();
-
-            info!("日志已输出到: {:?} {}", get_log_path()?, log_file);
-
             #[cfg(debug_assertions)] // only include this code on debug builds
             {
                 let windows = app.webview_windows();
