@@ -22,7 +22,7 @@
                     <p>📁 <strong>文件夹监控功能：</strong></p>
                     <ul>
                         <li>选择监控文件夹，按设定间隔自动检测新增视频文件</li>
-                        <li>文件需连续3次检测大小无变化才会被添加（确保文件完整）</li>
+                        <li>可设置文件大小稳定检测次数，确保文件完整后再添加</li>
                         <li>自动将符合大小要求且稳定的视频文件添加到当前模板</li>
                         <li>支持设置最小文件大小过滤，跳过过小的文件</li>
                         <li>支持定时开始功能，在指定时间自动开始监控</li>
@@ -76,6 +76,20 @@
                         />
                         <span class="setting-description">
                             检测间隔时间（秒），范围：5秒-3600秒（1小时）
+                        </span>
+                    </el-form-item>
+
+                    <el-form-item label="稳定检测次数：">
+                        <el-input-number
+                            v-model="settings.stableCheckCount"
+                            :min="0"
+                            :max="5"
+                            :step="1"
+                            controls-position="right"
+                            style="width: 200px"
+                        />
+                        <span class="setting-description">
+                            文件大小连续相同次数后才添加，0表示不检测直接添加
                         </span>
                     </el-form-item>
 
@@ -277,7 +291,8 @@ const settings = ref({
     minFileSize: 0, // 最小文件大小（MB），默认1MB
     autoSubmit: true, // 是否自动提交稿件
     delayedStart: false, // 是否启用定时开始
-    startTime: null as string | null // 开始时间
+    startTime: null as string | null, // 开始时间
+    stableCheckCount: 3 // 文件大小稳定检测次数，默认3次
 })
 
 // 监控状态
@@ -360,22 +375,27 @@ const getCurrentVideoTitles = (): string[] => {
     return props.currentVideos.map(video => video.title || '').filter(Boolean)
 }
 
-// 检查文件大小是否稳定（连续3次大小相同）
+// 检查文件大小是否稳定（连续N次大小相同）
 const isFileSizeStable = (filename: string, currentSize: number): boolean => {
+    // 如果设置为0，直接返回true（不检测稳定性，直接添加）
+    if (settings.value.stableCheckCount === 0) {
+        return true
+    }
+
     const history = fileSizeHistory.value.get(filename) || []
 
     // 更新文件大小历史记录
     history.push(currentSize)
 
-    // 只保留最近3次记录
-    if (history.length > 3) {
+    // 只保留最近N次记录
+    if (history.length > settings.value.stableCheckCount) {
         history.shift()
     }
 
     fileSizeHistory.value.set(filename, history)
 
-    // 检查是否有连续3次相同的大小记录
-    if (history.length >= 3) {
+    // 检查是否有连续N次相同的大小记录
+    if (history.length >= settings.value.stableCheckCount) {
         const allSame = history.every(size => size === history[0])
         return allSame
     }
