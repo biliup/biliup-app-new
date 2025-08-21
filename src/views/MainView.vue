@@ -101,15 +101,6 @@
                                     {{ userTemplate.user.username.charAt(0) }}
                                 </el-avatar>
                                 <span class="user-name">{{ userTemplate.user.username }}</span>
-                                <el-tooltip
-                                    :content="
-                                        isUserHasUploadTasks(userTemplate.user.uid)
-                                            ? '请先删除上传队列中属于该用户的任务'
-                                            : '登出用户'
-                                    "
-                                    placement="top"
-                                >
-                                </el-tooltip>
                                 <el-icon
                                     class="config-icon"
                                     @click.stop="openUserConfig(userTemplate.user)"
@@ -834,9 +825,6 @@
             class="login-dialog"
             top="5vh"
         >
-            <template #header>
-                <div></div>
-            </template>
             <div class="login-dialog-content" @click.stop>
                 <LoginView
                     @login-success="handleLoginSuccess"
