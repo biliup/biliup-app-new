@@ -1308,6 +1308,32 @@ watch(
     { deep: true }
 )
 
+// 监听表单标签变化，更新标签数组
+watch(
+    () => currentForm.value?.tag,
+    (newTag: string | undefined) => {
+        const newTags = newTag ? newTag.split(',').filter(tag => tag.trim()) : []
+        if (JSON.stringify(newTags) !== JSON.stringify(tags.value)) {
+            tags.value = newTags
+        }
+    }
+)
+
+// 监听表单分区变化，更新分区选择（双向绑定）
+watch(
+    () => currentForm.value?.tid,
+    (newTid: number | undefined) => {
+        if (newTid && newTid > 0) {
+            // 根据tid设置选中的分区
+            setSelectedCategoryByTid(newTid)
+        } else {
+            // 如果没有分区信息，清空分区选择
+            selectedCategory.value = null
+            selectedSubCategory.value = null
+        }
+    }
+)
+
 // 监听用户切换，重新加载封面
 watch(
     () => selectedUser.value,
@@ -1715,7 +1741,7 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
                 currentForm.value.tid = 0
                 currentForm.value.copyright = 1
                 currentForm.value.source = ''
-                // 清空分区选择
+                // 同步清空分区选择状态
                 selectedCategory.value = null
                 selectedSubCategory.value = null
                 // 清空封面显示
@@ -1724,6 +1750,7 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
 
             case 'tags':
                 currentForm.value.tag = ''
+                // 同步清空标签数组
                 tags.value = []
                 break
 
