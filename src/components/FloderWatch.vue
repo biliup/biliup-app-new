@@ -1,8 +1,7 @@
 <template>
     <el-dialog
         v-model="visible"
-        title="文件夹监控"
-        width="600px"
+        width="580px"
         :close-on-click-modal="!monitoring"
         :close-on-press-escape="!monitoring"
         :show-close="!monitoring"
@@ -37,8 +36,8 @@
 
             <!-- 设置区域 -->
             <div v-if="!monitoring" class="settings-section">
-                <el-form :model="settings" label-width="140px" label-position="left">
-                    <el-form-item label="监控文件夹：" required>
+                <el-form :model="settings" label-width="110px" label-position="right" size="small">
+                    <el-form-item label="监控文件夹" required>
                         <el-input
                             v-model="settings.folderPath"
                             placeholder="请选择要监控的文件夹"
@@ -53,47 +52,52 @@
                         </el-input>
                     </el-form-item>
 
-                    <el-form-item label="检测次数设置：">
+                    <el-form-item label="检测次数设置">
                         <el-input-number
                             v-model="settings.maxEmptyChecks"
                             :min="1"
                             :max="20"
                             :step="1"
                             controls-position="right"
-                            style="width: 200px"
+                            size="small"
+                            style="width: 180px"
                         />
-                        <span class="setting-description"> 连续检测此次数后自动提交稿件 </span>
+                        <span class="setting-description">
+                            连续检测此次数后自动提交稿件<br />（每轮检测如果有小文件或有不稳定的文件会重置计数器）
+                        </span>
                     </el-form-item>
 
-                    <el-form-item label="检测间隔时间：">
+                    <el-form-item label="检测间隔时间">
                         <el-input-number
                             v-model="settings.checkInterval"
                             :min="5"
                             :max="3600"
                             :step="1"
                             controls-position="right"
-                            style="width: 200px"
+                            size="small"
+                            style="width: 180px"
                         />
                         <span class="setting-description">
                             检测间隔时间（秒），范围：5秒-3600秒（1小时）
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="稳定检测次数：">
+                    <el-form-item label="稳定检测次数">
                         <el-input-number
                             v-model="settings.stableCheckCount"
                             :min="0"
                             :max="5"
                             :step="1"
                             controls-position="right"
-                            style="width: 200px"
+                            size="small"
+                            style="width: 180px"
                         />
                         <span class="setting-description">
                             文件大小连续相同次数后才添加，0表示不检测直接添加
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="监控范围：">
+                    <el-form-item label="监控范围">
                         <el-checkbox v-model="settings.includeSubfolders">
                             包含子文件夹
                         </el-checkbox>
@@ -102,21 +106,22 @@
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="最小文件大小：">
+                    <el-form-item label="最小文件大小">
                         <el-input-number
                             v-model="settings.minFileSize"
                             :min="0"
                             :max="999999"
                             :step="1"
                             controls-position="right"
-                            style="width: 200px"
+                            size="small"
+                            style="width: 180px"
                         />
                         <span class="setting-description">
                             过滤小于此大小的文件（MB），0为不过滤
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="自动提交：">
+                    <el-form-item label="自动提交">
                         <el-checkbox v-model="settings.autoSubmit"> 启用 </el-checkbox>
                         <span class="setting-description">
                             启用后，连续{{ settings.maxEmptyChecks }}次检测，无变化后将自动提交到"{{
@@ -125,29 +130,27 @@
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="定时开始：">
+                    <el-form-item label="定时开始">
                         <el-checkbox v-model="settings.delayedStart"> 启用定时开始 </el-checkbox>
                         <span class="setting-description"> 启用后，将在指定时间开始监控 </span>
                     </el-form-item>
 
-                    <el-form-item v-if="settings.delayedStart" label="开始时间：">
+                    <el-form-item v-if="settings.delayedStart" label="开始时间">
                         <el-date-picker
                             v-model="settings.startTime"
                             type="datetime"
                             placeholder="选择开始时间"
                             format="YYYY-MM-DD HH:mm:ss"
                             value-format="YYYY-MM-DD HH:mm:ss"
+                            size="small"
                             :disabled-date="
                                 (date: Date) => {
                                     const now = new Date()
                                     return date < now
                                 }
                             "
-                            style="width: 300px"
+                            style="width: 280px"
                         />
-                        <div class="setting-description" style="margin-top: 8px">
-                            选择监控开始的具体时间，不能早于当前时间
-                        </div>
                     </el-form-item>
                 </el-form>
             </div>
@@ -730,62 +733,83 @@ onUnmounted(() => {
 
 <style scoped>
 .folder-watch-content {
-    padding: 10px 0;
+    padding: 5px 0;
 }
 
 .info-alert {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
+}
+
+.info-alert :deep(.el-alert__content) {
+    padding: 8px 0;
 }
 
 .info-text {
-    line-height: 1.6;
+    line-height: 1.4;
 }
 
 .info-text p {
-    margin: 0 0 8px 0;
+    margin: 0 0 6px 0;
     font-weight: 500;
+    font-size: 13px;
 }
 
 .info-text ul {
-    margin: 8px 0 0 0;
-    padding-left: 20px;
+    margin: 6px 0 0 0;
+    padding-left: 18px;
 }
 
 .info-text li {
-    margin: 4px 0;
+    margin: 3px 0;
+    font-size: 12px;
 }
 
 .settings-section {
-    margin-bottom: 20px;
+    margin-bottom: 15px;
+}
+
+.settings-section :deep(.el-form-item) {
+    margin-bottom: 12px;
+}
+
+.settings-section :deep(.el-form-item__label) {
+    font-size: 13px;
+    line-height: 1.2;
+    padding-bottom: 4px;
+}
+
+.settings-section :deep(.el-form-item__content) {
+    line-height: 1.2;
 }
 
 .setting-description {
-    margin-left: 12px;
-    font-size: 12px;
+    margin-left: 8px;
+    font-size: 11px;
     color: #909399;
+    line-height: 1.3;
 }
 
 .monitoring-section {
-    padding: 20px 0;
+    padding: 15px 0;
 }
 
 .status-card {
     background: #f5f7fa;
-    border-radius: 8px;
-    padding: 20px;
+    border-radius: 6px;
+    padding: 15px;
     border: 1px solid #e4e7ed;
 }
 
 .status-header {
     display: flex;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .status-icon {
-    font-size: 20px;
+    font-size: 18px;
     color: #409eff;
-    margin-right: 8px;
+    margin-right: 6px;
 }
 
 .status-icon.waiting {
@@ -819,15 +843,17 @@ onUnmounted(() => {
 .status-header h3 {
     margin: 0;
     color: #303133;
+    font-size: 15px;
 }
 
 .status-info {
-    margin-bottom: 16px;
+    margin-bottom: 12px;
 }
 
 .status-info p {
-    margin: 8px 0;
+    margin: 6px 0;
     color: #606266;
+    font-size: 13px;
 }
 
 .auto-submit-info {
@@ -838,29 +864,29 @@ onUnmounted(() => {
 .countdown-info {
     color: #e6a23c !important;
     font-weight: 500;
-    font-size: 16px;
+    font-size: 15px;
 }
 
 .last-check h4 {
-    margin: 0 0 8px 0;
+    margin: 0 0 6px 0;
     color: #303133;
-    font-size: 14px;
+    font-size: 13px;
 }
 
 .last-check ul {
     margin: 0;
-    padding-left: 20px;
+    padding-left: 16px;
 }
 
 .last-check li {
-    margin: 4px 0;
+    margin: 3px 0;
     color: #606266;
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .dialog-footer {
     display: flex;
     justify-content: flex-end;
-    gap: 12px;
+    gap: 10px;
 }
 </style>
