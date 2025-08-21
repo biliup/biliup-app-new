@@ -380,13 +380,20 @@ const handleSave = async () => {
                 proxyUrl = `${userProxyForm.value.type}://${auth}${userProxyForm.value.host}:${userProxyForm.value.port}`
             }
 
-            await userConfigStore.updateUserConfig(selectedUserUid.value, {
-                line: userConfigForm.value.line === 'auto' ? undefined : userConfigForm.value.line,
-                proxy: proxyUrl || undefined,
-                limit: userConfigForm.value.limit,
-                watermark: userConfigForm.value.watermark,
-                auto_edit: userConfigForm.value.auto_edit
-            })
+            // 更新用户配置
+            const userConfig = userConfigStore.configRoot.config[selectedUserUid.value]
+            if (!userConfig) {
+                throw new Error('用户配置不存在')
+            }
+
+            userConfig.line = userConfigForm.value.line === 'auto' ? undefined : userConfigForm.value.line
+            userConfig.proxy = proxyUrl || undefined
+            userConfig.limit = userConfigForm.value.limit
+            userConfig.watermark = userConfigForm.value.watermark || 0
+            userConfig.auto_edit = userConfigForm.value.auto_edit || 0
+
+            // 保存配置
+            await userConfigStore.updateUserConfig(selectedUserUid.value, userConfig)
         }
 
         utilsStore.showMessage('配置保存成功', 'success')
