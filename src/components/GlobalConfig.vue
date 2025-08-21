@@ -386,7 +386,8 @@ const handleSave = async () => {
                 throw new Error('用户配置不存在')
             }
 
-            userConfig.line = userConfigForm.value.line === 'auto' ? undefined : userConfigForm.value.line
+            userConfig.line =
+                userConfigForm.value.line === 'auto' ? undefined : userConfigForm.value.line
             userConfig.proxy = proxyUrl || undefined
             userConfig.limit = userConfigForm.value.limit
             userConfig.watermark = userConfigForm.value.watermark || 0

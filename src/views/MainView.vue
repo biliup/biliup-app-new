@@ -817,10 +817,10 @@
         </el-container>
 
         <!-- 新建模板组件 -->
-        <NewTemplete 
-            ref="newTemplateRef" 
-            v-model="showNewTemplateDialog" 
-            @template-created="handleTemplateCreated" 
+        <NewTemplete
+            ref="newTemplateRef"
+            v-model="showNewTemplateDialog"
+            @template-created="handleTemplateCreated"
         />
 
         <!-- 登录对话框 -->
@@ -1048,11 +1048,16 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
                 utilsStore.showMessage(`设置合集失败: ${error}`, 'error')
             }
         }
-        
+
         const userConfig = userConfigStore.configRoot?.config[selectedUser.value.uid]
         if (!template.aid && userConfig && userConfig.auto_edit && newTemplateRef.value) {
             // 新增稿件且auto_edit开启，创建编辑模板
-            await newTemplateRef.value.createTemplateFromBV(selectedUser.value.uid, resp.bvid, resp.bvid, true)
+            await newTemplateRef.value.createTemplateFromBV(
+                selectedUser.value.uid,
+                resp.bvid,
+                resp.bvid,
+                true
+            )
             utilsStore.showMessage('从BV号创建模板成功', 'success')
         }
     } finally {
