@@ -10,6 +10,48 @@ fi
 NEW_VERSION="$1"
 echo "🚀 准备将 biliup-app 升级到版本：$NEW_VERSION"
 
+# 确保在项目根目录
+if [[ -d "src-tauri" && -f "package.json" ]]; then
+  echo "📍 当前在项目根目录"
+elif [[ -f "Cargo.toml" && -d "../src" ]]; then
+  echo "📍 当前在 src-tauri 目录，回到项目根目录"
+  cd ..
+elif [[ -f "../package.json" && -d "../src-tauri" ]]; then
+  echo "📍 回到项目根目录"
+  cd ..
+else
+  echo "❌ 错误：无法找到项目根目录，请在 biliup-app 项目根目录下执行此脚本"
+  exit 1
+fi
+
+# 编译检查函数
+run_checks() {
+  echo "🔍 开始编译检查..."
+  
+  echo "⚡ 执行代码格式化检查..."
+  if ! npm run fmt 2>&1 ; then
+    echo "❌ 代码格式化失败，请修复后再试"
+    exit 1
+  fi
+  
+  echo "🔨 执行前端构建检查..."
+  if ! npm run build 2>&1 ; then
+    echo "❌ 前端构建失败，请修复后再试"
+    exit 1
+  fi
+  
+  echo "🦀 执行后端构建检查..."
+  if ! (cd src-tauri && cargo build --release 2>&1); then
+    echo "❌ 后端构建失败，请修复后再试"
+    exit 1
+  fi
+  
+  echo "✅ 所有编译检查通过！"
+}
+
+# 执行编译检查
+run_checks
+
 # 自动从 package.json 中提取旧版本号
 OLD_VERSION=$(grep '"version":' package.json | head -n 1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
 echo "🔍 检测到旧版本号：$OLD_VERSION"
