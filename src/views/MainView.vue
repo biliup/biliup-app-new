@@ -573,35 +573,7 @@
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.tags" class="card-content">
                                         <el-form-item label="视频标签">
-                                            <div class="tag-input">
-                                                <el-tag
-                                                    v-for="tag in tags"
-                                                    :key="tag"
-                                                    closable
-                                                    @close="removeTag(tag)"
-                                                    class="tag-item"
-                                                >
-                                                    {{ tag }}
-                                                </el-tag>
-                                                <el-input
-                                                    v-if="inputVisible"
-                                                    ref="tagInputRef"
-                                                    v-model="newTag"
-                                                    size="small"
-                                                    placeholder="按回车键添加"
-                                                    @keyup.enter="addTag"
-                                                    @blur="addTag"
-                                                    class="tag-input-field"
-                                                />
-                                                <el-button
-                                                    v-else
-                                                    size="small"
-                                                    @click="showTagInput"
-                                                    class="add-tag-btn"
-                                                >
-                                                    + 添加标签
-                                                </el-button>
-                                            </div>
+                                            <TagView ref="tagViewRef" v-model="tags" />
                                         </el-form-item>
                                     </div>
                                 </el-collapse-transition>
@@ -962,6 +934,7 @@ import NewTemplete from '../components/NewTemplete.vue'
 import VideoList from '../components/VideoList.vue'
 import UserList from '../components/UserList.vue'
 import VideoStatus from '../components/VideoStatus.vue'
+import TagView from '../components/TagView.vue'
 
 const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
@@ -995,6 +968,7 @@ const showVideoStatusDialog = ref(false)
 
 // 组件引用
 const newTemplateRef = ref<InstanceType<typeof NewTemplete> | null>(null)
+const tagViewRef = ref<InstanceType<typeof TagView> | null>(null)
 // 自动提交状态记录 - 记录每个模板的自动提交状态
 const autoSubmittingRecord = ref<Record<string, boolean>>({})
 // 全局自动提交检查间隔
@@ -1163,9 +1137,6 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
     }
 }
 const lastSubmit = ref<string>('')
-const inputVisible = ref(false)
-const newTag = ref('')
-const tagInputRef = ref()
 
 // 卡片折叠状态
 const cardCollapsed = ref({
@@ -1754,6 +1725,8 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
                 currentForm.value.tag = ''
                 // 同步清空标签数组
                 tags.value = []
+                // 通过组件引用清空TagView的状态
+                tagViewRef.value?.clearTags()
                 break
 
             case 'description':
@@ -2276,30 +2249,6 @@ const saveTemplate = async () => {
     } catch (error) {
         console.error('保存模板失败: ', error)
         utilsStore.showMessage(`'保存模板失败: ${error}'`, 'error')
-    }
-}
-
-// 标签相关
-const showTagInput = () => {
-    inputVisible.value = true
-    nextTick(() => {
-        tagInputRef.value?.focus()
-    })
-}
-
-const addTag = () => {
-    const tag = newTag.value.trim()
-    if (tag && !tags.value.includes(tag)) {
-        tags.value.push(tag)
-    }
-    newTag.value = ''
-    inputVisible.value = false
-}
-
-const removeTag = (tag: string) => {
-    const index = tags.value.indexOf(tag)
-    if (index > -1) {
-        tags.value.splice(index, 1)
     }
 }
 
@@ -3458,25 +3407,6 @@ const checkUpdate = async () => {
     color: #409eff;
     font-size: 12px;
     font-weight: 500;
-}
-
-.tag-input {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-}
-
-.tag-item {
-    margin: 0;
-}
-
-.tag-input-field {
-    width: 100px;
-}
-
-.add-tag-btn {
-    height: 24px;
 }
 
 .cover-uploader {
