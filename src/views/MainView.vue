@@ -1546,11 +1546,13 @@ const setupKeyboardShortcuts = async () => {
             return
         }
 
-        // // 禁用 Ctrl+R 刷新
-        // if (event.ctrlKey && event.key === 'r') {
-        //     event.preventDefault()
-        //     return
-        // }
+        if (event.ctrlKey && event.key === 'r') {
+            event.preventDefault()
+            if (selectedUser.value && currentTemplateName.value) {
+                resetTemplate()
+            }
+            return
+        }
 
         // Ctrl+S 保存模板
         if (event.ctrlKey && event.key === 's') {
