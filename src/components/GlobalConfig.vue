@@ -49,6 +49,20 @@
                 <div class="form-tip">开启后，任务添加到队列后会自动开始上传</div>
             </el-form-item>
 
+            <!-- 日志级别 -->
+            <el-form-item label="日志级别">
+                <el-select v-model="configForm.log_level" placeholder="请选择日志级别">
+                    <el-option label="Trace" value="trace" />
+                    <el-option label="Debug" value="debug" />
+                    <el-option label="Info" value="info" />
+                    <el-option label="Warn" value="warn" />
+                    <el-option label="Error" value="error" />
+                </el-select>
+                <div class="form-tip">
+                    <el-text type="warning">该配置程序重启后生效</el-text>
+                </div>
+            </el-form-item>
+
             <!-- 用户配置分类标签 -->
             <el-divider content-position="left">
                 <el-text type="primary" size="large">用户配置</el-text>
@@ -217,6 +231,7 @@ interface GlobalConfigForm {
     max_curr: number
     auto_upload: boolean
     auto_start: boolean
+    log_level: string
 }
 
 // Props
@@ -269,14 +284,16 @@ const selectedUser = computed(
 const configForm = ref<GlobalConfigForm>({
     max_curr: 1,
     auto_upload: true,
-    auto_start: true
+    auto_start: true,
+    log_level: 'info'
 })
 
 // 保存原始配置用于检查变化
 const originalConfig = ref<GlobalConfigForm>({
     max_curr: 1,
     auto_upload: true,
-    auto_start: true
+    auto_start: true,
+    log_level: 'info'
 })
 
 // 监听 modelValue 变化
@@ -334,7 +351,8 @@ const loadGlobalConfig = async () => {
             configForm.value = {
                 max_curr: config.max_curr || 2,
                 auto_upload: config.auto_upload ?? true,
-                auto_start: config.auto_start ?? true
+                auto_start: config.auto_start ?? true,
+                log_level: config.log_level || 'info'
             }
 
             // 保存原始配置
@@ -365,7 +383,8 @@ const handleSave = async () => {
         await userConfigStore.updateGlobalConfig({
             max_curr: configForm.value.max_curr,
             auto_upload: configForm.value.auto_upload,
-            auto_start: configForm.value.auto_start
+            auto_start: configForm.value.auto_start,
+            log_level: configForm.value.log_level
         })
 
         // 如果选择了用户，保存用户配置
@@ -523,7 +542,8 @@ const handleDialogClose = () => {
     configForm.value = {
         max_curr: 1,
         auto_upload: true,
-        auto_start: true
+        auto_start: true,
+        log_level: 'info'
     }
     originalConfig.value = { ...configForm.value }
 }

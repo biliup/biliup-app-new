@@ -126,8 +126,14 @@ pub struct ConfigRoot {
     pub auto_upload: bool,
     #[serde(default)]
     pub auto_start: bool,
+    #[serde(default = "default_log_level")]
+    pub log_level: String,
     #[serde(default)]
     pub config: HashMap<u64, UserConfig>,
+}
+
+fn default_log_level() -> String {
+    "info".to_string()
 }
 
 impl ConfigRoot {
@@ -201,7 +207,7 @@ impl ConfigRoot {
     ) -> Result<&Self> {
         if let Some(user_config) = self.config.get_mut(&uid) {
             info!(
-                "Updated user config for UID {}: line={:?}, proxy={:?}, limit={}, watermark={}, auto_edit={}",
+                "UID {} 用户配置更新: line={:?}, proxy={:?}, limit={}, watermark={}, auto_edit={}",
                 uid, line, proxy, limit, watermark, auto_edit
             );
             user_config.line = line;
@@ -220,14 +226,16 @@ impl ConfigRoot {
         max_curr: u32,
         auto_start: bool,
         auto_upload: bool,
+        log_level: String,
     ) -> &Self {
         info!(
-            "Updated global config: max_curr={}, auto_start={}, auto_upload={}",
-            max_curr, auto_start, auto_upload
+            "更新全局配置: max_curr={}, auto_start={}, auto_upload={}, log_level={}",
+            max_curr, auto_start, auto_upload, log_level
         );
         self.max_curr = max_curr;
         self.auto_start = auto_start;
         self.auto_upload = auto_upload;
+        self.log_level = log_level;
 
         self
     }
@@ -268,6 +276,7 @@ impl ConfigRoot {
             max_curr: 1,
             auto_start: true,
             auto_upload: true,
+            log_level: default_log_level(),
             config: HashMap::new(),
         }
     }

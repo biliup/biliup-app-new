@@ -75,13 +75,22 @@ async fn startup() -> Result<AppData> {
     })
 }
 
-fn setup_logs() -> Result<()> {
+fn setup_logs(log_level: &str) -> Result<()> {
     let log_dir = get_log_path()?;
     let log_file = format!(
         "biliup-{}.log",
         chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S")
     );
     let file_appender = tracing_appender::rolling::never(log_dir, &log_file);
+
+    let level = match log_level.to_lowercase().as_str() {
+        "trace" => tracing_subscriber::filter::LevelFilter::TRACE,
+        "debug" => tracing_subscriber::filter::LevelFilter::DEBUG,
+        "info" => tracing_subscriber::filter::LevelFilter::INFO,
+        "warn" => tracing_subscriber::filter::LevelFilter::WARN,
+        "error" => tracing_subscriber::filter::LevelFilter::ERROR,
+        _ => tracing_subscriber::filter::LevelFilter::INFO,
+    };
 
     use tracing_subscriber::{Layer, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -108,14 +117,14 @@ fn setup_logs() -> Result<()> {
 
     #[cfg(debug_assertions)]
     tracing_subscriber::registry()
-        .with(file_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
+        .with(file_layer.with_filter(level))
         .with(console_layer.with_filter(tracing_subscriber::filter::LevelFilter::TRACE))
         .init();
 
     #[cfg(not(debug_assertions))]
     tracing_subscriber::registry()
-        .with(file_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
-        .with(console_layer.with_filter(tracing_subscriber::filter::LevelFilter::INFO))
+        .with(file_layer.with_filter(level))
+        .with(console_layer.with_filter(level))
         .init();
 
     info!("日志已输出到: {:?} {}", get_log_path()?, log_file);
@@ -125,7 +134,6 @@ fn setup_logs() -> Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub async fn run() {
-    setup_logs().expect("日志初始化失败");
     // 启动时进行兼容性检查
     if let Err(e) = CompatibilityConverter::startup_with_compatibility().await {
         info!("无旧biliup配置: {}", e);
@@ -142,6 +150,8 @@ pub async fn run() {
             clients: Arc::new(Mutex::new(HashMap::new())),
         }
     });
+
+    setup_logs(&appdata.config.lock().await.log_level.clone()).expect("日志初始化失败");
 
     tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
