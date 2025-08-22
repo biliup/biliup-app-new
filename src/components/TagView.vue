@@ -1,5 +1,8 @@
 <template>
-    <div class="tag-input" ref="tagContainerRef">
+    <div class="tag-input" ref="tagContainerRef" 
+         @focusin="addKeyboardListener" 
+         @focusout="removeKeyboardListener"
+         tabindex="0">
         <el-tag
             v-for="(tag, index) in modelValue"
             :key="`${tag}-${index}`"
@@ -51,7 +54,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, nextTick, watch } from 'vue'
 import { useUtilsStore } from '../stores/utils'
 
 const utilsStore = useUtilsStore()
@@ -310,6 +313,15 @@ const handleNewTagKeydown = (event: KeyboardEvent) => {
     }
 }
 
+// 键盘监听器管理
+const addKeyboardListener = () => {
+    document.addEventListener('keydown', handleKeyboardNavigation)
+}
+
+const removeKeyboardListener = () => {
+    document.removeEventListener('keydown', handleKeyboardNavigation)
+}
+
 // 处理键盘导航
 const handleKeyboardNavigation = (event: KeyboardEvent) => {
     // 只在有标签且没有输入或编辑状态时处理方向键
@@ -355,6 +367,32 @@ const handleKeyboardNavigation = (event: KeyboardEvent) => {
         event.preventDefault()
         if (selectedTagIndex.value >= 0) {
             selectedTagIndex.value = -1
+            // 让当前聚焦的元素失去焦点
+            const activeElement = document.activeElement as HTMLElement
+            if (activeElement && activeElement.classList.contains('tag-item')) {
+                activeElement.blur()
+            }
+        }
+    } else if (event.key === 'Tab') {
+        if (selectedTagIndex.value >= 0) {
+            // 如果有选中标签，进入编辑模式
+            event.preventDefault()
+            event.stopPropagation()
+
+            selectedTagIndex.value = -1
+            const activeElement = document.activeElement as HTMLElement
+            if (activeElement && activeElement.classList.contains('tag-item')) {
+                activeElement.blur()
+            }
+            nextTick(() => {
+                inputVisible.value = true
+                nextTick(() => {
+                    tagInputRef.value?.focus()
+                })
+            })
+        } else if (inputVisible.value) {
+            // 如果输入框可见，按 Tab 键时不做任何操作
+            event.preventDefault()
         }
     }
 }
@@ -377,15 +415,6 @@ const clearTags = () => {
     cancelEditTag()
     inputVisible.value = false
 }
-
-// 生命周期钩子
-onMounted(() => {
-    document.addEventListener('keydown', handleKeyboardNavigation)
-})
-
-onUnmounted(() => {
-    document.removeEventListener('keydown', handleKeyboardNavigation)
-})
 
 // 监听编辑内容变化，重置警告标志
 watch(editingTagValue, () => {
