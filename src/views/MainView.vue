@@ -2288,6 +2288,10 @@ const onCategoryChange = (categoryId: number) => {
     selectedSubCategory.value = null
     if (currentForm.value) {
         currentForm.value.tid = 0
+        // 上一行会触发watch事件，导致selectedCategory被清空
+        nextTick(() => {
+            selectedCategory.value = category
+        })
     }
 }
 
