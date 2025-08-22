@@ -253,6 +253,14 @@ const handleEditFinish = () => {
     finishEditTag()
 }
 
+const cancelSelect = () => {
+    selectedTagIndex.value = -1
+    const activeElement = document.activeElement as HTMLElement
+    if (activeElement && activeElement.classList.contains('tag-item')) {
+        activeElement.blur()
+    }
+}
+
 // 取消编辑标签
 const cancelEditTag = () => {
     inputVisible.value = false
@@ -314,12 +322,31 @@ const handleNewTagKeydown = (event: KeyboardEvent) => {
 }
 
 // 键盘监听器管理
+let focusTimeout: number | null = null
+
 const addKeyboardListener = () => {
+    // 清除可能存在的延时器
+    if (focusTimeout) {
+        clearTimeout(focusTimeout)
+        focusTimeout = null
+    }
     document.addEventListener('keydown', handleKeyboardNavigation)
 }
 
 const removeKeyboardListener = () => {
-    document.removeEventListener('keydown', handleKeyboardNavigation)
+    // 使用延时来检查焦点是否真的离开了整个组件
+    focusTimeout = setTimeout(() => {
+        // 检查当前聚焦的元素是否还在标签组件内
+        const activeElement = document.activeElement
+        const isStillInTagContainer = tagContainerRef.value?.contains(activeElement)
+        
+        if (!isStillInTagContainer) {
+            // 焦点确实离开了整个标签组件
+            document.removeEventListener('keydown', handleKeyboardNavigation)
+            cancelSelect()
+        }
+        focusTimeout = null
+    }, 0)
 }
 
 // 处理键盘导航
@@ -379,11 +406,7 @@ const handleKeyboardNavigation = (event: KeyboardEvent) => {
             event.preventDefault()
             event.stopPropagation()
 
-            selectedTagIndex.value = -1
-            const activeElement = document.activeElement as HTMLElement
-            if (activeElement && activeElement.classList.contains('tag-item')) {
-                activeElement.blur()
-            }
+            cancelSelect()
             nextTick(() => {
                 inputVisible.value = true
                 nextTick(() => {
