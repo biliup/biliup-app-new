@@ -79,16 +79,25 @@ update_tauri_conf() {
   ' "$file" > "$tmpfile" && mv "$tmpfile" "$file" && echo "✅ 已更新 $file"
 }
 
+# 更新 README.md 中的版本号图标
+update_readme_version() {
+  file="$1"
+  tmpfile="${file}.tmp"
+  
+  sed -E "s/version-[0-9]+\.[0-9]+\.[0-9]+-blue/version-$NEW_VERSION-blue/g" "$file" > "$tmpfile" && mv "$tmpfile" "$file" && echo "✅ 已更新 $file"
+}
+
 # 执行更新
 update_json_version "package.json"
 update_json_version "package-lock.json"
 update_toml_version "src-tauri/Cargo.toml"
 update_lock_version "src-tauri/Cargo.lock"
 update_tauri_conf "src-tauri/tauri.conf.json"
+update_readme_version "README.md"
 
 # Git 提交
 echo "📦 正在提交 Git 更改..."
-git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json
+git add package.json package-lock.json src-tauri/Cargo.toml src-tauri/Cargo.lock src-tauri/tauri.conf.json README.md
 git commit -m "🔖 v$NEW_VERSION"
 git tag app-v$NEW_VERSION
 
