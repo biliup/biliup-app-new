@@ -77,15 +77,52 @@ interface TemplateCommandResponse {
 export const useUserConfigStore = defineStore('userConfig', () => {
     const configRoot = ref<ConfigRoot | null>(null)
     const configBase = ref<ConfigRoot | null>(null)
-    const userTemplates = ref<UserWithTemplates[]>([])
+    const loginUsers = ref<User[]>([]) // 存储登录用户列表
     const loading = ref(false)
     const error = ref<string | null>(null)
 
-    // 计算属性
+    const userTemplates = computed(() => {
+        if (!configRoot.value || loginUsers.value.length === 0) {
+            return []
+        }
+
+        const result: UserWithTemplates[] = []
+
+        for (const user of loginUsers.value) {
+            const userConfig = configRoot.value.config[user.uid]
+            const templates =
+                userConfig && userConfig.templates
+                    ? Object.entries(userConfig.templates).map(([name, config]) => ({
+                          name,
+                          config
+                      }))
+                    : []
+
+            result.push({
+                user,
+                templates,
+                expanded: false // 这个状态需要单独管理
+            })
+        }
+
+        return result
+    })
+
+    // 用户展开状态管理
+    const userExpandedState = ref<Record<number, boolean>>({})
+
     const allUsers = computed(() => userTemplates.value.map(ut => ut.user))
     const totalTemplateCount = computed(() =>
         userTemplates.value.reduce((sum, ut) => sum + ut.templates.length, 0)
     )
+
+    // 获取带有展开状态的用户模板列表（用于UI显示）
+    const userTemplatesWithExpandedState = computed(() => {
+        return userTemplates.value.map(ut => ({
+            ...ut,
+            expanded: userExpandedState.value[ut.user.uid] || false
+        }))
+    })
 
     // 默认模板配置
     const createDefaultTemplate = (): TemplateConfig => ({
@@ -170,45 +207,22 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         }
     }
 
-    // 构建用户模板列表
-    const buildUserTemplates = async (loginUsers: User[]) => {
+    // 构建用户模板列表 - 现在只需要设置登录用户
+    const buildUserTemplates = async (users: User[]) => {
         // 确保配置已加载
         if (!configRoot.value) {
             await loadConfig()
         }
 
-        const newUserTemplates: UserWithTemplates[] = []
+        // 设置登录用户列表，userTemplates 会自动通过计算属性更新
+        loginUsers.value = users
 
-        // 为每个登录用户构建模板列表
-        for (const user of loginUsers) {
-            // 查找对应的用户配置
-            const userConfig = configRoot.value?.config[user.uid]
-
-            const templates =
-                userConfig && userConfig.templates
-                    ? Object.entries(userConfig.templates).map(([name, config]) => ({
-                          name,
-                          config
-                      }))
-                    : []
-
-            newUserTemplates.push({
-                user,
-                templates,
-                expanded: false
-            })
-        }
-
-        userTemplates.value = newUserTemplates
-        return newUserTemplates
+        return userTemplatesWithExpandedState.value
     }
 
     // 切换用户展开/收起状态
     const toggleUserExpanded = (userUid: number) => {
-        const userTemplate = userTemplates.value.find(ut => ut.user.uid === userUid)
-        if (userTemplate) {
-            userTemplate.expanded = !userTemplate.expanded
-        }
+        userExpandedState.value[userUid] = !userExpandedState.value[userUid]
     }
 
     // 获取指定用户的模板
@@ -480,7 +494,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         // 状态
         configRoot,
         configBase,
-        userTemplates,
+        userTemplates: userTemplatesWithExpandedState, // 导出带有展开状态的版本
         loading,
         error,
 
