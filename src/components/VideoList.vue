@@ -346,10 +346,7 @@ const startEditVideoTitle = (id: string, currentName: string) => {
     editingFileId.value = id
     editingTitle.value = currentName
     nextTick(() => {
-        const input = videoTitleInput.value
-        if (input) {
-            input.focus()
-        }
+        videoTitleInput.value[0].$el.querySelector('input').focus()
     })
 }
 
