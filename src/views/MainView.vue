@@ -1828,7 +1828,7 @@ const addVideoToCurrentForm = async (videoPath: string) => {
     currentForm.value.videos.push({
         id: videoId,
         filename: videoBaseName, // 使用完整的文件路径
-        title: videoNameWOExtension, // 去除扩展名作为标题
+        title: videoNameWOExtension.slice(0, 80), // 去除扩展名作为标题
         desc: '',
         path: videoPath, // 保存完整路径
         complete: false

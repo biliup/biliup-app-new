@@ -92,19 +92,23 @@
                             <div class="video-title-container">
                                 <div v-if="editingFileId === video.id" class="video-title-edit">
                                     <el-input
-                                        v-model="editingFileName"
+                                        v-model="editingTitle"
                                         size="small"
-                                        @keyup.enter="saveFileName(video.id)"
-                                        @blur="saveFileName(video.id)"
-                                        @keyup.esc="cancelEditFileName"
-                                        ref="videoNameInput"
+                                        @keyup.enter="saveVideoTitle(video.id)"
+                                        @blur="saveVideoTitle(video.id)"
+                                        @keyup.esc="cancelEditVideoTitle"
+                                        ref="videoTitleInput"
+                                        maxlength="80"
                                     />
                                 </div>
                                 <div
                                     v-else
                                     class="video-title"
                                     @click="
-                                        startEditFileName(video.id, video.title || video.videoname)
+                                        startEditVideoTitle(
+                                            video.id,
+                                            video.title || video.videoname
+                                        )
                                     "
                                 >
                                     {{ video.title || video.videoname }}
@@ -236,8 +240,8 @@ const emit = defineEmits<{
 
 // 文件编辑状态
 const editingFileId = ref<string | null>(null)
-const editingFileName = ref('')
-const videoNameInput = ref()
+const editingTitle = ref('')
+const videoTitleInput = ref()
 const uploadStore = useUploadStore()
 
 // 文件夹监控对话框状态
@@ -337,22 +341,22 @@ const handleReorderVideo = (currentIndex: number, newIndex: number) => {
     emit('update:videos', newVideos)
 }
 
-// 开始编辑文件名
-const startEditFileName = (id: string, currentName: string) => {
+// 开始编辑视频标题
+const startEditVideoTitle = (id: string, currentName: string) => {
     editingFileId.value = id
-    editingFileName.value = currentName
+    editingTitle.value = currentName
     nextTick(() => {
-        const input = videoNameInput.value
+        const input = videoTitleInput.value
         if (input) {
             input.focus()
         }
     })
 }
 
-// 保存文件名
-const saveFileName = (id: string) => {
-    if (!editingFileName.value.trim()) {
-        cancelEditFileName()
+// 保存视频标题
+const saveVideoTitle = (id: string) => {
+    if (!editingTitle.value.trim()) {
+        cancelEditVideoTitle()
         return
     }
 
@@ -360,20 +364,20 @@ const saveFileName = (id: string) => {
         if (video.id === id) {
             return {
                 ...video,
-                title: editingFileName.value.trim()
+                title: editingTitle.value.trim().slice(0, 80)
             }
         }
         return video
     })
 
     emit('update:videos', newVideos)
-    cancelEditFileName()
+    cancelEditVideoTitle()
 }
 
-// 取消编辑文件名
-const cancelEditFileName = () => {
+// 取消编辑视频标题
+const cancelEditVideoTitle = () => {
     editingFileId.value = null
-    editingFileName.value = ''
+    editingTitle.value = ''
 }
 
 // 格式化上传进度
