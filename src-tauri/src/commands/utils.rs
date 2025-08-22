@@ -407,7 +407,7 @@ pub async fn export_logs() -> Result<String, String> {
 
     // 创建临时zip文件
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
-    let zip_path = log_dir.join(format!("logs_export_{}.zip", timestamp));
+    let zip_path = log_dir.join(format!("logs_export_{timestamp}.zip"));
 
     let zip_file = fs::File::create(&zip_path).map_err(|e| format!("创建ZIP文件失败: {e}"))?;
     let mut zip = ZipWriter::new(zip_file);
@@ -421,8 +421,8 @@ pub async fn export_logs() -> Result<String, String> {
             if let Some(extension) = entry.path().extension() {
                 if extension == "log" {
                     let file_name = entry.file_name().to_string_lossy().to_string();
-                    if let Ok(content) = fs::read(&entry.path()) {
-                        zip.start_file(&file_name, options.clone())
+                    if let Ok(content) = fs::read(entry.path()) {
+                        zip.start_file(&file_name, options)
                             .map_err(|e| format!("创建ZIP条目失败: {e}"))?;
                         zip.write_all(&content)
                             .map_err(|e| format!("写入ZIP文件失败: {e}"))?;
