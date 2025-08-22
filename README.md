@@ -1,6 +1,6 @@
 # Biliup App - B站视频上传管理工具
 
-![Version](https://img.shields.io/badge/version-0.2.3-blue)
+![Version](https://img.shields.io/badge/version-0.2.4-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![License-MIT](https://img.shields.io/badge/license-MIT-green)
 ![License-Apache2.0](https://img.shields.io/badge/license-Apache2.0-green)
