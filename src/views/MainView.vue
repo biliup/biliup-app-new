@@ -1139,6 +1139,7 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
     } catch (error) {
         console.error('模板提交失败:', error)
         utilsStore.showMessage(`模板提交失败: ${error}`, 'error')
+        submitting.value = false
     }
 }
 const lastSubmit = ref<string>('')
