@@ -1123,7 +1123,9 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
                         utilsStore.showMessage('从BV号创建模板成功', 'success')
                     }
                 } else {
-                    reloadTemplateFromAV(uid, template.aid)
+                    if (selectedUser.value?.uid === uid && currentTemplateName.value === templateName) {
+                        reloadTemplateFromAV(uid, template.aid)
+                    }
                 }
             } catch (error) {
                 utilsStore.showMessage(`${error}`, 'error')
@@ -1951,7 +1953,9 @@ const selectTemplate = async (user: any, templateName: string) => {
         setTimeout(async () => {
             if (aid) {
                 try {
-                    await reloadTemplateFromAV(user.uid, aid)
+                    if (selectedUser.value?.uid === user.uid && currentTemplateName.value === templateName) {
+                       await reloadTemplateFromAV(user.uid, aid)
+                    }
                 } catch (error) {
                     console.error('自动刷新模板数据失败:', error)
                 }
@@ -2008,6 +2012,14 @@ const resetTemplate = async () => {
 const reloadTemplateFromAV = async (userUid: number, aid: number) => {
     // 如果正在加载模板，禁止重新加载
     if (templateLoading.value) {
+        return
+    }
+
+    if (!selectedUser.value || selectedUser.value.uid !== userUid) {
+        return
+    }
+
+    if (!currentForm.value || currentForm.value.aid !== aid) {
         return
     }
 
