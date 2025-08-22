@@ -1,8 +1,11 @@
 <template>
-    <div class="tag-input" ref="tagContainerRef" 
-         @focusin="addKeyboardListener" 
-         @focusout="removeKeyboardListener"
-         tabindex="0">
+    <div
+        class="tag-input"
+        ref="tagContainerRef"
+        @focusin="addKeyboardListener"
+        @focusout="removeKeyboardListener"
+        tabindex="0"
+    >
         <el-tag
             v-for="(tag, index) in modelValue"
             :key="`${tag}-${index}`"
@@ -339,7 +342,7 @@ const removeKeyboardListener = () => {
         // 检查当前聚焦的元素是否还在标签组件内
         const activeElement = document.activeElement
         const isStillInTagContainer = tagContainerRef.value?.contains(activeElement)
-        
+
         if (!isStillInTagContainer) {
             // 焦点确实离开了整个标签组件
             document.removeEventListener('keydown', handleKeyboardNavigation)
