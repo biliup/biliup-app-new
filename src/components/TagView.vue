@@ -26,6 +26,7 @@
             v-model="editingTagValue"
             size="small"
             placeholder="修改标签"
+            @blur="handleEditFinish"
             @keydown.enter="handleEditFinish"
             @keydown.esc="cancelEditTag"
             class="tag-input-field tag-editing-field"
@@ -89,6 +90,7 @@ const showTagInput = () => {
 
     inputVisible.value = true
     selectedTagIndex.value = -1 // 取消选中状态
+    hasShownDuplicateWarning.value = false // 重置警告标志
     nextTick(() => {
         tagInputRef.value?.focus()
     })
@@ -107,7 +109,11 @@ const addTag = (keepInput = false) => {
 
     if (props.modelValue.includes(tag)) {
         // 标签已存在，显示错误提示
-        utilsStore.showMessage(`标签 "${tag}" 已存在`, 'warning')
+        // 只在还没显示过警告时显示
+        if (!hasShownDuplicateWarning.value) {
+            utilsStore.showMessage(`标签 "${tag}" 已存在`, 'warning')
+            hasShownDuplicateWarning.value = true
+        }
 
         // 选中输入框内容，方便用户重新输入
         nextTick(() => {
@@ -256,6 +262,7 @@ const cancelEditTag = () => {
 // 处理标签的键盘事件
 const handleTagKeydown = (event: KeyboardEvent, index: number) => {
     if (event.key === 'Backspace' || event.key === 'Delete') {
+        hasShownDuplicateWarning.value = false
         event.preventDefault()
         const currentTag = props.modelValue[index]
 
@@ -371,37 +378,22 @@ const clearTags = () => {
     inputVisible.value = false
 }
 
-// 处理点击外部区域
-const handleClickOutside = (event: MouseEvent) => {
-    if (tagContainerRef.value && !tagContainerRef.value.contains(event.target as Node)) {
-        // 点击外部区域时的处理
-        if (editingTagIndex.value >= 0) {
-            // 如果正在编辑，尝试保存编辑内容
-            const editSuccess = finishEditTag()
-            if (!editSuccess) {
-                // 如果编辑失败，不继续后续操作（保持编辑状态）
-                return
-            }
-        }
-
-        // 取消选中状态
-        selectedTagIndex.value = -1
-    }
-}
-
 // 生命周期钩子
 onMounted(() => {
-    document.addEventListener('click', handleClickOutside)
     document.addEventListener('keydown', handleKeyboardNavigation)
 })
 
 onUnmounted(() => {
-    document.removeEventListener('click', handleClickOutside)
     document.removeEventListener('keydown', handleKeyboardNavigation)
 })
 
 // 监听编辑内容变化，重置警告标志
 watch(editingTagValue, () => {
+    hasShownDuplicateWarning.value = false
+})
+
+// 监听新标签输入内容变化，重置警告标志
+watch(newTag, () => {
     hasShownDuplicateWarning.value = false
 })
 

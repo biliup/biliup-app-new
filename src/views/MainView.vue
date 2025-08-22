@@ -1541,8 +1541,15 @@ const setupDragAndDrop = async () => {
 const setupKeyboardShortcuts = async () => {
     const handleKeydown = (event: KeyboardEvent) => {
         // 禁用 F5 刷新
-        if (event.key === 'F5') {
+        if (!event.ctrlKey && event.key === 'F5') {
             event.preventDefault()
+            return
+        }
+
+        // Ctrl+F5 刷新页面
+        if (event.ctrlKey && event.key === 'F5') {
+            event.preventDefault()
+            window.location.reload()
             return
         }
 
@@ -1972,7 +1979,7 @@ const resetTemplate = async () => {
 
     // 确认重置
     try {
-        await ElMessageBox.confirm('确定要重置当前模板吗？这将清除所有未保存的更改。', '确认重置', {
+        await ElMessageBox.confirm('确定要清除所有未保存的更改吗?', '', {
             confirmButtonText: '确定',
             cancelButtonText: '取消',
             type: 'warning'
