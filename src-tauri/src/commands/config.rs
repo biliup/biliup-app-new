@@ -48,7 +48,7 @@ pub async fn save_user_config(
     auto_edit: u8,
 ) -> Result<bool, String> {
     let data = app.state::<Mutex<AppData>>();
-    info!("User({uid}) config saved");
+    info!("用户({uid})配置已保存");
 
     data.lock()
         .await
@@ -69,7 +69,7 @@ pub async fn save_global_config(
 ) -> Result<bool, String> {
     let data = app.state::<Mutex<AppData>>();
 
-    info!("Global config saved");
+    info!("全局配置已保存");
 
     data.lock()
         .await
@@ -100,7 +100,7 @@ pub async fn delete_user_template(
         .lock()
         .await
         .delete_user_template(uid, &template_name);
-    info!("Delted template: {}", template_name);
+    info!("删除模板: {}", template_name);
 
     Ok(TemplateCommandResponse {
         success: true,
@@ -124,7 +124,7 @@ pub async fn update_user_template(
         .lock()
         .await
         .add_user_template(uid, &template_name, template);
-    info!("Template updated: {}", template_name);
+    info!("更新模板: {}", template_name);
 
     Ok(TemplateCommandResponse {
         success: true,
@@ -148,7 +148,7 @@ pub async fn add_user_template(
         .lock()
         .await
         .add_user_template(uid, &template_name, template);
-    info!("Template added: {}", template_name);
+    info!("添加模板: {}", template_name);
 
     Ok(TemplateCommandResponse {
         success: true,

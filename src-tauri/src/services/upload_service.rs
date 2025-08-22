@@ -43,7 +43,7 @@ impl UploadService {
         let old = *curr;
         *curr = max_curr;
 
-        debug!("Updated max current uploads from {} to {}", old, max_curr);
+        debug!("更新最大并发上传数: {} -> {}", old, max_curr);
     }
 
     pub fn new(max_curr: u32) -> Self {
@@ -133,7 +133,7 @@ impl UploadService {
                 || task_mutex.lock().await.is_failed()
                 || task_mutex.lock().await.is_waiting()
             {
-                info!("任务切换至pending: {}", task_title!(task_mutex));
+                info!("任务切换至等待状态: {}", task_title!(task_mutex));
                 task_mutex.lock().await.pending();
                 return Ok(true);
             }

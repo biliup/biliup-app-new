@@ -60,7 +60,7 @@ fn read_dir_recursive_internal(
         Ok(entries) => entries,
         Err(e) => {
             // 记录警告但继续处理其他目录
-            error!("Warning: Failed to read directory {:?}: {}", dir_path, e);
+            error!("无法读取目录 {:?}: {}", dir_path, e);
             return Ok(());
         }
     };
@@ -69,7 +69,7 @@ fn read_dir_recursive_internal(
         let entry = match entry {
             Ok(entry) => entry,
             Err(e) => {
-                error!("Warning: Failed to read directory entry: {}", e);
+                error!("无法读取目录条目: {}", e);
                 continue;
             }
         };
@@ -104,7 +104,7 @@ fn read_dir_recursive_internal(
                     current_depth + 1,
                     result,
                 ) {
-                    error!("Warning: Failed to read subdirectory {:?}: {}", path, e);
+                    error!("无法读取子目录 {:?}: {}", path, e);
                 }
             }
         } else {

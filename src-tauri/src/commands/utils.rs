@@ -299,14 +299,14 @@ pub async fn switch_season(
             .cookie_info
             .get("cookies")
             .and_then(|c| c.as_array())
-            .ok_or("cookie error")?
+            .ok_or("Cookie错误")?
             .iter()
             .filter_map(|c| c.as_object())
             .find(|c| c["name"] == "bili_jct")
-            .ok_or("jct error")?
+            .ok_or("JCT错误")?
             .get("value")
             .and_then(|v| v.as_str())
-            .ok_or("csrf error")?;
+            .ok_or("CSRF错误")?;
         Ok(csrf.to_string())
     }
 

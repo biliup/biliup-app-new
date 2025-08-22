@@ -206,5 +206,5 @@ pub async fn run() {
             console_log
         ])
         .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .expect("运行Tauri应用程序时出错");
 }

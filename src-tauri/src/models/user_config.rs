@@ -296,13 +296,13 @@ impl ConfigRoot {
             // 打印新增的 VideoInfo
             for new_video in new {
                 if !old.contains(new_video) {
-                    debug!("VideoInfo added: {:?}", new_video);
+                    debug!("添加视频信息: {:?}", new_video);
                 }
             }
             // 打印被删除的 VideoInfo
             for old_video in old {
                 if !new.contains(old_video) {
-                    debug!("VideoInfo removed: {:?}", old_video);
+                    debug!("删除视频信息: {:?}", old_video);
                 }
             }
         }
