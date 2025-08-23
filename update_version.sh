@@ -24,6 +24,58 @@ else
   exit 1
 fi
 
+# 自动从 package.json 中提取旧版本号
+OLD_VERSION=$(grep '"version":' package.json | head -n 1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
+echo "🔍 检测到旧版本号：$OLD_VERSION"
+
+# 版本号验证函数
+validate_version() {
+    local old_ver="$1"
+    local new_ver="$2"
+    
+    # 解析版本号
+    local old_major=$(echo "$old_ver" | cut -d. -f1)
+    local old_minor=$(echo "$old_ver" | cut -d. -f2)
+    local old_patch=$(echo "$old_ver" | cut -d. -f3)
+    
+    local new_major=$(echo "$new_ver" | cut -d. -f1)
+    local new_minor=$(echo "$new_ver" | cut -d. -f2)
+    local new_patch=$(echo "$new_ver" | cut -d. -f3)
+    
+    # 检查版本号格式
+    if ! [[ "$new_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "❌ 错误：版本号格式无效，请使用 x.y.z 格式"
+        exit 1
+    fi
+    
+    # 计算期望的版本号
+    local expected_major=$((old_major + 1))
+    local expected_minor=$((old_minor + 1))
+    local expected_patch=$((old_patch + 1))
+    
+    # 验证新版本号是否为合法的递增版本
+    if [[ "$new_major" -eq "$expected_major" && "$new_minor" -eq 0 && "$new_patch" -eq 0 ]]; then
+        echo "✅ 主版本号递增：$old_ver → $new_ver"
+        return 0
+    elif [[ "$new_major" -eq "$old_major" && "$new_minor" -eq "$expected_minor" && "$new_patch" -eq 0 ]]; then
+        echo "✅ 次版本号递增：$old_ver → $new_ver"
+        return 0
+    elif [[ "$new_major" -eq "$old_major" && "$new_minor" -eq "$old_minor" && "$new_patch" -eq "$expected_patch" ]]; then
+        echo "✅ 修订号递增：$old_ver → $new_ver"
+        return 0
+    else
+        echo "❌ 错误：版本号 $new_ver 不是基于 $old_ver 的合法递增版本"
+        echo "   合法的下一个版本应该是："
+        echo "   - $expected_major.0.0 (主版本号+1)"
+        echo "   - $old_major.$expected_minor.0 (次版本号+1)"
+        echo "   - $old_major.$old_minor.$expected_patch (修订号+1)"
+        exit 1
+    fi
+}
+
+# 验证版本号
+validate_version "$OLD_VERSION" "$NEW_VERSION"
+
 # 编译检查函数
 run_checks() {
   echo "🔍 开始编译检查..."
@@ -51,10 +103,6 @@ run_checks() {
 
 # 执行编译检查
 run_checks
-
-# 自动从 package.json 中提取旧版本号
-OLD_VERSION=$(grep '"version":' package.json | head -n 1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
-echo "🔍 检测到旧版本号：$OLD_VERSION"
 
 # 更新 package.json 和 package-lock.json 中的 "name": "biliup-app" 块
 update_json_version() {
