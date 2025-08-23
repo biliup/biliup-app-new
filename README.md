@@ -110,7 +110,7 @@
 - [Tauri](https://tauri.app/) - 跨平台桌面应用框架
 - [Vue.js](https://vuejs.org/) - 渐进式 JavaScript 框架
 - [Element Plus](https://element-plus.org/) - Vue 3 组件库
-- [biliup](https://github.com/biliup/biliup)/[biliup-rs]((https://github.com/biliup/biliup)-rs) - B站上传核心库
+- [biliup](https://github.com/biliup/biliup)/[biliup-rs](https://github.com/biliup/biliup-rs) - B站上传核心库
 
 ---
 
