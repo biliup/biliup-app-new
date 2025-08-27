@@ -10,14 +10,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest' # for Arm based macs (M1 and above).
+          # macOS ARM64 (M1/M2)
+          - platform: macos-latest
             args: '--target aarch64-apple-darwin --bundles app'
-          - platform: 'macos-latest' # for Intel based macs.
-            args: '--target x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04' # for Tauri v1 you could replace this with ubuntu-20.04.
-            args: ''
-          - platform: 'windows-latest'
-            args: ''
+
+          # macOS x64 (Intel)
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin
+
+          # Linux ARM64
+          - platform: ubuntu-22.04
+            args: --target aarch64-unknown-linux-gnu
+
+          # Linux x64
+          - platform: ubuntu-22.04
+            args: --target x86_64-unknown-linux-gnu
+
+          # Windows x64
+          - platform: windows-latest
+            args: --target x86_64-pc-windows-msvc
+
+          # Windows ARM64（实验性支持）
+          - platform: windows-latest
+            args: --target aarch64-pc-windows-msvc
 
     runs-on: ${{ matrix.platform }}
     steps:
