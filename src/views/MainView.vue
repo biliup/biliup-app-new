@@ -65,7 +65,12 @@
                         >
                             <span class="highlight-checkbox-text"> 高亮显示<br />自动提交 </span>
                         </el-checkbox>
-                        <el-button type="success" size="small" @click="showLoginDialog = true">
+                        <el-button
+                            type="success"
+                            size="small"
+                            @click="showLoginDialog = true"
+                            :disabled="templateLoading"
+                        >
                             <el-icon><user /></el-icon>
                             登录用户
                         </el-button>
@@ -73,7 +78,7 @@
                             type="primary"
                             size="small"
                             @click="showNewTemplateDialog = true"
-                            :disabled="!loginUsers.length"
+                            :disabled="!loginUsers.length || templateLoading"
                         >
                             <el-icon><plus /></el-icon>
                             新建模板
@@ -91,7 +96,8 @@
                             <!-- 用户头部 -->
                             <div
                                 class="user-header"
-                                @click="toggleUserExpanded(userTemplate.user.uid)"
+                                @click="handleUserExpansion(userTemplate.user.uid)"
+                                :class="{ disabled: templateLoading }"
                             >
                                 <el-avatar
                                     :src="`data:image/jpeg;base64,${userTemplate.user.avatar}`"
@@ -143,9 +149,12 @@
                                         'template-loading':
                                             templateLoading &&
                                             selectedUser?.uid === userTemplate.user.uid &&
-                                            currentTemplateName === template.name
+                                            currentTemplateName === template.name,
+                                        disabled: templateLoading
                                     }"
-                                    @click="selectTemplate(userTemplate.user, template.name)"
+                                    @click="
+                                        handleTemplateSelection(userTemplate.user, template.name)
+                                    "
                                 >
                                     <div class="template-main">
                                         <div class="template-name">
@@ -176,6 +185,7 @@
                                         "
                                         @click.stop
                                         trigger="click"
+                                        :disabled="templateLoading"
                                     >
                                         <el-button link size="small" class="template-menu-btn">
                                             <el-icon><more-filled /></el-icon>
@@ -250,9 +260,14 @@
                                 </el-tooltip>
                                 <h3
                                     v-if="!isEditingTemplateName"
-                                    @click="startEditTemplateName"
+                                    @click="handleTemplateNameEdit"
                                     class="template-name-display"
-                                    :title="'点击编辑模板名称'"
+                                    :class="{ disabled: templateLoading }"
+                                    :title="
+                                        templateLoading
+                                            ? '模板加载中，无法编辑'
+                                            : '点击编辑模板名称'
+                                    "
                                 >
                                     {{ currentTemplateName }}
                                     <el-icon class="edit-hint-icon"><edit /></el-icon>
@@ -266,11 +281,19 @@
                                     @keyup.esc="cancelEditTemplateName"
                                     class="template-name-input"
                                     size="large"
+                                    :disabled="templateLoading"
                                 />
                             </div>
                             <div class="header-actions">
-                                <el-button @click="resetTemplate">放弃更改</el-button>
-                                <el-button type="primary" @click="saveTemplate">保存</el-button>
+                                <el-button @click="resetTemplate" :disabled="templateLoading"
+                                    >放弃更改</el-button
+                                >
+                                <el-button
+                                    type="primary"
+                                    @click="saveTemplate"
+                                    :disabled="templateLoading"
+                                    >保存</el-button
+                                >
                                 <el-button
                                     @click="
                                         handleTemplateCommand('delete', selectedUser, {
@@ -281,6 +304,7 @@
                                     @click.stop
                                     trigger="click"
                                     type="danger"
+                                    :disabled="templateLoading"
                                     >删除</el-button
                                 >
                             </div>
@@ -302,6 +326,7 @@
                                                 size="small"
                                                 @click.stop="clearCardContent('basic')"
                                                 title="清空基本信息"
+                                                :disabled="templateLoading"
                                             >
                                                 <el-icon><delete /></el-icon>
                                             </el-button>
@@ -323,6 +348,7 @@
                                                 placeholder="请输入视频标题"
                                                 maxlength="80"
                                                 show-word-limit
+                                                :disabled="templateLoading"
                                             />
                                         </el-form-item>
 
@@ -330,8 +356,9 @@
                                             <div
                                                 class="cover-uploader"
                                                 action="#"
-                                                @click="selectCoverWithTauri"
+                                                @click="handleCoverSelection"
                                                 v-loading="coverLoading"
+                                                :class="{ disabled: templateLoading }"
                                             >
                                                 <img
                                                     v-if="coverDisplayUrl && !coverLoading"
@@ -361,6 +388,7 @@
                                                         :type="
                                                             currentForm.tid ? 'primary' : 'default'
                                                         "
+                                                        :disabled="templateLoading"
                                                     >
                                                         <span class="category-text">
                                                             <span v-if="selectedSubCategory">
@@ -457,7 +485,10 @@
                                         </el-form-item>
 
                                         <el-form-item label="版权声明">
-                                            <el-radio-group v-model="currentForm.copyright">
+                                            <el-radio-group
+                                                v-model="currentForm.copyright"
+                                                :disabled="templateLoading"
+                                            >
                                                 <el-radio :value="1">自制</el-radio>
                                                 <el-radio :value="2">转载</el-radio>
                                             </el-radio-group>
@@ -470,6 +501,7 @@
                                             <el-input
                                                 v-model="currentForm.source"
                                                 placeholder="请填写转载来源"
+                                                :disabled="templateLoading"
                                             />
                                         </el-form-item>
                                     </div>
@@ -505,6 +537,7 @@
                                                     currentForm.videos.length > 0 &&
                                                     currentTemplate?.aid
                                                 "
+                                                :disabled="templateLoading"
                                             >
                                                 视频转码状态
                                             </el-button>
@@ -531,6 +564,7 @@
                                             :is-drag-over="isDragOver"
                                             :uploading="uploading"
                                             :template-title="currentTemplateName"
+                                            :disabled="templateLoading"
                                             @select-video="selectVideoWithTauri"
                                             @clear-all-videos="clearAllVideos"
                                             @remove-file="removeUploadedFile"
@@ -557,6 +591,7 @@
                                                 size="small"
                                                 @click.stop="clearCardContent('tags')"
                                                 title="清空标签设置"
+                                                :disabled="templateLoading"
                                             >
                                                 <el-icon><delete /></el-icon>
                                             </el-button>
@@ -573,7 +608,11 @@
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.tags" class="card-content">
                                         <el-form-item label="视频标签">
-                                            <TagView ref="tagViewRef" v-model="tags" />
+                                            <TagView
+                                                ref="tagViewRef"
+                                                v-model="tags"
+                                                :disabled="templateLoading"
+                                            />
                                         </el-form-item>
                                     </div>
                                 </el-collapse-transition>
@@ -597,6 +636,7 @@
                                                 size="small"
                                                 @click.stop="clearCardContent('description')"
                                                 title="清空视频描述"
+                                                :disabled="templateLoading"
                                             >
                                                 <el-icon><delete /></el-icon>
                                             </el-button>
@@ -620,6 +660,7 @@
                                                 placeholder="请输入视频简介"
                                                 maxlength="2000"
                                                 show-word-limit
+                                                :disabled="templateLoading"
                                             />
                                         </el-form-item>
 
@@ -629,6 +670,7 @@
                                                 placeholder="发布时的动态内容"
                                                 maxlength="233"
                                                 show-word-limit
+                                                :disabled="templateLoading"
                                             />
                                         </el-form-item>
                                     </div>
@@ -653,6 +695,7 @@
                                                 size="small"
                                                 @click.stop="clearCardContent('advanced')"
                                                 title="清空高级选项"
+                                                :disabled="templateLoading"
                                             >
                                                 <el-icon><delete /></el-icon>
                                             </el-button>
@@ -674,6 +717,7 @@
                                                     v-model="currentForm.watermark"
                                                     :true-value="1"
                                                     :false-value="0"
+                                                    :disabled="templateLoading"
                                                 >
                                                     开启 (本功能只对本次上传的视频生效)
                                                 </el-checkbox>
@@ -685,6 +729,7 @@
                                                 type="datetime"
                                                 placeholder="选择发布时间"
                                                 format="YYYY-MM-DD HH:mm:ss"
+                                                :disabled="templateLoading"
                                                 :disabled-date="
                                                     (date: Date) => {
                                                         const now = new Date()
@@ -705,7 +750,10 @@
                                         </el-form-item>
 
                                         <el-form-item label="字幕设置">
-                                            <el-checkbox v-model="currentForm.open_subtitle">
+                                            <el-checkbox
+                                                v-model="currentForm.open_subtitle"
+                                                :disabled="templateLoading"
+                                            >
                                                 开启字幕功能
                                             </el-checkbox>
                                         </el-form-item>
@@ -716,6 +764,7 @@
                                                 v-model:topic-id="currentForm.topic_id"
                                                 :user-uid="selectedUser?.uid"
                                                 mode="selector"
+                                                :disabled="templateLoading"
                                             />
                                         </el-form-item>
 
@@ -725,6 +774,7 @@
                                                     v-model="currentForm.interactive"
                                                     :true-value="1"
                                                     :false-value="0"
+                                                    :disabled="templateLoading"
                                                 >
                                                     开启
                                                 </el-checkbox>
@@ -736,6 +786,7 @@
                                                 v-model="currentForm.season_id"
                                                 v-model:section-id="currentForm.section_id"
                                                 :user-uid="selectedUser?.uid"
+                                                :disabled="templateLoading"
                                             />
                                         </el-form-item>
 
@@ -745,6 +796,7 @@
                                                     v-model="currentForm.dolby"
                                                     :true-value="1"
                                                     :false-value="0"
+                                                    :disabled="templateLoading"
                                                 >
                                                     杜比音效
                                                 </el-checkbox>
@@ -752,6 +804,7 @@
                                                     v-model="currentForm.lossless_music"
                                                     :true-value="1"
                                                     :false-value="0"
+                                                    :disabled="templateLoading"
                                                 >
                                                     无损音乐
                                                 </el-checkbox>
@@ -764,6 +817,7 @@
                                                     v-model="currentForm.no_reprint"
                                                     :true-value="1"
                                                     :false-value="0"
+                                                    :disabled="templateLoading"
                                                 >
                                                     禁止转载
                                                 </el-checkbox>
@@ -771,6 +825,7 @@
                                                     v-model="currentForm.open_elec"
                                                     :true-value="1"
                                                     :false-value="0"
+                                                    :disabled="templateLoading"
                                                 >
                                                     开启充电
                                                 </el-checkbox>
@@ -783,6 +838,7 @@
                                                     v-model="currentForm.up_selection_reply"
                                                     :true-value="1"
                                                     :false-value="0"
+                                                    :disabled="templateLoading"
                                                 >
                                                     UP主精选评论
                                                 </el-checkbox>
@@ -790,6 +846,7 @@
                                                     v-model="currentForm.up_close_reply"
                                                     :true-value="1"
                                                     :false-value="0"
+                                                    :disabled="templateLoading"
                                                 >
                                                     关闭评论
                                                 </el-checkbox>
@@ -797,6 +854,7 @@
                                                     v-model="currentForm.up_close_danmu"
                                                     :true-value="1"
                                                     :false-value="0"
+                                                    :disabled="templateLoading"
                                                 >
                                                     关闭弹幕
                                                 </el-checkbox>
@@ -808,6 +866,7 @@
                                                 v-model="currentForm.is_only_self"
                                                 :true-value="1"
                                                 :false-value="0"
+                                                :disabled="templateLoading"
                                             >
                                                 仅自己可见
                                             </el-checkbox>
@@ -824,6 +883,7 @@
                                     :loading="submitting"
                                     @click="submitTemplate"
                                     :disabled="
+                                        templateLoading ||
                                         !currentForm.videos ||
                                         currentForm.videos.length === 0 ||
                                         !currentForm.title ||
@@ -1523,6 +1583,10 @@ const setupDragAndDrop = async () => {
         await listen('tauri://drag-drop', async event => {
             const videos = event.payload as string[]
             isDragOver.value = false
+            if (templateLoading.value) {
+                utilsStore.showMessage('模板加载中', 'warning')
+                return
+            }
             await handleDroppedFiles(videos)
         })
 
@@ -1810,16 +1874,13 @@ const addVideoToCurrentForm = async (videoPath: string) => {
         return 0 // 不支持的格式，跳过添加
     }
 
-    templateLoading.value = true
     // 检查文件是否已经存在
     if (!currentForm.value) {
-        templateLoading.value = false
         return 0 // 没有当前模板，跳过添加
     }
 
     const existingFile = currentForm.value.videos.find(f => f.path === videoPath)
     if (existingFile) {
-        templateLoading.value = false
         return 0 // 跳过已存在的文件
     }
 
@@ -1860,8 +1921,6 @@ const addVideoToCurrentForm = async (videoPath: string) => {
             console.error('自动添加到上传队列失败:', error)
         }
     }
-
-    templateLoading.value = false
     return 1
 }
 
@@ -1875,9 +1934,11 @@ const handleDroppedFiles = async (videoFiles: any) => {
 
     // 添加视频文件到当前模板
     let addedCount = 0
+    templateLoading.value = true
     for (const videoPath of videoFiles.paths) {
         addedCount += await addVideoToCurrentForm(videoPath)
     }
+    templateLoading.value = false
 
     if (addedCount > 0) {
         utilsStore.showMessage(`成功添加 ${addedCount} 个视频文件`, 'success')
@@ -1918,6 +1979,34 @@ const handleLoginDialogClose = async (done: () => void) => {
 // 切换用户展开状态
 const toggleUserExpanded = (userUid: number) => {
     userConfigStore.toggleUserExpanded(userUid)
+}
+
+// 处理用户展开按钮点击 - 在模板加载时禁用
+const handleUserExpansion = (userUid: number) => {
+    if (!templateLoading.value) {
+        toggleUserExpanded(userUid)
+    }
+}
+
+// 处理模板选择点击 - 在模板加载时禁用
+const handleTemplateSelection = (user: any, templateName: string) => {
+    if (!templateLoading.value) {
+        selectTemplate(user, templateName)
+    }
+}
+
+// 处理模板名编辑点击 - 在模板加载时禁用
+const handleTemplateNameEdit = () => {
+    if (!templateLoading.value) {
+        startEditTemplateName()
+    }
+}
+
+// 处理封面选择点击 - 在模板加载时禁用
+const handleCoverSelection = () => {
+    if (!templateLoading.value) {
+        selectCoverWithTauri()
+    }
 }
 
 // 选择模板
@@ -2366,6 +2455,12 @@ const selectCoverWithTauri = async () => {
 
 // 使用 Tauri 文件对话框选择视频文件
 const selectVideoWithTauri = async () => {
+    if (templateLoading.value) {
+        utilsStore.showMessage('模板加载中', 'warning')
+        return
+    }
+
+    templateLoading.value = true
     try {
         const selected = await open({
             multiple: true,
@@ -2406,6 +2501,8 @@ const selectVideoWithTauri = async () => {
     } catch (error) {
         console.error('文件选择失败: ', error)
         utilsStore.showMessage(`'文件选择失败: ${error}'`, 'error')
+    } finally {
+        templateLoading.value = false
     }
 }
 
@@ -2553,6 +2650,7 @@ const createUpload = async () => {
 
 // 处理文件夹监控添加视频事件
 const handleAddVideosToForm = async (newVideos: any[]) => {
+    templateLoading.value = true
     for (const videoPath of newVideos) {
         try {
             await addVideoToCurrentForm(videoPath)
@@ -2560,6 +2658,7 @@ const handleAddVideosToForm = async (newVideos: any[]) => {
             console.error(`添加视频失败: ${videoPath}`, error)
         }
     }
+    templateLoading.value = false
 }
 
 // 处理文件夹监控提交稿件事件
@@ -3837,6 +3936,46 @@ const checkUpdate = async () => {
     color: #ffd700;
     font-weight: 500;
     margin-top: 15px;
+}
+
+/* 禁用状态样式 */
+.cover-uploader.disabled {
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+}
+
+.cover-uploader.disabled:hover {
+    border-color: #dcdfe6 !important;
+}
+
+.template-name-display.disabled {
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+    color: #909399 !important;
+}
+
+.template-name-display.disabled .edit-hint-icon {
+    color: #c0c4cc !important;
+}
+
+/* 用户头部禁用状态 */
+.user-header.disabled {
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+}
+
+.user-header.disabled:hover {
+    background: #fff !important;
+}
+
+/* 模板项禁用状态 */
+.template-item.disabled {
+    cursor: not-allowed !important;
+    opacity: 0.6 !important;
+}
+
+.template-item.disabled:hover {
+    background: #fff !important;
 }
 </style>
 
