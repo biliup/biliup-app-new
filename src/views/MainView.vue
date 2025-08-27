@@ -1306,8 +1306,9 @@ const checkTemplateHasUnsavedChanges = (uid: number, templateName: string): bool
     }
 
     const currentTemplateData = currentUserConfig.templates[templateName]
+    const baseTemplateData = baseUserConfig.templates[templateName]
 
-    return hasUnsavedChanges(uid, templateName, currentTemplateData)
+    return hasUnsavedChanges(baseTemplateData, currentTemplateData)
 }
 
 // 生命周期
@@ -1493,14 +1494,10 @@ const initializeData = async () => {
     }
 }
 
-const hasUnsavedChanges = (uid: number, template: string, currentTemplateData: TemplateConfig) => {
-    const baseUserConfig = userConfigStore.configBase?.config?.[uid]
-    if (!baseUserConfig || !baseUserConfig.templates[template]) {
-        return true
-    }
-
-    const baseTemplate = baseUserConfig.templates[template]
-
+const hasUnsavedChanges = (
+    baseTemplateData: TemplateConfig,
+    currentTemplateData: TemplateConfig
+) => {
     // 比较关键字段
     const fieldsToCompare = [
         'title',
@@ -1531,7 +1528,7 @@ const hasUnsavedChanges = (uid: number, template: string, currentTemplateData: T
 
     for (const field of fieldsToCompare) {
         const currentValue = (currentTemplateData as any)[field]
-        const baseValue = (baseTemplate as any)[field]
+        const baseValue = (baseTemplateData as any)[field]
 
         // 处理 undefined/null/空字符串 的情况
         if (
@@ -1542,16 +1539,15 @@ const hasUnsavedChanges = (uid: number, template: string, currentTemplateData: T
         }
 
         if (JSON.stringify(currentValue) !== JSON.stringify(baseValue)) {
-            // console.log(field, '有改动')
-            // console.log(JSON.stringify(currentValue))
-            // console.log(JSON.stringify(baseValue))
+            console.log(field, '有改动')
+            console.log('current: ', JSON.stringify(currentValue), 'vs', JSON.stringify(baseValue))
             return true
         }
     }
 
     // 特别比较 videos 数组
     const currentVideos = currentTemplateData.videos || []
-    const baseVideos = baseTemplate.videos || []
+    const baseVideos = baseTemplateData.videos || []
 
     if (currentVideos.length !== baseVideos.length) {
         return true
@@ -2050,13 +2046,31 @@ const selectTemplate = async (user: any, templateName: string) => {
                         selectedUser.value?.uid === user.uid &&
                         currentTemplateName.value === templateName
                     ) {
-                        await reloadTemplateFromAV(user.uid, aid)
+                        const newTemplate = await getNewTemplateFromAv(user.uid, aid)
+                        const currentTemplateData =
+                            userConfigStore.configRoot?.config[user.uid].templates[templateName]
+                        if (
+                            currentTemplateData &&
+                            hasUnsavedChanges(currentTemplateData, newTemplate)
+                        ) {
+                            await ElMessageBox.confirm(
+                                `检测到本地模板内容与bilibili不一致，是否刷新？（此操作会丢失所有未保存的更改）`,
+                                '',
+                                {
+                                    confirmButtonText: '刷新并继续',
+                                    cancelButtonText: '不刷新，仅显示当前',
+                                    type: 'info'
+                                }
+                            )
+                            await reloadTemplateFromAV(user.uid, aid)
+                        }
                     }
                 } catch (error) {
                     console.error('自动刷新模板数据失败:', error)
                 }
             }
         }, 666)
+        console.log(`已切换到模板: ${user.username} - ${templateName}`)
     } catch (error) {
         console.error('切换模板失败:', error)
         utilsStore.showMessage(`切换模板失败: ${error}`, 'error')
@@ -2105,21 +2119,7 @@ const resetTemplate = async () => {
     }
 }
 
-const reloadTemplateFromAV = async (userUid: number, aid: number) => {
-    // 如果正在加载模板，禁止重新加载
-    if (templateLoading.value) {
-        return
-    }
-
-    if (!selectedUser.value || selectedUser.value.uid !== userUid) {
-        return
-    }
-
-    if (!currentForm.value || currentForm.value.aid !== aid) {
-        return
-    }
-
-    templateLoading.value = true
+const getNewTemplateFromAv = async (userUid: number, aid: number) => {
     try {
         const newTemplate = (await utilsStore.getVideoDetail(userUid, aid.toString())) as any
 
@@ -2144,6 +2144,30 @@ const reloadTemplateFromAV = async (userUid: number, aid: number) => {
         }
 
         newTemplate.watermark = currentForm.value?.watermark
+        return newTemplate
+    } catch (error) {
+        console.error('获取新模板失败: ', error)
+        throw error
+    }
+}
+
+const reloadTemplateFromAV = async (userUid: number, aid: number) => {
+    // 如果正在加载模板，禁止重新加载
+    if (templateLoading.value) {
+        return
+    }
+
+    if (!selectedUser.value || selectedUser.value.uid !== userUid) {
+        return
+    }
+
+    if (!currentForm.value || currentForm.value.aid !== aid) {
+        return
+    }
+
+    templateLoading.value = true
+    try {
+        const newTemplate = await getNewTemplateFromAv(userUid, aid)
         currentForm.value = newTemplate
         utilsStore.showMessage('模板数据已刷新', 'success')
     } catch (error) {
@@ -2894,6 +2918,15 @@ const checkVideoStatus = async () => {
 
     try {
         // 先刷新模板数据
+        await ElMessageBox.confirm(
+            `此操作会重新拉取模板数据，此操作会丢失未保存的更改，是否继续？`,
+            '',
+            {
+                confirmButtonText: '刷新并继续',
+                cancelButtonText: '不刷新，仅显示当前',
+                type: 'info'
+            }
+        )
         await reloadTemplateFromAV(selectedUser.value.uid, currentTemplate.value.aid)
         // 然后显示状态对话框
         showVideoStatusDialog.value = true
