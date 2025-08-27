@@ -3,11 +3,35 @@
 
 # 用法提示
 if [[ -z "$1" ]]; then
-  echo "❗ 用法: $0 <新版本号>"
-  exit 1
+  echo "🔍 未指定版本号，将自动递增 patch 版本..."
+  
+  # 确保在项目根目录（临时检查以获取当前版本）
+  if [[ -d "src-tauri" && -f "package.json" ]]; then
+    CURRENT_DIR="."
+  elif [[ -f "Cargo.toml" && -d "../src" ]]; then
+    CURRENT_DIR=".."
+  elif [[ -f "../package.json" && -d "../src-tauri" ]]; then
+    CURRENT_DIR=".."
+  else
+    echo "❌ 错误：无法找到项目根目录，请在 biliup-app 项目根目录下执行此脚本"
+    exit 1
+  fi
+  
+  # 获取当前版本号
+  CURRENT_VERSION=$(grep '"version":' "$CURRENT_DIR/package.json" | head -n 1 | sed -E 's/.*"version": "([^"]+)".*/\1/')
+  
+  # 解析版本号并递增 patch
+  CURRENT_MAJOR=$(echo "$CURRENT_VERSION" | cut -d. -f1)
+  CURRENT_MINOR=$(echo "$CURRENT_VERSION" | cut -d. -f2)
+  CURRENT_PATCH=$(echo "$CURRENT_VERSION" | cut -d. -f3)
+  NEW_PATCH=$((CURRENT_PATCH + 1))
+  
+  NEW_VERSION="$CURRENT_MAJOR.$CURRENT_MINOR.$NEW_PATCH"
+  echo "📋 自动生成版本号：$CURRENT_VERSION → $NEW_VERSION"
+else
+  NEW_VERSION="$1"
 fi
 
-NEW_VERSION="$1"
 echo "🚀 准备将 biliup-app 升级到版本：$NEW_VERSION"
 
 # 确保在项目根目录
