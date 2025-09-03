@@ -8,7 +8,8 @@ use std::{collections::HashMap, sync::Arc};
 
 use biliup::bilibili::BiliBili;
 use commands::*;
-use tauri::Manager;
+use tauri::{Manager, WindowEvent};
+use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::sync::Mutex;
 use tracing::{error, info};
 use utils::CompatibilityConverter;
@@ -159,6 +160,7 @@ pub async fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .setup(move |app: &mut tauri::App| {
             #[cfg(debug_assertions)] // only include this code on debug builds
             {
@@ -215,6 +217,15 @@ pub async fn run() {
             check_update,
             console_log
         ])
+        .on_window_event(|window, event| {
+            match event {
+                WindowEvent::CloseRequested { .. } => {
+                    // 在窗口关闭前保存状态
+                    let _ = window.app_handle().save_window_state(StateFlags::all());
+                }
+                _ => {}
+            }
+        })
         .run(tauri::generate_context!())
         .expect("运行Tauri应用程序时出错");
 }
