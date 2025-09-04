@@ -38,18 +38,42 @@
             <div v-if="!monitoring" class="settings-section">
                 <el-form :model="settings" label-width="110px" label-position="right" size="small">
                     <el-form-item label="监控文件夹" required>
-                        <el-input
-                            v-model="settings.folderPath"
-                            placeholder="请选择要监控的文件夹"
-                            readonly
-                        >
-                            <template #append>
+                        <div class="folder-selection">
+                            <div v-if="settings.folderPaths.length === 0" class="no-folders">
+                                <el-text type="info">尚未选择监控文件夹</el-text>
+                            </div>
+                            <div v-else class="selected-folders">
+                                <el-tag
+                                    v-for="(folder, index) in settings.folderPaths"
+                                    :key="index"
+                                    closable
+                                    @close="removeFolder(index)"
+                                    class="folder-tag"
+                                    type="primary"
+                                >
+                                    <el-tooltip :content="folder" placement="top">
+                                        <span class="folder-path">{{
+                                            getFolderDisplayName(folder)
+                                        }}</span>
+                                    </el-tooltip>
+                                </el-tag>
+                            </div>
+                            <div class="folder-buttons">
                                 <el-button type="primary" @click="selectFolder">
                                     <el-icon><folder-opened /></el-icon>
-                                    选择文件夹
+                                    添加文件夹
                                 </el-button>
-                            </template>
-                        </el-input>
+                                <el-button
+                                    v-if="settings.folderPaths.length > 0"
+                                    type="danger"
+                                    @click="clearAllFolders"
+                                    plain
+                                >
+                                    <el-icon><delete /></el-icon>
+                                    清空全部
+                                </el-button>
+                            </div>
+                        </div>
                     </el-form-item>
 
                     <el-form-item label="检测次数设置">
@@ -171,7 +195,16 @@
                     </div>
 
                     <div class="status-info">
-                        <p><strong>监控路径：</strong>{{ settings.folderPath }}</p>
+                        <div><strong>监控路径：</strong></div>
+                        <ul class="folder-list">
+                            <li
+                                v-for="folder in settings.folderPaths"
+                                :key="folder"
+                                class="folder-item"
+                            >
+                                {{ folder }}
+                            </li>
+                        </ul>
                         <p>
                             <strong>监控配置：</strong>
                             {{ settings.includeSubfolders ? '包含子文件夹' : '仅当前文件夹' }}，
@@ -234,7 +267,8 @@
                     <el-button
                         type="primary"
                         :disabled="
-                            !settings.folderPath || (settings.delayedStart && !settings.startTime)
+                            !settings.folderPaths.length ||
+                            (settings.delayedStart && !settings.startTime)
                         "
                         @click="startMonitoring"
                     >
@@ -255,7 +289,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onUnmounted, watch } from 'vue'
-import { FolderOpened, Loading, Clock } from '@element-plus/icons-vue'
+import { FolderOpened, Loading, Clock, Delete } from '@element-plus/icons-vue'
 import { open } from '@tauri-apps/plugin-dialog'
 import { useUtilsStore } from '../stores/utils'
 
@@ -287,7 +321,7 @@ const visible = computed({
 
 // 设置
 const settings = ref({
-    folderPath: '',
+    folderPaths: [] as string[], // 改为多个文件夹路径的数组
     maxEmptyChecks: 5,
     checkInterval: 60, // 检测间隔时间（秒），默认60秒
     includeSubfolders: false, // 是否包含子文件夹
@@ -324,7 +358,7 @@ let monitorTimer: number | null = null
 watch(visible, (newValue, oldValue) => {
     if (newValue && !oldValue) {
         // 窗口从关闭变为打开状态，清空文件夹路径
-        settings.value.folderPath = ''
+        settings.value.folderPaths = []
     }
 })
 
@@ -350,17 +384,48 @@ const selectFolder = async () => {
     try {
         const selected = await open({
             directory: true,
-            multiple: false,
+            multiple: true, // 允许多选
             title: '选择要监控的文件夹'
         })
 
-        if (selected && typeof selected === 'string') {
-            settings.value.folderPath = selected
+        if (selected) {
+            if (Array.isArray(selected)) {
+                // 多选情况
+                for (const folder of selected) {
+                    if (!settings.value.folderPaths.includes(folder)) {
+                        settings.value.folderPaths.push(folder)
+                    }
+                }
+            } else if (typeof selected === 'string') {
+                // 单选情况
+                if (!settings.value.folderPaths.includes(selected)) {
+                    settings.value.folderPaths.push(selected)
+                }
+            }
         }
     } catch (error) {
         console.error('选择文件夹失败:', error)
         utilsStore.showMessage('选择文件夹失败', 'error')
     }
+}
+
+// 移除文件夹
+const removeFolder = (index: number) => {
+    settings.value.folderPaths.splice(index, 1)
+}
+
+// 清空所有文件夹
+const clearAllFolders = () => {
+    settings.value.folderPaths = []
+}
+
+// 获取文件夹显示名称（截取路径末尾部分）
+const getFolderDisplayName = (folderPath: string): string => {
+    const maxLength = 30
+    if (folderPath.length <= maxLength) {
+        return folderPath
+    }
+    return '...' + folderPath.slice(-maxLength + 3)
 }
 
 // 检查文件是否为支持的视频格式
@@ -413,16 +478,26 @@ const performCheck = async (): Promise<{
     stableFiles: string[]
 }> => {
     try {
-        // 根据设置决定是否递归读取目录
-        const entries = await utilsStore
-            .readDirRecursive(settings.value.folderPath, settings.value.includeSubfolders, 20)
-            .then(files =>
-                files.map(file => ({
-                    name: file.name,
-                    path: file.path,
-                    isDirectory: file.is_directory
-                }))
-            )
+        // 收集所有文件夹的文件
+        const allEntries: Array<{ name: string; path: string; isDirectory: boolean }> = []
+
+        for (const folderPath of settings.value.folderPaths) {
+            try {
+                const entries = await utilsStore
+                    .readDirRecursive(folderPath, settings.value.includeSubfolders, 20)
+                    .then(files =>
+                        files.map(file => ({
+                            name: file.name,
+                            path: file.path,
+                            isDirectory: file.is_directory
+                        }))
+                    )
+                allEntries.push(...entries)
+            } catch (error) {
+                console.error(`读取文件夹 ${folderPath} 失败:`, error)
+                // 继续处理其他文件夹，不因单个文件夹失败而中断
+            }
+        }
 
         const currentVideoNames = getCurrentVideoNames()
         const currentVideoTitles = getCurrentVideoTitles()
@@ -430,8 +505,11 @@ const performCheck = async (): Promise<{
         const stableFiles: string[] = []
         let resetCounter = false
 
-        // 按文件名排序
-        const sortedEntries = entries
+        // 按文件名排序，去重
+        const uniqueEntries = Array.from(
+            new Map(allEntries.map(entry => [entry.path, entry])).values()
+        )
+        const sortedEntries = uniqueEntries
             .filter(entry => !entry.isDirectory) // 只处理文件，不处理文件夹
             .sort((a, b) => (a.name || '').localeCompare(b.name || ''))
 
@@ -564,7 +642,7 @@ const performMonitoringCycle = async () => {
 
 // 开始监控
 const startMonitoring = async () => {
-    if (!settings.value.folderPath) {
+    if (!settings.value.folderPaths || settings.value.folderPaths.length === 0) {
         utilsStore.showMessage('请先选择监控文件夹', 'error')
         return
     }
@@ -621,8 +699,8 @@ const startMonitoringNow = async () => {
     fileSizeHistory.value.clear()
 
     const folderMsg = settings.value.includeSubfolders
-        ? `开始监控文件夹: ${settings.value.folderPath} (包含子文件夹)`
-        : `开始监控文件夹: ${settings.value.folderPath}`
+        ? `开始监控文件夹 (${settings.value.folderPaths.length}个，包含子文件夹): ${settings.value.folderPaths.join(', ')}`
+        : `开始监控文件夹 (${settings.value.folderPaths.length}个): ${settings.value.folderPaths.join(', ')}`
     console.log(`${folderMsg}，最小文件大小: ${settings.value.minFileSize}MB`)
 
     // 立即执行第一次检测
@@ -780,6 +858,65 @@ onUnmounted(() => {
 
 .settings-section :deep(.el-form-item__content) {
     line-height: 1.2;
+}
+
+/* 多文件夹选择相关样式 */
+.folder-selection {
+    width: 100%;
+}
+
+.no-folders {
+    padding: 12px;
+    text-align: center;
+    background: #f5f7fa;
+    border: 1px dashed #dcdfe6;
+    border-radius: 4px;
+    margin-bottom: 12px;
+}
+
+.selected-folders {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 12px;
+    min-height: 32px;
+    padding: 8px;
+    background: #f5f7fa;
+    border: 1px solid #dcdfe6;
+    border-radius: 4px;
+}
+
+.folder-tag {
+    max-width: 200px;
+    display: flex;
+    align-items: center;
+}
+
+.folder-path {
+    display: inline-block;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.folder-buttons {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-start;
+}
+
+.folder-list {
+    margin: 8px 0;
+    padding-left: 20px;
+    list-style-type: disc;
+}
+
+.folder-item {
+    margin: 4px 0;
+    color: #606266;
+    font-size: 12px;
+    word-break: break-all;
 }
 
 .setting-description {
