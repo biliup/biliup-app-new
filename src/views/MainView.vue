@@ -1539,8 +1539,8 @@ const hasUnsavedChanges = (
         }
 
         if (JSON.stringify(currentValue) !== JSON.stringify(baseValue)) {
-            console.log(field, '有改动')
-            console.log('current: ', JSON.stringify(currentValue), 'vs', JSON.stringify(baseValue))
+            // console.log(field, '有改动')
+            // console.log('current: ', JSON.stringify(currentValue), 'vs', JSON.stringify(baseValue))
             return true
         }
     }
