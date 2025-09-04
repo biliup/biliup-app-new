@@ -2750,6 +2750,27 @@ const submitTemplate = async () => {
         const currentAutoSubmitting = getCurrentAutoSubmitting.value
         if (!currentAutoSubmitting) {
             // 首次点击，开始自动提交
+            // 将当前video列表加入upload queue
+            try {
+                if (currentForm.value?.videos && currentForm.value.videos.length > 0) {
+                    await uploadStore.createUploadTask(
+                        selectedUser.value.uid,
+                        currentTemplateName.value,
+                        currentForm.value.videos
+                    )
+
+                    setTimeout(async () => {
+                        try {
+                            await autoStartWaitingTasks()
+                        } catch (error) {
+                            console.error('自动开始任务失败:', error)
+                        }
+                    }, 500)
+                }
+            } catch (error) {
+                console.error('添加到上传队列失败:', error)
+                utilsStore.showMessage(`添加到上传队列失败: ${error}`, 'error')
+            }
             setAutoSubmitting(selectedUser.value.uid, currentTemplateName.value, true)
             startAutoSubmitCheck()
             utilsStore.showMessage('已启动自动提交，上传完成后将自动提交', 'info')
