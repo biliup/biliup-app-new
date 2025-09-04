@@ -781,7 +781,10 @@
                                             </div>
                                         </el-form-item>
 
-                                        <el-form-item v-if="currentForm.videos[0]?.cid" label="加入合集">
+                                        <el-form-item
+                                            v-if="currentForm.videos[0]?.cid"
+                                            label="加入合集"
+                                        >
                                             <SeasonView
                                                 v-model="currentForm.season_id"
                                                 v-model:section-id="currentForm.section_id"
@@ -1848,7 +1851,7 @@ const getCardDisplayName = (cardType: string): string => {
 const addVideoToCurrentForm = async (videoPath: string) => {
     // 从路径中提取文件名
     const videoBaseName = videoPath.split(/[/\\]/).pop() || videoPath
-    const videoNameWOExtension = videoBaseName.replace(/\.[^/.]+$/, '')
+    const videoNameWOExtension = videoBaseName.replace(/\.[^/.]+$/, '').slice(0, 80)
     const videoExt = videoBaseName.split('.').pop()?.toLowerCase() || ''
 
     const extFilter = [
@@ -1876,9 +1879,23 @@ const addVideoToCurrentForm = async (videoPath: string) => {
         return 0 // 没有当前模板，跳过添加
     }
 
-    const existingFile = currentForm.value.videos.find(f => f.path === videoPath)
+    const existingFile = currentForm.value.videos.find(
+        f => f.path === videoPath || videoNameWOExtension === f.title
+    )
     if (existingFile) {
         return 0 // 跳过已存在的文件
+    }
+
+    const currentAddedVideos = currentForm.value.videos.filter(video => {
+        return (
+            (video.finished_at && video.finished_at > 0) || (video.path && video.path.trim() !== '')
+        )
+    })
+
+    // 检查是否超过100个视频的限制
+    if (currentAddedVideos.length >= 100) {
+        utilsStore.showMessage('单次提交最大限制100个视频文件，无法添加更多视频', 'error')
+        return 0
     }
 
     // 添加到currentForm.videos
@@ -1886,7 +1903,7 @@ const addVideoToCurrentForm = async (videoPath: string) => {
     currentForm.value.videos.push({
         id: videoId,
         filename: videoBaseName, // 使用完整的文件路径
-        title: videoNameWOExtension.slice(0, 80), // 去除扩展名作为标题
+        title: videoNameWOExtension, // 去除扩展名作为标题
         desc: '',
         path: videoPath, // 保存完整路径
         complete: false

@@ -176,7 +176,7 @@ export const useUtilsStore = defineStore('template', () => {
             message,
             type,
             showClose: true,
-            duration: type === 'error' ? 5000 : 3000
+            duration: type === 'error' ? 0 : 3000
         })
     }
 
