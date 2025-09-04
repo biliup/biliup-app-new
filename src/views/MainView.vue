@@ -614,6 +614,16 @@
                                                 :disabled="templateLoading"
                                             />
                                         </el-form-item>
+
+                                        <el-form-item label="活动/话题">
+                                            <TopicView
+                                                v-model="currentForm.mission_id"
+                                                v-model:topic-id="currentForm.topic_id"
+                                                :user-uid="selectedUser?.uid"
+                                                mode="selector"
+                                                :disabled="templateLoading"
+                                            />
+                                        </el-form-item>
                                     </div>
                                 </el-collapse-transition>
                             </el-card>
@@ -756,16 +766,6 @@
                                             >
                                                 开启字幕功能
                                             </el-checkbox>
-                                        </el-form-item>
-
-                                        <el-form-item label="活动/话题">
-                                            <TopicView
-                                                v-model="currentForm.mission_id"
-                                                v-model:topic-id="currentForm.topic_id"
-                                                :user-uid="selectedUser?.uid"
-                                                mode="selector"
-                                                :disabled="templateLoading"
-                                            />
                                         </el-form-item>
 
                                         <el-form-item label="互动功能">
