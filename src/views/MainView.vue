@@ -615,7 +615,7 @@
                                             />
                                         </el-form-item>
 
-                                        <el-form-item label="活动/话题">
+                                        <el-form-item v-if="!currentForm.aid" label="参与活动">
                                             <TopicView
                                                 v-model="currentForm.mission_id"
                                                 v-model:topic-id="currentForm.topic_id"
