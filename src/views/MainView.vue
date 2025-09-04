@@ -781,7 +781,7 @@
                                             </div>
                                         </el-form-item>
 
-                                        <el-form-item label="加入合集">
+                                        <el-form-item v-if="currentForm.videos[0]?.cid" label="加入合集">
                                             <SeasonView
                                                 v-model="currentForm.season_id"
                                                 v-model:section-id="currentForm.section_id"
@@ -1144,12 +1144,13 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
                 const old_season_id = await utilsStore.getVideoSeason(uid, resp.aid)
                 let add = old_season_id && old_season_id !== 0 ? false : true
 
-                if (template && old_season_id !== template.season_id) {
+                if (template && old_season_id !== template.season_id && template.videos[0]?.cid) {
                     const new_season_id = template.season_id || 0
                     const new_section_id = template.section_id || 0
                     await utilsStore.switchSeason(
                         uid,
                         resp.aid,
+                        template.videos[0]?.cid,
                         new_season_id,
                         new_section_id,
                         template.title,

@@ -285,6 +285,7 @@ pub async fn switch_season(
     app: tauri::AppHandle,
     uid: u64,
     aid: u64,
+    cid: u64,
     season_id: u64,
     section_id: u64,
     title: String,
@@ -339,7 +340,8 @@ pub async fn switch_season(
             "episodes": [
                 {
                     "title": title,
-                    "aid": aid
+                    "aid": aid,
+                    "cid": cid
                 }
             ],
             "sectionId": section_id,
@@ -376,6 +378,7 @@ pub async fn switch_season(
                 "section_id": if section_id != 0 { Some(section_id) } else { None },
                 "title": title,
                 "aid": aid,
+                "cid": cid,
                 "csrf": csrf
             }))
             .send()

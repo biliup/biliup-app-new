@@ -420,7 +420,7 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
             }
             Ok(return_video) = &mut video_fut => {
                 // 处理视频上传完成
-
+                debug!("视频上传完成: {:?}", return_video);
                 // rewrite the stored id & name
                 task_mutex.lock().await.video.filename = return_video.filename.clone();
                 task_mutex.lock().await.video.path.clear();

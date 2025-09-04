@@ -149,6 +149,7 @@ export const useUtilsStore = defineStore('template', () => {
     const switchSeason = async (
         uid: number,
         aid: number,
+        cid: number,
         seasonId: number,
         sectionId: number,
         title: string,
@@ -159,7 +160,7 @@ export const useUtilsStore = defineStore('template', () => {
         }
 
         try {
-            await invoke('switch_season', { uid, aid, seasonId, sectionId, title, add })
+            await invoke('switch_season', { uid, aid, cid, seasonId, sectionId, title, add })
         } catch (error) {
             console.error('设置合集失败:', error)
             throw error

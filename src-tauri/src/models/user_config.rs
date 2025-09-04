@@ -24,6 +24,8 @@ pub struct VideoInfo {
     #[serde(default)]
     pub id: String,
     #[serde(default)]
+    pub cid: u64,
+    #[serde(default)]
     pub title: String,
     #[serde(default)]
     pub filename: String,
