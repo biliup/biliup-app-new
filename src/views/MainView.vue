@@ -782,7 +782,6 @@
                                         </el-form-item>
 
                                         <el-form-item
-                                            v-if="currentForm.videos[0]?.cid"
                                             label="加入合集"
                                         >
                                             <SeasonView
