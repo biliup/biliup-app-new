@@ -1559,7 +1559,7 @@ const hasUnsavedChanges = (
         const currentVideo = currentVideos[i]
         const baseVideo = baseVideos[i]
 
-        const videoFieldsToCompare = ['title', 'filename', 'desc', 'path']
+        const videoFieldsToCompare = ['title', 'filename', 'desc', 'path', 'cid']
         for (const field of videoFieldsToCompare) {
             if (
                 JSON.stringify((currentVideo as any)[field]) !==
