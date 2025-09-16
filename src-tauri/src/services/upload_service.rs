@@ -388,8 +388,7 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
                 let chunked_buffer = ChunkedBuffer::new(chunk, net_send_tx.clone());
                 Ok((chunked_buffer, len))
             })
-        },
-        3,
+        }
     ));
 
     let mut paused = false;

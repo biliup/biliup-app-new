@@ -59,7 +59,7 @@ pub struct BilibiliForm {
     /// 0-允许转载，1-禁止转载
     pub no_reprint: u8,
     /// 是否开启充电, 0-关闭 1-开启
-    pub open_elec: u8,
+    pub charging_pay: u8,
     /// aid 要追加视频的 avid
     pub aid: Option<u64>,
     /// 是否开启精选评论，仅提交接口为app时可用
@@ -155,7 +155,7 @@ impl TemplateConfig {
             dolby: self.dolby,
             lossless_music: self.lossless_music,
             no_reprint: self.no_reprint,
-            open_elec: self.open_elec,
+            charging_pay: self.open_elec,
             aid: self.aid,
             up_selection_reply: self.up_selection_reply > 0,
             up_close_reply: self.up_close_reply > 0,
