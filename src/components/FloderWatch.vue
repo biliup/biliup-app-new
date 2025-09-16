@@ -23,8 +23,6 @@
                         <li>选择监控文件夹，按设定间隔自动检测新增视频文件</li>
                         <li>可设置文件大小稳定检测次数，确保文件完整后再添加</li>
                         <li>自动将符合大小要求且稳定的视频文件添加到当前模板</li>
-                        <li>支持设置最小文件大小过滤，跳过过小的文件</li>
-                        <li>支持定时开始功能，在指定时间自动开始监控</li>
                         <li v-if="settings.autoSubmit">
                             启用自动提交后，连续{{
                                 settings.maxEmptyChecks
@@ -145,6 +143,45 @@
                         </span>
                     </el-form-item>
 
+                    <el-form-item label="文件名过滤">
+                        <el-checkbox v-model="settings.enableFilenameFilter">
+                            启用正则表达式过滤
+                        </el-checkbox>
+                        <span class="setting-description">
+                            启用后，忽略符合正则表达式的文件名
+                        </span>
+                    </el-form-item>
+
+                    <el-form-item v-if="settings.enableFilenameFilter" label="正则表达式">
+                        <el-input
+                            v-model="settings.filenameRegex"
+                            placeholder="例如：^.*_temp\.|\.tmp$"
+                            size="small"
+                            style="width: 280px"
+                            :class="{ 'regex-error': regexError }"
+                        />
+                        <span class="setting-description">
+                            匹配要忽略的文件名的正则表达式，支持 JavaScript 正则语法
+                        </span>
+                        <div v-if="regexError" class="regex-error-msg">
+                            {{ regexError }}
+                        </div>
+                        <div v-if="settings.filenameRegex && !regexError" class="regex-test-section">
+                            <div class="test-input-group">
+                                <el-input
+                                    v-model="testFilename"
+                                    placeholder="输入文件名测试忽略结果，例如：video_temp.mp4"
+                                    size="small"
+                                    style="width: 200px; margin-right: 8px;"
+                                    clearable
+                                />
+                                <span class="test-result" :class="getTestResultClass()">
+                                    {{ getTestResult() }}
+                                </span>
+                            </div>
+                        </div>
+                    </el-form-item>
+
                     <el-form-item label="自动提交">
                         <el-checkbox v-model="settings.autoSubmit"> 启用 </el-checkbox>
                         <span class="setting-description">
@@ -209,6 +246,9 @@
                             <strong>监控配置：</strong>
                             {{ settings.includeSubfolders ? '包含子文件夹' : '仅当前文件夹' }}，
                             最小文件大小 {{ settings.minFileSize }}MB
+                            <span v-if="settings.enableFilenameFilter">
+                                ，正则忽略：{{ settings.filenameRegex || '未设置' }}
+                            </span>
                         </p>
                         <p v-if="settings.autoSubmit" class="auto-submit-info">
                             <strong>自动提交：</strong>连续
@@ -329,7 +369,9 @@ const settings = ref({
     autoSubmit: true, // 是否自动提交稿件
     delayedStart: false, // 是否启用定时开始
     startTime: null as string | null, // 开始时间
-    stableCheckCount: 3 // 文件大小稳定检测次数，默认3次
+    stableCheckCount: 3, // 文件大小稳定检测次数，默认3次
+    enableFilenameFilter: false, // 是否启用文件名正则过滤
+    filenameRegex: '' // 文件名过滤正则表达式
 })
 
 // 监控状态
@@ -351,6 +393,11 @@ const startCountdownTimer = ref<number | null>(null)
 // 文件大小跟踪：存储每个文件最近3次的大小记录
 const fileSizeHistory = ref<Map<string, number[]>>(new Map())
 
+// 正则表达式相关
+const regexError = ref('')
+const compiledRegex = ref<RegExp | null>(null)
+const testFilename = ref('')
+
 // 定时器
 let monitorTimer: number | null = null
 
@@ -361,6 +408,29 @@ watch(visible, (newValue, oldValue) => {
         settings.value.folderPaths = []
     }
 })
+
+// 监听正则表达式变化，验证正则表达式
+watch(
+    () => settings.value.filenameRegex,
+    (newRegex) => {
+        regexError.value = ''
+        compiledRegex.value = null
+
+        if (newRegex.trim()) {
+            try {
+                compiledRegex.value = new RegExp(newRegex, 'i') // 不区分大小写
+                regexError.value = ''
+            } catch (error) {
+                regexError.value = '正则表达式语法错误'
+                compiledRegex.value = null
+            }
+        } else {
+            // 正则表达式被清空时，也清空测试文件名
+            testFilename.value = ''
+        }
+    },
+    { immediate: true }
+)
 
 // 支持的视频格式
 const supportedFormats = [
@@ -432,6 +502,31 @@ const getFolderDisplayName = (folderPath: string): string => {
 const isSupportedVideoFormat = (filename: string): boolean => {
     const ext = filename.toLowerCase().substring(filename.lastIndexOf('.'))
     return supportedFormats.includes(ext)
+}
+
+// 获取测试文件名的匹配结果
+const getTestResult = (): string => {
+    if (!testFilename.value.trim()) {
+        return '请输入文件名进行测试'
+    }
+    
+    if (!compiledRegex.value) {
+        return '正则表达式无效'
+    }
+
+    const isMatch = compiledRegex.value.test(testFilename.value.trim())
+    return isMatch ? '✓ 将被忽略' : '✗ 将被监控'
+}
+
+// 获取测试结果的CSS类
+const getTestResultClass = (): string => {
+    if (!testFilename.value.trim() || !compiledRegex.value) {
+        return 'test-neutral'
+    }
+
+    const isMatch = compiledRegex.value.test(testFilename.value.trim())
+    // 逻辑反转：匹配的文件会被忽略（红色），不匹配的文件会被监控（绿色）
+    return isMatch ? 'test-no-match' : 'test-match'
 }
 
 // 获取当前视频文件名列表
@@ -524,6 +619,14 @@ const performCheck = async (): Promise<{
                 const fileSizeMB = fileSize / (1024 * 1024) // 转换为MB
 
                 const isVideoFile = isSupportedVideoFormat(entry.name)
+                const shouldIgnoreByRegex = settings.value.enableFilenameFilter 
+                    ? (compiledRegex.value ? compiledRegex.value.test(entry.name) : false)
+                    : false
+
+                if (shouldIgnoreByRegex) {
+                    console.log(`文件 ${entry.name} 被正则表达式忽略，跳过`)
+                    continue
+                }
 
                 if (isVideoFile) {
                     // 检查文件大小是否符合最小要求
@@ -701,7 +804,12 @@ const startMonitoringNow = async () => {
     const folderMsg = settings.value.includeSubfolders
         ? `开始监控文件夹 (${settings.value.folderPaths.length}个，包含子文件夹): ${settings.value.folderPaths.join(', ')}`
         : `开始监控文件夹 (${settings.value.folderPaths.length}个): ${settings.value.folderPaths.join(', ')}`
-    console.log(`${folderMsg}，最小文件大小: ${settings.value.minFileSize}MB`)
+    
+    let configMsg = `最小文件大小: ${settings.value.minFileSize}MB`
+    if (settings.value.enableFilenameFilter && settings.value.filenameRegex) {
+        configMsg += `，正则忽略: ${settings.value.filenameRegex}`
+    }
+    console.log(`${folderMsg}，${configMsg}`)
 
     // 立即执行第一次检测
     await performMonitoringCycle()
@@ -709,9 +817,16 @@ const startMonitoringNow = async () => {
     // 设置定时器，按配置的间隔检测
     monitorTimer = setInterval(performMonitoringCycle, settings.value.checkInterval * 1000)
 
-    const successMsg = settings.value.includeSubfolders
-        ? `开始监控文件夹（包含子文件夹，最小${settings.value.minFileSize}MB）`
-        : `开始监控文件夹（最小${settings.value.minFileSize}MB）`
+    let successMsg = settings.value.includeSubfolders
+        ? `开始监控文件夹（包含子文件夹，最小${settings.value.minFileSize}MB`
+        : `开始监控文件夹（最小${settings.value.minFileSize}MB`
+    
+    if (settings.value.enableFilenameFilter && settings.value.filenameRegex) {
+        successMsg += `，正则忽略）`
+    } else {
+        successMsg += `）`
+    }
+    
     utilsStore.showMessage(successMsg, 'success')
 }
 
@@ -1025,5 +1140,50 @@ onUnmounted(() => {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
+}
+
+/* 正则表达式相关样式 */
+.regex-error {
+    border-color: #f56c6c !important;
+}
+
+.regex-error-msg {
+    color: #f56c6c;
+    font-size: 12px;
+    margin-top: 4px;
+    line-height: 1.2;
+}
+
+/* 正则表达式测试相关样式 */
+.regex-test-section {
+    margin-top: 8px;
+}
+
+.test-input-group {
+    display: flex;
+    align-items: center;
+}
+
+.test-result {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.test-neutral {
+    color: #909399;
+    background: #f4f4f5;
+}
+
+.test-no-match {
+    color: #67c23a;
+    background: #f0f9ff;
+}
+
+.test-match {
+    color: #f56c6c;
+    background: #fef0f0;
 }
 </style>
