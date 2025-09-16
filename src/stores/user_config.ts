@@ -293,15 +293,6 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         // 保存配置
         await saveConfig()
 
-        // 更新本地状态
-        const userTemplate = userTemplates.value.find(ut => ut.user.uid === userUid)
-        if (userTemplate) {
-            userTemplate.templates.push({
-                name: templateName,
-                config: userConfig.templates[templateName]
-            })
-        }
-
         return true
     }
 
@@ -335,15 +326,6 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         // 保存配置
         await saveConfig()
-
-        // 更新本地状态
-        const userTemplate = userTemplates.value.find(ut => ut.user.uid === userUid)
-        if (userTemplate) {
-            const templateIndex = userTemplate.templates.findIndex(t => t.name === templateName)
-            if (templateIndex !== -1) {
-                userTemplate.templates.splice(templateIndex, 1)
-            }
-        }
 
         return true
     }
@@ -383,15 +365,6 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         // 保存配置
         await saveConfig()
-
-        // 更新本地状态
-        const userTemplate = userTemplates.value.find(ut => ut.user.uid === userUid)
-        if (userTemplate) {
-            const template = userTemplate.templates.find(t => t.name === templateName)
-            if (template) {
-                template.config = userConfig.templates[templateName]
-            }
-        }
 
         return true
     }
