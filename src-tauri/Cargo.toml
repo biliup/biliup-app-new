@@ -51,7 +51,7 @@ tracing-appender = "0.2"
 indexmap = "2"
 bytes="1"
 debug-ignore = "1.0"
-zip = "2.2"
+zip = "5"
 
 
 
