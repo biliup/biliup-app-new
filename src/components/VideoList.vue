@@ -290,6 +290,7 @@ const updatedVideos = computed(() => {
                 updatedVideo.speed = task.speed || 0
                 updatedVideo.progress = task.progress || 0
                 updatedVideo.finished_at = task.finished_at || 0
+                updatedVideo.cid = task.video.cid || 0
             } else {
                 updatedVideo.complete = false
                 updatedVideo.status = 'Waiting'
@@ -309,7 +310,8 @@ const updatedVideos = computed(() => {
             originalVideo.totalSize !== updatedVideo.totalSize ||
             originalVideo.speed !== updatedVideo.speed ||
             originalVideo.progress !== updatedVideo.progress ||
-            originalVideo.finished_at !== updatedVideo.finished_at
+            originalVideo.finished_at !== updatedVideo.finished_at ||
+            originalVideo.cid !== updatedVideo.cid
         ) {
             hasChanges = true
         }

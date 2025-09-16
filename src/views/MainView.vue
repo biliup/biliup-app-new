@@ -781,10 +781,7 @@
                                             </div>
                                         </el-form-item>
 
-                                        <el-form-item
-                                            v-if="currentForm.videos[0]?.cid"
-                                            label="加入合集"
-                                        >
+                                        <el-form-item label="加入合集">
                                             <SeasonView
                                                 v-model="currentForm.season_id"
                                                 v-model:section-id="currentForm.section_id"
