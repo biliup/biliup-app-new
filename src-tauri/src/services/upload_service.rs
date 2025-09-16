@@ -372,10 +372,8 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
     let (file_read_tx, mut file_read_rx) = mpsc::unbounded_channel();
     let (net_send_tx, mut net_send_rx) = mpsc::unbounded_channel();
     let mut uploaded = 0;
-    let mut video_fut = Box::pin(parcel.upload(
-        StatelessClient::default(),
-        limit as usize,
-        |vs| {
+    let mut video_fut = Box::pin(
+        parcel.upload(StatelessClient::default(), limit as usize, |vs| {
             vs.map(|chunk| {
                 // parcel.upload 将文件分成各个chunk
                 // 用ChunkedBuffer 将每个chunk再拆分成1MB一小段
@@ -388,8 +386,8 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
                 let chunked_buffer = ChunkedBuffer::new(chunk, net_send_tx.clone());
                 Ok((chunked_buffer, len))
             })
-        }
-    ));
+        }),
+    );
 
     let mut paused = false;
     loop {

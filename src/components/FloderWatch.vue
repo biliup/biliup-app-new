@@ -166,13 +166,16 @@
                         <div v-if="regexError" class="regex-error-msg">
                             {{ regexError }}
                         </div>
-                        <div v-if="settings.filenameRegex && !regexError" class="regex-test-section">
+                        <div
+                            v-if="settings.filenameRegex && !regexError"
+                            class="regex-test-section"
+                        >
                             <div class="test-input-group">
                                 <el-input
                                     v-model="testFilename"
                                     placeholder="输入文件名测试忽略结果，例如：video_temp.mp4"
                                     size="small"
-                                    style="width: 200px; margin-right: 8px;"
+                                    style="width: 200px; margin-right: 8px"
                                     clearable
                                 />
                                 <span class="test-result" :class="getTestResultClass()">
@@ -412,7 +415,7 @@ watch(visible, (newValue, oldValue) => {
 // 监听正则表达式变化，验证正则表达式
 watch(
     () => settings.value.filenameRegex,
-    (newRegex) => {
+    newRegex => {
         regexError.value = ''
         compiledRegex.value = null
 
@@ -509,7 +512,7 @@ const getTestResult = (): string => {
     if (!testFilename.value.trim()) {
         return '请输入文件名进行测试'
     }
-    
+
     if (!compiledRegex.value) {
         return '正则表达式无效'
     }
@@ -619,8 +622,10 @@ const performCheck = async (): Promise<{
                 const fileSizeMB = fileSize / (1024 * 1024) // 转换为MB
 
                 const isVideoFile = isSupportedVideoFormat(entry.name)
-                const shouldIgnoreByRegex = settings.value.enableFilenameFilter 
-                    ? (compiledRegex.value ? compiledRegex.value.test(entry.name) : false)
+                const shouldIgnoreByRegex = settings.value.enableFilenameFilter
+                    ? compiledRegex.value
+                        ? compiledRegex.value.test(entry.name)
+                        : false
                     : false
 
                 if (shouldIgnoreByRegex) {
@@ -804,7 +809,7 @@ const startMonitoringNow = async () => {
     const folderMsg = settings.value.includeSubfolders
         ? `开始监控文件夹 (${settings.value.folderPaths.length}个，包含子文件夹): ${settings.value.folderPaths.join(', ')}`
         : `开始监控文件夹 (${settings.value.folderPaths.length}个): ${settings.value.folderPaths.join(', ')}`
-    
+
     let configMsg = `最小文件大小: ${settings.value.minFileSize}MB`
     if (settings.value.enableFilenameFilter && settings.value.filenameRegex) {
         configMsg += `，正则忽略: ${settings.value.filenameRegex}`
@@ -820,13 +825,13 @@ const startMonitoringNow = async () => {
     let successMsg = settings.value.includeSubfolders
         ? `开始监控文件夹（包含子文件夹，最小${settings.value.minFileSize}MB`
         : `开始监控文件夹（最小${settings.value.minFileSize}MB`
-    
+
     if (settings.value.enableFilenameFilter && settings.value.filenameRegex) {
         successMsg += `，正则忽略）`
     } else {
         successMsg += `）`
     }
-    
+
     utilsStore.showMessage(successMsg, 'success')
 }
 
