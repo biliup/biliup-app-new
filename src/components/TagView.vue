@@ -48,6 +48,7 @@
             @blur="addTag(false)"
             @keydown="handleNewTagKeydown"
             @keydown.esc="cancelEditTag"
+            @focusout="removeKeyboardListener"
             class="tag-input-field"
         />
         <el-button v-else size="small" @click.stop="showTagInput" class="add-tag-btn">
@@ -326,6 +327,7 @@ const handleNewTagKeydown = (event: KeyboardEvent) => {
 
 // 键盘监听器管理
 let focusTimeout: number | null = null
+const keyboardListenerAdded = ref(false)
 
 const addKeyboardListener = () => {
     // 清除可能存在的延时器
@@ -333,7 +335,10 @@ const addKeyboardListener = () => {
         clearTimeout(focusTimeout)
         focusTimeout = null
     }
-    document.addEventListener('keydown', handleKeyboardNavigation)
+    if (!keyboardListenerAdded.value) {
+        document.addEventListener('keydown', handleKeyboardNavigation)
+        keyboardListenerAdded.value = true
+    }
 }
 
 const removeKeyboardListener = () => {
@@ -345,7 +350,10 @@ const removeKeyboardListener = () => {
 
         if (!isStillInTagContainer) {
             // 焦点确实离开了整个标签组件
-            document.removeEventListener('keydown', handleKeyboardNavigation)
+            if (keyboardListenerAdded.value) {
+                document.removeEventListener('keydown', handleKeyboardNavigation)
+                keyboardListenerAdded.value = false
+            }
             cancelSelect()
         }
         focusTimeout = null
