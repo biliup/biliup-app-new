@@ -54,8 +54,7 @@
         <el-button v-else size="small" @click.stop="showTagInput" class="add-tag-btn">
             + 添加标签
         </el-button>
-        <span v-if="inputVisible" class="tag-count">{{ modelValue.length }}/10</span>
-        <span v-else class="tag-count">{{ modelValue.length }}/10</span>
+        <span class="tag-count">{{ modelValue.length }}/10</span>
     </div>
 </template>
 
