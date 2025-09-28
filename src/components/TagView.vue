@@ -54,6 +54,8 @@
         <el-button v-else size="small" @click.stop="showTagInput" class="add-tag-btn">
             + 添加标签
         </el-button>
+        <span v-if="inputVisible" class="tag-count">{{ modelValue.length }}/10</span>
+        <span v-else class="tag-count">{{ modelValue.length }}/10</span>
     </div>
 </template>
 
@@ -112,6 +114,15 @@ const addTag = (keepInput = false) => {
             inputVisible.value = false
         }
         return true // 空内容视为成功
+    }
+
+    // 检查标签数量上限
+    if (props.modelValue.length >= 10) {
+        utilsStore.showMessage('最多只能添加10个标签', 'warning')
+        if (!keepInput) {
+            inputVisible.value = false
+        }
+        return false
     }
 
     if (props.modelValue.includes(tag)) {
@@ -472,6 +483,8 @@ defineExpose({
     flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+    position: relative;
+    min-height: 28px;
 }
 
 .tag-item {
@@ -511,5 +524,13 @@ defineExpose({
 
 .add-tag-btn {
     height: 24px;
+}
+
+.tag-count {
+    font-size: 11px;
+    color: var(--el-text-color-placeholder);
+    opacity: 0.7;
+    margin-left: 4px;
+    white-space: nowrap;
 }
 </style>
