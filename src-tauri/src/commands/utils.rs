@@ -225,6 +225,36 @@ pub async fn get_video_detail(
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
+    let true_desc = match app_data.clients.lock().await.get(&uid) {
+        Some(client) => {
+            match client
+                .bilibili
+                .client
+                .get(format!(
+                    "https://api.bilibili.com/x/web-interface/view?{vid}",
+                ))
+                .send()
+                .await
+            {
+                Ok(response) => match response.json::<Value>().await {
+                    Ok(res) => res["data"]["desc"].as_str().unwrap_or("").to_string(),
+                    Err(e) => {
+                        error!("解析稿件描述响应失败: {:?}", e);
+                        "".to_string()
+                    }
+                },
+                Err(e) => {
+                    error!("获取稿件描述请求失败: {:?}", e);
+                    "".to_string()
+                }
+            }
+        }
+        None => {
+            error!("用户未登录或不存在，无法获取稿件描述");
+            "".to_string()
+        }
+    };
+
     let proxy: Option<String> = app_data
         .config
         .lock()
@@ -243,7 +273,14 @@ pub async fn get_video_detail(
         .video_data(&vid, proxy.as_deref())
         .await
     {
-        Ok(res) => Ok(TemplateConfig::from_bilibili_res(res).map_err(|e| e.to_string())?),
+        Ok(res) => {
+            let mut template_config =
+                TemplateConfig::from_bilibili_res(res).map_err(|e| e.to_string())?;
+            if !true_desc.is_empty() {
+                template_config.desc = true_desc;
+            }
+            Ok(template_config)
+        }
         Err(e) => Err(e.to_string()),
     }
 }
