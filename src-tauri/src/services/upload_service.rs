@@ -348,21 +348,41 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
         .bilibili
         .clone();
 
-    info!("选择线路: {:?}", line);
-    let probe = if let Some(line) = line {
-        match line.as_str() {
-            "bda2" => line::bda2(),
-            "ws" => line::ws(),
-            "qn" => line::qn(),
-            "bldsa" => line::bldsa(),
-            "tx" => line::tx(),
-            "txa" => line::txa(),
-            "bda" => line::bda(),
-            "alia" => line::alia(),
-            _ => line::Probe::probe(&client.client).await?,
+    let retry_count = task_mutex.lock().await.retry_count();
+
+    // 定义可用的上传线路列表
+    let available_lines = [
+        "auto", "bda2", "ws", "qn", "bldsa", "tx", "txa", "bda", "alia",
+    ];
+
+    // 根据重试次数自动选择线路
+    let selected_line = if let Some(config_line) = &line {
+        // 如果用户配置了特定线路，第一次使用配置线路，之后重试时自动切换
+        if retry_count == 0 {
+            config_line.clone()
+        } else {
+            // 根据重试次数选择不同的线路，避免重复使用失败的线路
+            let line_index = (retry_count as usize) % available_lines.len();
+            available_lines[line_index].to_string()
         }
     } else {
-        line::Probe::probe(&client.client).await?
+        // 如果没有配置线路，根据重试次数自动选择
+        let line_index = (retry_count as usize) % available_lines.len();
+        available_lines[line_index].to_string()
+    };
+
+    info!("选择线路: {} (重试次数: {})", selected_line, retry_count);
+
+    let probe = match selected_line.as_str() {
+        "bda2" => line::bda2(),
+        "ws" => line::ws(),
+        "qn" => line::qn(),
+        "bldsa" => line::bldsa(),
+        "tx" => line::tx(),
+        "txa" => line::txa(),
+        "bda" => line::bda(),
+        "alia" => line::alia(),
+        _ => line::Probe::probe(&client.client).await?,
     };
 
     let filepath = PathBuf::from(&task_mutex.lock().await.video.path);

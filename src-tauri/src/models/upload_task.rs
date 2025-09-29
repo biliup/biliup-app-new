@@ -113,6 +113,10 @@ impl UploadTask {
         self.retry_count += 1;
     }
 
+    pub fn retry_count(&self) -> u32 {
+        self.retry_count
+    }
+
     pub fn update_progress(&mut self, progress: f64) {
         self.progress = progress.clamp(0.0, 100.0);
     }
