@@ -375,8 +375,6 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
 
     let probe = match selected_line.as_str() {
         "bda2" => line::bda2(),
-        "ws" => line::ws(),
-        "qn" => line::qn(),
         "bldsa" => line::bldsa(),
         "tx" => line::tx(),
         "txa" => line::txa(),

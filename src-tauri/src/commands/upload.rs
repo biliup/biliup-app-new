@@ -145,7 +145,7 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
             .get(&uid)
             .ok_or("用户未登录或不存在")?
             .bilibili
-            .submit_by_app(&studio, proxy.as_deref())
+            .submit_by_web(&studio, proxy.as_deref())
             .await
         {
             Ok(resp) => {
