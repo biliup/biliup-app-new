@@ -104,7 +104,8 @@ const showSectionSelect = computed(() => {
 
 const uniqueSections = (sections: SeasonSection[]) => {
     return sections.filter(
-        (section, index, list) => index === list.findIndex(item => item.section_id === section.section_id)
+        (section, index, list) =>
+            index === list.findIndex(item => item.section_id === section.section_id)
     )
 }
 
