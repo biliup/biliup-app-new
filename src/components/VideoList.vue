@@ -711,7 +711,13 @@ const handleSubmitVideos = () => {
 }
 
 .video-title-edit {
-    width: 150px;
+    flex: 1;
+    width: 100%;
+    min-width: 0;
+}
+
+.video-title-edit :deep(.el-input) {
+    width: 100%;
 }
 
 .video-status {

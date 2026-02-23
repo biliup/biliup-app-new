@@ -1,46 +1,83 @@
-<template>
-    <!-- 合集选择器：使用下拉框 -->
+﻿<template>
     <div class="season-selector">
-        <el-select
-            v-model="selectedSeasonKey"
-            placeholder="请选择合集"
-            clearable
-            filterable
-            :loading="isSearching"
-            class="season-select"
-            @change="handleSeasonChange"
-            @clear="clearSelection"
-        >
-            <el-option
-                v-for="season in allSeasons"
-                :key="`${season.season_id}-${season.section_id}`"
-                :label="season.title"
-                :value="`${season.season_id}-${season.section_id}`"
-                class="season-option"
+        <div class="season-select-row">
+            <el-select
+                v-model="selectedSeasonId"
+                placeholder="请选择合集"
+                clearable
+                filterable
+                :loading="isSearching"
+                :disabled="disabled"
+                class="season-select season-main-select"
+                @change="handleSeasonChange"
+                @clear="clearSelection"
             >
-                <div class="season-option-content">
-                    <span class="season-option-title">{{ season.title }}</span>
-                    <span class="season-option-id">ID: {{ season.season_id }}</span>
-                </div>
-            </el-option>
-        </el-select>
+                <el-option
+                    v-for="season in allSeasons"
+                    :key="season.season_id"
+                    :label="season.title"
+                    :value="season.season_id"
+                    class="season-option"
+                >
+                    <div class="season-option-content">
+                        <span class="season-option-title">{{ season.title }}</span>
+                        <span class="season-option-id">ID: {{ season.season_id }}</span>
+                    </div>
+                </el-option>
+            </el-select>
+
+            <el-select
+                v-if="showSectionSelect"
+                v-model="selectedSectionId"
+                placeholder="请选择小节"
+                filterable
+                :disabled="disabled"
+                class="season-select season-section-select"
+                @change="handleSectionChange"
+            >
+                <el-option
+                    v-for="section in selectedSeasonSections"
+                    :key="section.section_id"
+                    :label="section.title"
+                    :value="section.section_id"
+                    class="season-option"
+                >
+                    <div class="season-option-content">
+                        <span class="season-option-title">{{ section.title }}</span>
+                        <span class="season-option-id">ID: {{ section.section_id }}</span>
+                    </div>
+                </el-option>
+            </el-select>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useUtilsStore } from '../stores/utils'
 
-// 定义组件props
 interface Props {
-    modelValue?: number // season_id
-    sectionId?: number // section_id
+    modelValue?: number
+    sectionId?: number
     userUid?: number
+    disabled?: boolean
 }
 
-const props = withDefaults(defineProps<Props>(), {})
+interface SeasonSection {
+    section_id: number
+    title: string
+}
 
-// 定义emits
+interface SeasonOption {
+    season_id: number
+    title: string
+    sections: SeasonSection[]
+}
+
+const props = withDefaults(defineProps<Props>(), {
+    disabled: false
+})
+
 const emit = defineEmits<{
     'update:modelValue': [value: number | undefined]
     'update:sectionId': [value: number | undefined]
@@ -48,54 +85,122 @@ const emit = defineEmits<{
 
 const utilsStore = useUtilsStore()
 
-// 合集数据接口
-interface Season {
-    season_id: number
-    section_id: number
-    title: string
-}
-
-// 响应式数据
-const allSeasons = ref<Season[]>([])
+const allSeasons = ref<SeasonOption[]>([])
 const selectedSeasonId = ref<number | undefined>(props.modelValue)
 const selectedSectionId = ref<number | undefined>(props.sectionId)
-const selectedSeasonKey = ref<string | undefined>()
 const isSearching = ref(false)
 
-// 计算属性
+const selectedSeasonSections = computed(() => {
+    if (selectedSeasonId.value === undefined) {
+        return []
+    }
 
-// 处理合集选择变化
-const handleSeasonChange = (value: string) => {
-    if (!value) {
+    return allSeasons.value.find(item => item.season_id === selectedSeasonId.value)?.sections || []
+})
+
+const showSectionSelect = computed(() => {
+    return selectedSeasonId.value !== undefined && selectedSeasonSections.value.length > 0
+})
+
+const uniqueSections = (sections: SeasonSection[]) => {
+    return sections.filter(
+        (section, index, list) => index === list.findIndex(item => item.section_id === section.section_id)
+    )
+}
+
+const normalizeSeason = (season: any): SeasonOption | null => {
+    const seasonId = Number(season?.season_id)
+    if (!Number.isFinite(seasonId) || seasonId <= 0) {
+        return null
+    }
+
+    const seasonTitle = String(season?.title || `合集 ${seasonId}`)
+
+    let sections: SeasonSection[] = []
+    if (Array.isArray(season?.sections)) {
+        sections = season.sections
+            .map((section: any) => {
+                const sectionId = Number(section?.section_id)
+                if (!Number.isFinite(sectionId) || sectionId <= 0) {
+                    return null
+                }
+
+                return {
+                    section_id: sectionId,
+                    title: String(section?.title || `小节 ${sectionId}`)
+                }
+            })
+            .filter(Boolean) as SeasonSection[]
+    }
+
+    const defaultSectionId = Number(season?.section_id)
+    if (sections.length === 0 && Number.isFinite(defaultSectionId) && defaultSectionId > 0) {
+        sections = [
+            {
+                section_id: defaultSectionId,
+                title: '默认小节'
+            }
+        ]
+    }
+
+    return {
+        season_id: seasonId,
+        title: seasonTitle,
+        sections: uniqueSections(sections)
+    }
+}
+
+const syncSelectionWithCurrentSeason = () => {
+    if (selectedSeasonId.value === undefined) {
+        selectedSectionId.value = undefined
+        return
+    }
+
+    const season = allSeasons.value.find(item => item.season_id === selectedSeasonId.value)
+    if (!season) {
+        selectedSeasonId.value = undefined
+        selectedSectionId.value = undefined
+        return
+    }
+
+    if (season.sections.length === 0) {
+        selectedSectionId.value = undefined
+        return
+    }
+
+    const hasSelectedSection = season.sections.some(
+        section => section.section_id === selectedSectionId.value
+    )
+
+    if (!hasSelectedSection) {
+        selectedSectionId.value = season.sections[0].section_id
+    }
+}
+
+const clearSelection = () => {
+    selectedSeasonId.value = undefined
+    selectedSectionId.value = undefined
+}
+
+const handleSeasonChange = (value: number | undefined) => {
+    if (value === undefined || value === null) {
         clearSelection()
         return
     }
 
-    const [seasonId, sectionId] = value.split('-').map(Number)
-    selectedSeasonId.value = seasonId
-    selectedSectionId.value = sectionId
-    selectedSeasonKey.value = value
+    selectedSeasonId.value = value
+    const season = allSeasons.value.find(item => item.season_id === value)
+    selectedSectionId.value = season?.sections[0]?.section_id
 }
 
-// 清空选择
-const clearSelection = () => {
-    selectedSeasonId.value = undefined
-    selectedSectionId.value = undefined
-    selectedSeasonKey.value = undefined
+const handleSectionChange = (value: number | undefined) => {
+    selectedSectionId.value = value
 }
 
-// 更新selectedSeasonKey的辅助函数
-const updateSelectedKey = () => {
-    if (selectedSeasonId.value && selectedSectionId.value) {
-        selectedSeasonKey.value = `${selectedSeasonId.value}-${selectedSectionId.value}`
-    } else {
-        selectedSeasonKey.value = undefined
-    }
-}
-
-// 加载合集列表
 const loadSeasons = async () => {
     if (!props.userUid) {
+        allSeasons.value = []
+        clearSelection()
         return
     }
 
@@ -103,23 +208,28 @@ const loadSeasons = async () => {
         isSearching.value = true
         await utilsStore.getSeasonList(props.userUid)
 
-        if (utilsStore.seasonlist) {
-            allSeasons.value = utilsStore.seasonlist.map((season: any) => ({
-                season_id: season.season_id,
-                section_id: season.section_id,
-                title: season.title
-            }))
+        const seasonMap = new Map<number, SeasonOption>()
 
-            // 使用联合主键去重
-            allSeasons.value = allSeasons.value.filter(
-                (season, index, self) =>
-                    index ===
-                    self.findIndex(
-                        s => s.season_id === season.season_id && s.section_id === season.section_id
-                    )
-            )
-            updateSelectedKey()
+        for (const rawSeason of utilsStore.seasonlist || []) {
+            const season = normalizeSeason(rawSeason)
+            if (!season) {
+                continue
+            }
+
+            const current = seasonMap.get(season.season_id)
+            if (!current) {
+                seasonMap.set(season.season_id, season)
+                continue
+            }
+
+            current.sections = uniqueSections([...current.sections, ...season.sections])
+            if (!current.title && season.title) {
+                current.title = season.title
+            }
         }
+
+        allSeasons.value = Array.from(seasonMap.values())
+        syncSelectionWithCurrentSeason()
     } catch (error) {
         console.error('加载合集列表失败:', error)
         utilsStore.showMessage(`加载合集列表失败: ${error}`, 'error')
@@ -128,12 +238,11 @@ const loadSeasons = async () => {
     }
 }
 
-// 监听props变化
 watch(
     () => props.modelValue,
     newValue => {
         selectedSeasonId.value = newValue
-        updateSelectedKey()
+        syncSelectionWithCurrentSeason()
     }
 )
 
@@ -141,7 +250,7 @@ watch(
     () => props.sectionId,
     newValue => {
         selectedSectionId.value = newValue
-        updateSelectedKey()
+        syncSelectionWithCurrentSeason()
     }
 )
 
@@ -149,29 +258,28 @@ watch(
     () => props.userUid,
     () => {
         loadSeasons()
-    }
+    },
+    { immediate: true }
 )
 
-// 监听选中值变化，向父组件发送更新
-watch(selectedSeasonId, newValue => {
-    emit('update:modelValue', newValue)
+watch(selectedSeasonId, value => {
+    emit('update:modelValue', value)
 })
 
-watch(selectedSectionId, newValue => {
-    emit('update:sectionId', newValue)
-})
-
-// 组件挂载时加载数据
-onMounted(() => {
-    selectedSeasonId.value = props.modelValue
-    selectedSectionId.value = props.sectionId
-    loadSeasons()
+watch(selectedSectionId, value => {
+    emit('update:sectionId', value)
 })
 </script>
 
 <style scoped>
-/* 合集选择器样式 */
 .season-selector {
+    width: 100%;
+}
+
+.season-select-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     width: 100%;
 }
 
@@ -179,7 +287,16 @@ onMounted(() => {
     width: 100%;
 }
 
-/* 自定义下拉框选项样式 */
+.season-main-select {
+    flex: 1;
+    min-width: 0;
+}
+
+.season-section-select {
+    flex: 1;
+    min-width: 140px;
+}
+
 .season-option-content {
     display: flex;
     justify-content: space-between;
@@ -208,7 +325,6 @@ onMounted(() => {
     font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
 }
 
-/* 下拉框样式优化 */
 .season-select :deep(.el-input__inner) {
     border-radius: 6px;
     border-color: #dcdfe6;
@@ -228,7 +344,6 @@ onMounted(() => {
     color: #c0c4cc;
 }
 
-/* 下拉面板样式 */
 :deep(.el-select-dropdown) {
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -249,12 +364,10 @@ onMounted(() => {
     color: #409eff;
 }
 
-/* 加载状态 */
 :deep(.el-select .el-input.is-focus .el-input__inner) {
     border-color: #409eff;
 }
 
-/* 清空按钮 */
 :deep(.el-select .el-input__suffix .el-input__suffix-inner .el-select__caret) {
     transition: all 0.3s;
 }
@@ -263,8 +376,12 @@ onMounted(() => {
     transform: rotateZ(180deg);
 }
 
-/* 响应式设计 */
 @media (max-width: 768px) {
+    .season-select-row {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
     .season-option-title {
         font-size: 13px;
     }

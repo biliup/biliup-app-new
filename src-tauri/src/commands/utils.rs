@@ -196,12 +196,34 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, S
                     .ok_or("用户没有创建合集").unwrap_or(&season_vec).to_owned();
                 for season in &seasons {
                     let season_id = season["season"]["id"].as_u64().unwrap_or(0);
-                    let section_id = season["sections"]["sections"][0]["id"].as_u64().unwrap_or(0);
                     let season_title = season["season"]["title"].as_str().unwrap_or("").to_string();
+                    let mut sections_vec = Vec::new();
+
+                    if let Some(sections) = season["sections"]["sections"].as_array() {
+                        for section in sections {
+                            let section_id = section["id"].as_u64().unwrap_or(0);
+                            let section_title = section["title"]
+                                .as_str()
+                                .unwrap_or(&season_title)
+                                .to_string();
+
+                            sections_vec.push(serde_json::json!({
+                                "section_id": if section_id != 0 { Some(section_id) } else { None },
+                                "title": section_title,
+                            }));
+                        }
+                    }
+
+                    let default_section_id = sections_vec
+                        .first()
+                        .and_then(|item| item["section_id"].as_u64())
+                        .unwrap_or(0);
+
                     season_vec.push(serde_json::json!({
                         "season_id": if season_id != 0 { Some(season_id) } else { None },
-                        "section_id": if section_id != 0 { Some(section_id) } else { None },
+                        "section_id": if default_section_id != 0 { Some(default_section_id) } else { None },
                         "title": season_title,
+                        "sections": sections_vec,
                     }));
                 }
 
