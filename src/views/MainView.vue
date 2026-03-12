@@ -378,24 +378,38 @@
                                         </el-form-item>
 
                                         <el-form-item label="封面">
-                                            <div
-                                                class="cover-uploader"
-                                                action="#"
-                                                @click="handleCoverSelection"
-                                                v-loading="coverLoading"
-                                                :class="{ disabled: templateLoading }"
-                                            >
-                                                <img
-                                                    v-if="coverDisplayUrl && !coverLoading"
-                                                    :src="coverDisplayUrl"
-                                                    class="cover-image"
-                                                />
-                                                <el-icon
-                                                    v-else-if="!coverLoading"
-                                                    class="cover-uploader-icon"
+                                            <div class="cover-uploader-row">
+                                                <div
+                                                    class="cover-uploader"
+                                                    action="#"
+                                                    @click="handleCoverSelection"
+                                                    v-loading="coverLoading"
+                                                    :class="{ disabled: templateLoading }"
                                                 >
-                                                    <plus />
-                                                </el-icon>
+                                                    <img
+                                                        v-if="coverDisplayUrl && !coverLoading"
+                                                        :src="coverDisplayUrl"
+                                                        class="cover-image"
+                                                    />
+                                                    <el-icon
+                                                        v-else-if="!coverLoading"
+                                                        class="cover-uploader-icon"
+                                                    >
+                                                        <plus />
+                                                    </el-icon>
+                                                </div>
+
+                                                <el-button
+                                                    v-if="coverDisplayUrl && !coverLoading"
+                                                    class="cover-clear-btn-side"
+                                                    type="danger"
+                                                    size="small"
+                                                    @click.stop="clearCurrentCover"
+                                                    :disabled="templateLoading"
+                                                    title="清除封面"
+                                                >
+                                                    <el-icon><Close /></el-icon>
+                                                </el-button>
                                             </div>
                                         </el-form-item>
 
@@ -1003,7 +1017,8 @@ import {
     Edit,
     Setting,
     Refresh,
-    Delete
+    Delete,
+    Close
 } from '@element-plus/icons-vue'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { copyFile, remove } from '@tauri-apps/plugin-fs'
@@ -1352,7 +1367,7 @@ watch(
                 coverDisplayUrl.value = downloadedCover || ''
             } catch (error) {
                 console.error('Failed to download cover:', error)
-                coverDisplayUrl.value = ''
+                clearCurrentCover()
             } finally {
                 coverLoading.value = false
             }
@@ -1414,7 +1429,7 @@ watch(
                 coverDisplayUrl.value = downloadedCover || ''
             } catch (error) {
                 console.error('Failed to download cover:', error)
-                coverDisplayUrl.value = ''
+                clearCurrentCover()
             } finally {
                 coverLoading.value = false
             }
@@ -1876,16 +1891,15 @@ const getCardDisplayName = (cardType: string): string => {
     return cardNames[cardType] || cardType
 }
 
-const ensureTitleFromFirstVideo = () => {
+const ensureTitleFromFirstVideo = (videoTitle: string) => {
     if (!currentForm.value) return
 
     const currentTitle = (currentForm.value.title || '').trim()
     if (currentTitle) return
 
-    const firstVideo = currentForm.value.videos?.[0]
-    const firstVideoTitle = (firstVideo?.title || '').trim()
-    if (firstVideoTitle) {
-        currentForm.value.title = firstVideoTitle
+    const importedVideoTitle = (videoTitle || '').trim()
+    if (importedVideoTitle) {
+        currentForm.value.title = importedVideoTitle
     }
 }
 
@@ -1950,8 +1964,8 @@ const addVideoToCurrentForm = async (videoPath: string) => {
         complete: false
     })
 
-    // 标题为空时，自动使用第一个导入视频的文件名（去扩展名）作为标题
-    ensureTitleFromFirstVideo()
+    // 标题为空时，自动使用本次导入的第一个视频文件名（去扩展名）作为标题
+    ensureTitleFromFirstVideo(videoNameWOExtension)
 
     // 检查是否启用自动添加到上传队列
     if (userConfigStore.configRoot?.auto_upload && selectedUser.value) {
@@ -2550,6 +2564,22 @@ const selectCoverWithTauri = async () => {
         coverLoading.value = false
         templateLoading.value = false
     }
+}
+
+const clearCurrentCover = () => {
+    if (templateLoading.value) {
+        return
+    }
+
+    if (!currentForm.value || !currentTemplate.value) {
+        utilsStore.showMessage('请先选择用户和模板', 'warning')
+        return
+    }
+
+    currentTemplate.value.cover = ''
+    currentForm.value.cover = ''
+    coverDisplayUrl.value = ''
+    utilsStore.showMessage('已清除封面', 'success')
 }
 
 // 使用 Tauri 文件对话框选择视频文件
@@ -3735,6 +3765,12 @@ const checkUpdate = async () => {
     font-weight: 500;
 }
 
+.cover-uploader-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .cover-uploader {
     position: relative;
     display: inline-block;
@@ -3751,6 +3787,36 @@ const checkUpdate = async () => {
         box-shadow 0.3s ease;
     cursor: pointer;
     position: relative; /* 重要：让 z-index 生效 */
+}
+
+.cover-clear-btn-side {
+    align-self: center;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: #9ca3af;
+    padding: 0;
+    min-width: 14px;
+    width: 14px;
+    height: 14px;
+    line-height: 14px;
+    font-size: 12px;
+    transition: opacity 0.2s ease;
+}
+
+.cover-clear-btn-side:hover {
+    background: transparent;
+    border: none;
+    color: #ef4444;
+}
+
+.cover-clear-btn-side :deep(.el-icon) {
+    font-size: 12px;
+}
+
+.cover-uploader:hover + .cover-clear-btn-side {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .cover-uploader .cover-image:hover {
