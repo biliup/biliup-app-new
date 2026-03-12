@@ -1876,6 +1876,19 @@ const getCardDisplayName = (cardType: string): string => {
     return cardNames[cardType] || cardType
 }
 
+const ensureTitleFromFirstVideo = () => {
+    if (!currentForm.value) return
+
+    const currentTitle = (currentForm.value.title || '').trim()
+    if (currentTitle) return
+
+    const firstVideo = currentForm.value.videos?.[0]
+    const firstVideoTitle = (firstVideo?.title || '').trim()
+    if (firstVideoTitle) {
+        currentForm.value.title = firstVideoTitle
+    }
+}
+
 const addVideoToCurrentForm = async (videoPath: string) => {
     // 从路径中提取文件名
     const videoBaseName = videoPath.split(/[/\\]/).pop() || videoPath
@@ -1936,6 +1949,9 @@ const addVideoToCurrentForm = async (videoPath: string) => {
         path: videoPath, // 保存完整路径
         complete: false
     })
+
+    // 标题为空时，自动使用第一个导入视频的文件名（去扩展名）作为标题
+    ensureTitleFromFirstVideo()
 
     // 检查是否启用自动添加到上传队列
     if (userConfigStore.configRoot?.auto_upload && selectedUser.value) {
