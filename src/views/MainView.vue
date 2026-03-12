@@ -808,7 +808,7 @@
                                         </el-form-item>
 
                                         <el-form-item label="互动功能">
-                                            <div div class="checkbox-group">
+                                            <div class="interactive-setting-row">
                                                 <el-checkbox
                                                     v-model="currentForm.interactive"
                                                     :true-value="1"
@@ -817,6 +817,18 @@
                                                 >
                                                     开启
                                                 </el-checkbox>
+
+                                                <el-tooltip
+                                                    content="勾选后本视频将被投稿为互动视频，需在规定时间内完成剧情树配置，否则系统可能回收稿件。"
+                                                    placement="top"
+                                                >
+                                                    <el-icon
+                                                        class="interactive-help-icon"
+                                                        @click.stop="showInteractiveInfoDialog"
+                                                    >
+                                                        <QuestionFilled />
+                                                    </el-icon>
+                                                </el-tooltip>
                                             </div>
                                         </el-form-item>
 
@@ -1018,7 +1030,8 @@ import {
     Setting,
     Refresh,
     Delete,
-    Close
+    Close,
+    QuestionFilled
 } from '@element-plus/icons-vue'
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { copyFile, remove } from '@tauri-apps/plugin-fs'
@@ -1065,6 +1078,8 @@ const templateLoading = ref(false) // 模板加载状态锁
 
 // 视频状态对话框
 const showVideoStatusDialog = ref(false)
+const interactiveConfirmShown = ref<Record<string, boolean>>({})
+const interactiveDialogOpening = ref(false)
 
 // 组件引用
 const newTemplateRef = ref<InstanceType<typeof NewTemplete> | null>(null)
@@ -1436,6 +1451,78 @@ watch(
         } else {
             coverDisplayUrl.value = ''
             coverLoading.value = false
+        }
+    }
+)
+
+const getInteractiveConfirmKey = () => {
+    if (!selectedUser.value?.uid) return ''
+    return `${selectedUser.value.uid}`
+}
+
+const showInteractiveInfoDialog = async () => {
+    await ElMessageBox.alert(
+        '勾选后本视频将被投稿为互动视频，需在规定时间内完成剧情树配置，否则系统可能回收稿件。',
+        '互动功能说明',
+        {
+            confirmButtonText: '知道了',
+            type: 'warning'
+        }
+    )
+}
+
+const confirmInteractiveEnable = async () => {
+    let dontShowAgain = false
+
+    await ElMessageBox.confirm(
+        '<div class="interactive-confirm-dialog">' +
+            '<div class="interactive-confirm-dialog-text">互动视频需在规定时间内完成剧情树配置，否则系统可能回收稿件。</div>' +
+            '<label class="interactive-confirm-dialog-checkbox">' +
+            '<input id="interactive-dont-show-again" type="checkbox" />' +
+            '<span>以后不再显示提示</span>' +
+            '</label>' +
+            '</div>',
+        '确认',
+        {
+            confirmButtonText: '是，我已知晓',
+            cancelButtonText: '否',
+            type: 'warning',
+            dangerouslyUseHTMLString: true,
+            beforeClose: (action, _instance, done) => {
+                void _instance
+                if (action === 'confirm') {
+                    const checkbox = document.getElementById(
+                        'interactive-dont-show-again'
+                    ) as HTMLInputElement | null
+                    dontShowAgain = Boolean(checkbox?.checked)
+                }
+                done()
+            }
+        }
+    )
+
+    return dontShowAgain
+}
+
+watch(
+    () => currentForm.value?.interactive,
+    async (newValue, oldValue) => {
+        if (!currentForm.value || interactiveDialogOpening.value || templateLoading.value) return
+        if (newValue !== 1 || oldValue === 1) return
+
+        const key = getInteractiveConfirmKey()
+        if (!key || interactiveConfirmShown.value[key]) return
+
+        interactiveDialogOpening.value = true
+        try {
+            const dontShowAgain = await confirmInteractiveEnable()
+            if (dontShowAgain) {
+                interactiveConfirmShown.value[key] = true
+            }
+        } catch {
+            currentForm.value.interactive = 0
+        } finally {
+            interactiveDialogOpening.value = false
         }
     }
 )
@@ -3942,6 +4029,23 @@ const checkUpdate = async () => {
     gap: 12px;
 }
 
+.interactive-setting-row {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.interactive-help-icon {
+    color: #909399;
+    cursor: pointer;
+    font-size: 14px;
+    transition: color 0.2s ease;
+}
+
+.interactive-help-icon:hover {
+    color: #606266;
+}
+
 /* 表单提示样式 */
 .form-tip {
     font-size: 12px;
@@ -4247,5 +4351,27 @@ const checkUpdate = async () => {
 
 .category-popover .el-popover__arrow {
     display: none;
+}
+
+.interactive-confirm-dialog {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.interactive-confirm-dialog-text {
+    line-height: 1.6;
+}
+
+.interactive-confirm-dialog-checkbox {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.interactive-confirm-dialog-checkbox input {
+    cursor: pointer;
 }
 </style>
