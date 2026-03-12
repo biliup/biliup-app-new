@@ -4,19 +4,10 @@ use crate::{
     AppData,
     models::{TemplateConfig, UploadTask, VideoInfo},
 };
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
 use tracing::info;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UploadProgress {
-    pub task_id: String,
-    pub progress: f64,
-    pub status: String,
-    pub message: String,
-}
 
 /// 创建上传任务
 #[tauri::command]
