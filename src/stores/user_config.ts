@@ -7,6 +7,7 @@ interface User {
     uid: number
     username: string
     avatar: string
+    expired: boolean
 }
 
 // 模板配置接口

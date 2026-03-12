@@ -97,18 +97,27 @@
                             <div
                                 class="user-header"
                                 @click="handleUserExpansion(userTemplate.user.uid)"
-                                :class="{ disabled: templateLoading }"
+                                :class="{
+                                    disabled: templateLoading || userTemplate.user.expired,
+                                    'user-header-expired': userTemplate.user.expired
+                                }"
                             >
                                 <el-avatar
-                                    :src="`data:image/jpeg;base64,${userTemplate.user.avatar}`"
+                                    :src="
+                                        userTemplate.user.expired
+                                            ? ''
+                                            : `data:image/jpeg;base64,${userTemplate.user.avatar}`
+                                    "
                                     :size="24"
                                     class="user-avatar"
+                                    :class="{ 'user-avatar-expired': userTemplate.user.expired }"
                                 >
                                     {{ userTemplate.user.username.charAt(0) }}
                                 </el-avatar>
                                 <span class="user-name">{{ userTemplate.user.username }}</span>
                                 <el-icon
                                     class="config-icon"
+                                    :class="{ disabled: userTemplate.user.expired }"
                                     @click.stop="openUserConfig(userTemplate.user)"
                                     title="用户配置"
                                 >
@@ -150,7 +159,7 @@
                                             templateLoading &&
                                             selectedUser?.uid === userTemplate.user.uid &&
                                             currentTemplateName === template.name,
-                                        disabled: templateLoading
+                                        disabled: templateLoading || userTemplate.user.expired
                                     }"
                                     @click="
                                         handleTemplateSelection(userTemplate.user, template.name)
@@ -204,6 +213,22 @@
                                             </el-dropdown-menu>
                                         </template>
                                     </el-dropdown>
+                                </div>
+
+                                <div v-if="userTemplate.user.expired" class="expired-mask">
+                                    <div class="expired-mask-content">
+                                        <div class="expired-mask-title">账号登录状态已失效</div>
+                                        <div class="expired-mask-desc">
+                                            请重新登录后再编辑或选择模板
+                                        </div>
+                                        <el-button
+                                            type="primary"
+                                            size="small"
+                                            @click.stop="showLoginDialog = true"
+                                        >
+                                            重新登录
+                                        </el-button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1722,6 +1747,12 @@ const restoreTemplateSelection = async () => {
             return
         }
 
+        if (targetUser.expired) {
+            // 过期账号不恢复历史模板选择
+            localStorage.removeItem(TEMPLATE_SELECTION_KEY)
+            return
+        }
+
         // 检查模板是否仍然存在
         const userTemplate = userTemplates.value.find(ut => ut.user.uid === userUid)
         const template = userTemplate?.templates.find(t => t.name === templateName)
@@ -1994,6 +2025,13 @@ const toggleUserExpanded = (userUid: number) => {
 
 // 处理用户展开按钮点击 - 在模板加载时禁用
 const handleUserExpansion = (userUid: number) => {
+    const targetUser = loginUsers.value.find(user => user.uid === userUid)
+    if (targetUser?.expired) {
+        showLoginDialog.value = true
+        utilsStore.showMessage('该用户 Cookie 已过期，请重新登录', 'warning')
+        return
+    }
+
     if (!templateLoading.value) {
         toggleUserExpanded(userUid)
     }
@@ -2001,6 +2039,12 @@ const handleUserExpansion = (userUid: number) => {
 
 // 处理模板选择点击 - 在模板加载时禁用
 const handleTemplateSelection = (user: any, templateName: string) => {
+    if (user?.expired) {
+        showLoginDialog.value = true
+        utilsStore.showMessage('该用户 Cookie 已过期，请重新登录', 'warning')
+        return
+    }
+
     if (!templateLoading.value) {
         selectTemplate(user, templateName)
     }
@@ -2855,6 +2899,12 @@ const cancelEditTemplateName = () => {
 
 // 用户配置相关方法
 const openUserConfig = (user: any) => {
+    if (user?.expired) {
+        showLoginDialog.value = true
+        utilsStore.showMessage('该用户 Cookie 已过期，请重新登录', 'warning')
+        return
+    }
+
     configUser.value = user
     userConfigVisible.value = true
 }
@@ -3139,8 +3189,21 @@ const checkUpdate = async () => {
     background: #ecf5ff;
 }
 
+.user-header.user-header-expired {
+    background: #f3f4f6;
+}
+
+.user-header.user-header-expired:hover {
+    background: #f3f4f6;
+}
+
 .user-avatar {
     margin-right: 10px;
+}
+
+.user-avatar.user-avatar-expired {
+    background: #000000;
+    color: #ffffff;
 }
 
 .user-name {
@@ -3178,6 +3241,15 @@ const checkUpdate = async () => {
     color: #409eff;
 }
 
+.config-icon.disabled {
+    color: #c0c4cc;
+    cursor: not-allowed;
+}
+
+.config-icon.disabled:hover {
+    color: #c0c4cc;
+}
+
 .logout-icon {
     color: #f56c6c;
     cursor: pointer;
@@ -3202,6 +3274,7 @@ const checkUpdate = async () => {
 .template-list {
     margin-left: 20px;
     margin-top: 10px;
+    position: relative;
 }
 
 .template-item {
@@ -3351,6 +3424,42 @@ const checkUpdate = async () => {
 .template-item.template-loading .template-main {
     position: relative;
     z-index: 2;
+}
+
+.template-item.disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+    pointer-events: none;
+}
+
+.expired-mask {
+    position: absolute;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.45);
+    backdrop-filter: blur(1px);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 8;
+}
+
+.expired-mask-content {
+    text-align: center;
+    color: #ffffff;
+    padding: 12px;
+}
+
+.expired-mask-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+}
+
+.expired-mask-desc {
+    font-size: 12px;
+    opacity: 0.9;
+    margin-bottom: 10px;
 }
 
 @keyframes loading-shimmer {

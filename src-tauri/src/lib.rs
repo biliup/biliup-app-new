@@ -43,28 +43,42 @@ async fn startup() -> Result<AppData> {
             user_config.proxy.as_deref(),
         )?;
 
+        let fallback_uid = user_config.user.uid;
+        let fallback_name = user_config.user.name.clone();
+
         let myinfo = bilibili.my_info().await?;
-        let username = myinfo["data"]["name"].as_str().unwrap().to_owned();
         let uid = myinfo["data"]["mid"].as_u64().unwrap_or(0);
-        let avatar_url = myinfo["data"]["face"].as_str().unwrap_or("").to_string();
 
-        let avatar = bilibili
-            .client
-            .get(avatar_url)
-            .send()
-            .await
-            .map_err(|e| anyhow::anyhow!("获取用户头像失败: {}", e))?
-            .bytes()
-            .await?;
-        let avatar = encode_base64(&avatar);
+        if uid > 0 {
+            let username = myinfo["data"]["name"].as_str().unwrap_or("").to_owned();
+            let avatar_url = myinfo["data"]["face"].as_str().unwrap_or("").to_string();
+            let avatar = bilibili
+                .client
+                .get(avatar_url)
+                .send()
+                .await
+                .map_err(|e| anyhow::anyhow!("获取用户头像失败: {}", e))?
+                .bytes()
+                .await?;
+            let avatar = encode_base64(&avatar);
 
-        clients.insert(
-            uid,
-            MyClient {
-                bilibili,
-                user: User::new(uid, username, avatar),
-            },
-        );
+            clients.insert(
+                uid,
+                MyClient {
+                    bilibili,
+                    user: User::new(uid, username, avatar, false),
+                },
+            );
+        } else {
+            info!("用户 {} 的 Cookie 无效，跳过自动登录", fallback_name);
+            clients.insert(
+                fallback_uid,
+                MyClient {
+                    bilibili,
+                    user: User::new(fallback_uid, fallback_name, "".to_string(), true),
+                },
+            );
+        }
     }
 
     let max_curr = config.max_curr;

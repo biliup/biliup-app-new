@@ -18,18 +18,31 @@
             <template #dropdown>
                 <el-dropdown-menu class="user-dropdown-menu">
                     <div class="user-list-content">
-                        <div v-for="user in loginUsers" :key="user.uid" class="user-item">
+                        <div
+                            v-for="user in loginUsers"
+                            :key="user.uid"
+                            class="user-item"
+                            :class="{ 'user-item-expired': user.expired }"
+                        >
                             <div class="user-info">
                                 <el-avatar
-                                    :src="`data:image/jpeg;base64,${user.avatar}`"
+                                    :src="
+                                        user.expired ? '' : `data:image/jpeg;base64,${user.avatar}`
+                                    "
                                     :size="32"
                                     class="user-avatar"
+                                    :class="{ 'user-avatar-expired': user.expired }"
                                 >
                                     {{ user.username.charAt(0) }}
                                 </el-avatar>
                                 <div class="user-details">
                                     <div class="username">{{ user.username }}</div>
-                                    <div class="user-uid">UID: {{ user.uid }}</div>
+                                    <div class="user-uid">
+                                        UID: {{ user.uid }}
+                                        <span v-if="user.expired" class="expired-tip"
+                                            >Cookie已过期</span
+                                        >
+                                    </div>
                                 </div>
                             </div>
 
@@ -236,6 +249,16 @@ const handleLogout = async (user: any) => {
     border-bottom: none;
 }
 
+.user-item-expired {
+    background: #f3f4f6;
+    opacity: 0.88;
+}
+
+.user-item-expired .username,
+.user-item-expired .user-uid {
+    color: #6b7280;
+}
+
 .user-info {
     display: flex;
     align-items: center;
@@ -245,6 +268,11 @@ const handleLogout = async (user: any) => {
 
 .user-avatar {
     flex-shrink: 0;
+}
+
+.user-avatar-expired {
+    background: #000000;
+    color: #ffffff;
 }
 
 .user-details {
@@ -265,6 +293,12 @@ const handleLogout = async (user: any) => {
 .user-uid {
     font-size: 12px;
     color: #64748b;
+}
+
+.expired-tip {
+    margin-left: 6px;
+    color: #ef4444;
+    font-weight: 500;
 }
 
 .logout-button {

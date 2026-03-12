@@ -5,6 +5,7 @@ pub struct User {
     pub uid: u64,
     pub username: String,
     pub avatar: String,
+    pub expired: bool,
 }
 
 impl Default for User {
@@ -13,16 +14,18 @@ impl Default for User {
             uid: 0,
             username: "未登录用户".to_string(),
             avatar: "default_profile_picture.png".to_string(),
+            expired: false,
         }
     }
 }
 
 impl User {
-    pub fn new(uid: u64, username: String, avatar: String) -> Self {
+    pub fn new(uid: u64, username: String, avatar: String, expired: bool) -> Self {
         Self {
             uid,
             username,
             avatar,
+            expired,
         }
     }
 }

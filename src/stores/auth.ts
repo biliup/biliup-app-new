@@ -6,6 +6,7 @@ interface User {
     uid: number
     username: string
     avatar: string
+    expired: boolean
 }
 
 interface LoginResponse {

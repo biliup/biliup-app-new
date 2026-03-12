@@ -39,12 +39,21 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, Stri
         .map_err(|e| format!("二维码登录状态失败: {e}"))?;
 
     let proxy = app_data.auth_service.get_proxy();
-    app_data.config.lock().await.new_user_config(
-        user.uid,
-        user.username.clone(),
-        bilibili.login_info.clone(),
-        proxy,
-    );
+    {
+        let mut config_guard = app_data.config.lock().await;
+        if let Some(existing_config) = config_guard.config.get_mut(&user.uid) {
+            existing_config.user.name = user.username.clone();
+            existing_config.user.cookie = bilibili.login_info.clone();
+            existing_config.proxy = proxy;
+        } else {
+            config_guard.new_user_config(
+                user.uid,
+                user.username.clone(),
+                bilibili.login_info.clone(),
+                proxy,
+            );
+        }
+    }
 
     app_data.clients.lock().await.insert(
         user.uid,

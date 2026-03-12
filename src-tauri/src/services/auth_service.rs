@@ -159,7 +159,7 @@ impl AuthService {
             .await?;
         let avatar = encode_base64(&avatar);
         debug!("头像 URL: {}", avatar_url);
-        Ok((bilibili, User::new(uid, username, avatar)))
+        Ok((bilibili, User::new(uid, username, avatar, false)))
     }
 }
 
@@ -168,10 +168,28 @@ pub async fn validate_cookie_in_old_config(cookie: &PathBuf) -> Result<(BiliBili
 
     let myinfo = bilibili.my_info().await?;
 
-    let user_name = myinfo["data"]["name"].as_str().unwrap().to_owned();
     let uid = myinfo["data"]["mid"].as_u64().unwrap_or(0);
-    let avatar_url = myinfo["data"]["face"].as_str().unwrap_or("").to_string();
 
-    info!("验证用户: {}", user_name);
-    Ok((bilibili, User::new(uid, user_name, avatar_url)))
+    if uid > 0 {
+        let username = myinfo["data"]["name"].as_str().unwrap_or("").to_owned();
+        let avatar_url = myinfo["data"]["face"].as_str().unwrap_or("").to_string();
+        let avatar = bilibili
+            .client
+            .get(avatar_url)
+            .send()
+            .await
+            .map_err(|e| anyhow::anyhow!("获取用户头像失败: {}", e))?
+            .bytes()
+            .await?;
+        let avatar = encode_base64(&avatar);
+
+        info!("验证用户: {}", username);
+        Ok((bilibili, User::new(uid, username, avatar, false)))
+    } else {
+        info!("旧配置中的用户cookie失效");
+        Ok((
+            bilibili,
+            User::new(uid, "未知过期用户".to_owned(), String::new(), true),
+        ))
+    }
 }
