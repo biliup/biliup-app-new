@@ -189,7 +189,8 @@ impl CompatibilityConverter {
                 e
             })?;
 
-        let template_order: Vec<String> = template.keys().cloned().collect();
+        let mut template_order: Vec<String> = template.keys().cloned().collect();
+        template_order.sort_unstable();
         let template_updated_at: HashMap<String, u64> =
             template_order.iter().map(|k| (k.clone(), 0)).collect();
         let user_config = UserConfig {
