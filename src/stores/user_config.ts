@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { useAuthStore } from './auth'
 
 // 用户信息接口
 interface User {
@@ -98,9 +99,10 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         }
     )
 
+    const authStore = useAuthStore()
     const configRoot = ref<ConfigRoot | null>(null)
     const configBase = ref<ConfigRoot | null>(null)
-    const loginUsers = ref<User[]>([]) // 存储登录用户列表
+    const loginUsers = computed(() => authStore.loginUsers)
     const loading = ref(false)
     const error = ref<string | null>(null)
 
@@ -318,14 +320,11 @@ export const useUserConfigStore = defineStore('userConfig', () => {
     }
 
     // 构建用户模板列表 - 现在只需要设置登录用户
-    const buildUserTemplates = async (users: User[]) => {
+    const buildUserTemplates = async (_users: User[]) => {
         // 确保配置已加载
         if (!configRoot.value) {
             await loadConfig()
         }
-
-        // 设置登录用户列表，userTemplates 会自动通过计算属性更新
-        loginUsers.value = users
 
         return userTemplatesWithExpandedState.value
     }
