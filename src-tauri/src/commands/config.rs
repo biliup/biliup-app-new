@@ -14,6 +14,13 @@ pub struct TemplateCommandResponse {
     pub template: Option<TemplateConfig>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TemplateOrderCommandResponse {
+    pub success: bool,
+    pub message: String,
+    pub template_order: Vec<String>,
+}
+
 /// 加载配置文件
 #[tauri::command]
 pub async fn load_config(app: AppHandle) -> Result<ConfigRoot, String> {
@@ -155,5 +162,34 @@ pub async fn add_user_template(
         success: true,
         message: "模板添加成功".to_string(),
         template: Some(added),
+    })
+}
+
+#[tauri::command]
+pub async fn save_template_order(
+    app: AppHandle,
+    uid: u64,
+    template_order: Vec<String>,
+) -> Result<TemplateOrderCommandResponse, String> {
+    let app_lock = app.state::<Mutex<AppData>>();
+    let app_data = app_lock.lock().await;
+
+    let mut config = app_data.config.lock().await;
+    config
+        .save_template_order(uid, template_order)
+        .map_err(|e| format!("保存模板顺序失败: {e}"))?;
+
+    let saved_order = config
+        .config
+        .get(&uid)
+        .map(|user_config| user_config.template_order.clone())
+        .unwrap_or_default();
+
+    info!("保存模板顺序: uid={}", uid);
+
+    Ok(TemplateOrderCommandResponse {
+        success: true,
+        message: "模板顺序保存成功".to_string(),
+        template_order: saved_order,
     })
 }

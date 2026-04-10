@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, fs, path::PathBuf};
 use tracing::{debug, info};
 
+fn current_timestamp() -> u64 {
+    chrono::Utc::now().timestamp().max(0) as u64
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserInfo {
     pub uid: u64,
@@ -118,6 +122,10 @@ pub struct UserConfig {
     pub auto_edit: u8,
     #[serde(default)]
     pub templates: HashMap<String, TemplateConfig>, // 匹配config.json中的"templates"字段
+    #[serde(default)]
+    pub template_order: Vec<String>,
+    #[serde(default)]
+    pub template_updated_at: HashMap<String, u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -141,10 +149,14 @@ fn default_log_level() -> String {
 impl ConfigRoot {
     pub fn from_file(path: &PathBuf) -> Result<Self> {
         let json_content = fs::read_to_string(path)?;
-        Ok(serde_json::from_str(&json_content)?)
+        let mut config: Self = serde_json::from_str(&json_content)?;
+        config.normalize_template_metadata();
+        Ok(config)
     }
 
-    pub fn save_to_file(&self, path: &PathBuf) -> Result<()> {
+    pub fn save_to_file(&mut self, path: &PathBuf) -> Result<()> {
+        self.normalize_template_metadata();
+
         // 确保父目录存在
         if let Some(parent) = path.parent()
             && !parent.exists()
@@ -155,6 +167,12 @@ impl ConfigRoot {
         let json_content = serde_json::to_string_pretty(self)?;
         fs::write(path, json_content)?;
         Ok(())
+    }
+
+    pub fn normalize_template_metadata(&mut self) {
+        for user_config in self.config.values_mut() {
+            user_config.normalize_template_metadata();
+        }
     }
 
     pub fn new_user_config(
@@ -177,6 +195,8 @@ impl ConfigRoot {
             watermark: 0,
             auto_edit: 0,
             templates: HashMap::new(),
+            template_order: Vec::new(),
+            template_updated_at: HashMap::new(),
         };
         self.config.insert(uid, user_config);
 
@@ -185,6 +205,8 @@ impl ConfigRoot {
 
     pub fn add_user_config(&mut self, config: UserConfig) -> &Self {
         let uid = config.user.uid;
+        let mut config = config;
+        config.normalize_template_metadata();
         self.config.insert(uid, config);
 
         self
@@ -249,13 +271,24 @@ impl ConfigRoot {
         template: TemplateConfig,
     ) -> TemplateConfig {
         if let Some(user_config) = self.config.get_mut(&uid) {
-            if let Some(old) = user_config
+            let template_name = template_name.to_owned();
+            let existed = user_config.templates.contains_key(&template_name);
+            let old = user_config
                 .templates
-                .insert(template_name.to_owned(), template.clone())
-            {
-                #[cfg(debug_assertions)]
-                self.compare_templates(&old, &template);
+                .insert(template_name.clone(), template.clone());
+            #[cfg(debug_assertions)]
+            if let Some(ref old_val) = old {
+                // Avoid borrow conflict by not using self here
+                Self::compare_templates_debug(old_val, &template);
             }
+
+            if !existed {
+                user_config.template_order.push(template_name.clone());
+            }
+            user_config
+                .template_updated_at
+                .insert(template_name, current_timestamp());
+            user_config.normalize_template_metadata();
         }
 
         template
@@ -267,9 +300,27 @@ impl ConfigRoot {
         template_name: &str,
     ) -> Option<TemplateConfig> {
         if let Some(user_config) = self.config.get_mut(&uid) {
-            user_config.templates.remove(template_name)
+            let removed = user_config.templates.remove(template_name);
+            if removed.is_some() {
+                user_config
+                    .template_order
+                    .retain(|name| name != template_name);
+                user_config.template_updated_at.remove(template_name);
+            }
+            user_config.normalize_template_metadata();
+            removed
         } else {
             None
+        }
+    }
+
+    pub fn save_template_order(&mut self, uid: u64, template_order: Vec<String>) -> Result<&Self> {
+        if let Some(user_config) = self.config.get_mut(&uid) {
+            user_config.template_order = template_order;
+            user_config.normalize_template_metadata();
+            Ok(self)
+        } else {
+            Err(anyhow::anyhow!("用户配置不存在"))
         }
     }
 
@@ -284,7 +335,7 @@ impl ConfigRoot {
     }
 
     #[cfg(debug_assertions)]
-    fn compare_templates(&self, old: &TemplateConfig, new: &TemplateConfig) {
+    fn compare_templates_debug(old: &TemplateConfig, new: &TemplateConfig) {
         macro_rules! compare_field {
             ($field:ident, $old:expr, $new:expr) => {
                 if $old.$field != $new.$field {
@@ -346,6 +397,29 @@ impl ConfigRoot {
         }
 
         compare_template_fields(old, new);
+    }
+}
+
+impl UserConfig {
+    pub fn normalize_template_metadata(&mut self) {
+        let mut seen = std::collections::HashSet::new();
+        self.template_order
+            .retain(|name| self.templates.contains_key(name) && seen.insert(name.clone()));
+
+        for template_name in self.templates.keys() {
+            if !self.template_order.iter().any(|name| name == template_name) {
+                self.template_order.push(template_name.clone());
+            }
+        }
+
+        self.template_updated_at
+            .retain(|name, _| self.templates.contains_key(name));
+
+        for template_name in self.templates.keys() {
+            self.template_updated_at
+                .entry(template_name.clone())
+                .or_insert(0);
+        }
     }
 }
 

@@ -137,6 +137,37 @@
 
                             <!-- 模板列表 -->
                             <div class="template-list" v-show="userTemplate.expanded">
+                                <div class="template-list-toolbar">
+                                    <span class="template-list-hint">拖动可调整顺序</span>
+                                    <el-dropdown
+                                        trigger="click"
+                                        :disabled="templateLoading || userTemplate.user.expired"
+                                        @command="
+                                            (command: string) =>
+                                                handleTemplateSortCommand(
+                                                    userTemplate.user.uid,
+                                                    command
+                                                )
+                                        "
+                                    >
+                                        <el-button link size="small" class="template-sort-btn">
+                                            排序
+                                        </el-button>
+                                        <template #dropdown>
+                                            <el-dropdown-menu>
+                                                <el-dropdown-item command="name-asc"
+                                                    >名称正序</el-dropdown-item
+                                                >
+                                                <el-dropdown-item command="name-desc"
+                                                    >名称倒序</el-dropdown-item
+                                                >
+                                                <el-dropdown-item command="recent-saved"
+                                                    >最近保存</el-dropdown-item
+                                                >
+                                            </el-dropdown-menu>
+                                        </template>
+                                    </el-dropdown>
+                                </div>
                                 <div
                                     v-for="template in userTemplate.templates"
                                     :key="`${userTemplate.user.uid}-${template.name}`"
@@ -159,11 +190,31 @@
                                             templateLoading &&
                                             selectedUser?.uid === userTemplate.user.uid &&
                                             currentTemplateName === template.name,
-                                        disabled: templateLoading || userTemplate.user.expired
+                                        disabled: templateLoading || userTemplate.user.expired,
+                                        dragging:
+                                            draggingTemplateKey ===
+                                            getTemplateKey(userTemplate.user.uid, template.name),
+                                        'drag-over':
+                                            dragOverTemplateKey ===
+                                            getTemplateKey(userTemplate.user.uid, template.name)
                                     }"
+                                    :draggable="isTemplateDragEnabled(userTemplate)"
                                     @click="
                                         handleTemplateSelection(userTemplate.user, template.name)
                                     "
+                                    @dragstart="
+                                        handleTemplateDragStart(
+                                            userTemplate.user.uid,
+                                            template.name
+                                        )
+                                    "
+                                    @dragover.prevent="
+                                        handleTemplateDragOver(userTemplate.user.uid, template.name)
+                                    "
+                                    @drop.prevent="
+                                        handleTemplateDrop(userTemplate.user.uid, template.name)
+                                    "
+                                    @dragend="handleTemplateDragEnd"
                                 >
                                     <div class="template-main">
                                         <div class="template-name">
@@ -829,7 +880,9 @@
                                                         size="small"
                                                         circle
                                                         class="season-refresh-btn"
-                                                        :disabled="templateLoading || !selectedUser?.uid"
+                                                        :disabled="
+                                                            templateLoading || !selectedUser?.uid
+                                                        "
                                                         @click="refreshSeasonList"
                                                     >
                                                         <el-icon><refresh /></el-icon>
@@ -1073,6 +1126,9 @@ const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
 const templateLoading = ref(false) // 模板加载状态锁
+const draggingTemplateKey = ref('')
+const dragOverTemplateKey = ref('')
+const skipNextTemplateSelection = ref(false)
 
 // 视频状态对话框
 const showVideoStatusDialog = ref(false)
@@ -2155,6 +2211,11 @@ const handleUserExpansion = (userUid: number) => {
 
 // 处理模板选择点击 - 在模板加载时禁用
 const handleTemplateSelection = (user: any, templateName: string) => {
+    if (skipNextTemplateSelection.value) {
+        skipNextTemplateSelection.value = false
+        return
+    }
+
     if (user?.expired) {
         showLoginDialog.value = true
         utilsStore.showMessage('该用户 Cookie 已过期，请重新登录', 'warning')
@@ -2164,6 +2225,103 @@ const handleTemplateSelection = (user: any, templateName: string) => {
     if (!templateLoading.value) {
         selectTemplate(user, templateName)
     }
+}
+
+const isTemplateDragEnabled = (userTemplate: any) => {
+    return !templateLoading.value && !userTemplate.user.expired && userTemplate.templates.length > 1
+}
+
+const handleTemplateSortCommand = async (userUid: number, command: string) => {
+    if (templateLoading.value) {
+        return
+    }
+
+    try {
+        if (command !== 'name-asc' && command !== 'name-desc' && command !== 'recent-saved') {
+            return
+        }
+
+        await userConfigStore.sortUserTemplates(userUid, command)
+        utilsStore.showMessage('模板顺序已更新', 'success')
+    } catch (error) {
+        console.error('模板排序失败:', error)
+        utilsStore.showMessage(`模板排序失败: ${error}`, 'error')
+    }
+}
+
+const handleTemplateDragStart = (userUid: number, templateName: string) => {
+    draggingTemplateKey.value = getTemplateKey(userUid, templateName)
+    dragOverTemplateKey.value = ''
+}
+
+const handleTemplateDragOver = (userUid: number, templateName: string) => {
+    if (!draggingTemplateKey.value) {
+        return
+    }
+
+    const currentKey = getTemplateKey(userUid, templateName)
+    if (draggingTemplateKey.value === currentKey) {
+        return
+    }
+
+    const [draggingUid] = draggingTemplateKey.value.split('-', 1)
+    if (Number(draggingUid) !== userUid) {
+        return
+    }
+
+    dragOverTemplateKey.value = currentKey
+}
+
+const handleTemplateDrop = async (userUid: number, targetTemplateName: string) => {
+    if (!draggingTemplateKey.value) {
+        return
+    }
+
+    const draggingKey = draggingTemplateKey.value
+    const dragPrefix = `${userUid}-`
+    if (!draggingKey.startsWith(dragPrefix)) {
+        handleTemplateDragEnd()
+        return
+    }
+
+    const draggedTemplateName = draggingKey.slice(dragPrefix.length)
+    handleTemplateDragEnd()
+
+    if (!draggedTemplateName || draggedTemplateName === targetTemplateName) {
+        return
+    }
+
+    const orderedTemplates = userConfigStore
+        .getUserTemplates(userUid)
+        .map(template => template.name)
+    const fromIndex = orderedTemplates.indexOf(draggedTemplateName)
+    const toIndex = orderedTemplates.indexOf(targetTemplateName)
+
+    if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) {
+        return
+    }
+
+    const nextOrder = [...orderedTemplates]
+    const [movedTemplate] = nextOrder.splice(fromIndex, 1)
+    nextOrder.splice(toIndex, 0, movedTemplate)
+
+    try {
+        skipNextTemplateSelection.value = true
+        await userConfigStore.reorderUserTemplates(userUid, nextOrder)
+        utilsStore.showMessage('模板顺序已保存', 'success')
+    } catch (error) {
+        console.error('拖动排序失败:', error)
+        utilsStore.showMessage(`拖动排序失败: ${error}`, 'error')
+    } finally {
+        window.setTimeout(() => {
+            skipNextTemplateSelection.value = false
+        }, 0)
+    }
+}
+
+const handleTemplateDragEnd = () => {
+    draggingTemplateKey.value = ''
+    dragOverTemplateKey.value = ''
 }
 
 // 处理模板名编辑点击 - 在模板加载时禁用
@@ -2473,18 +2631,7 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                     return
                 }
 
-                // 获取原模板配置
-                const originalTemplate = userConfigStore.getUserTemplate(user.uid, template.name)
-                if (!originalTemplate) {
-                    utilsStore.showMessage('原模板不存在', 'error')
-                    return
-                }
-
-                // 先添加新模板
-                await userConfigStore.addUserTemplate(user.uid, trimmedName, originalTemplate)
-
-                // 再删除原模板
-                await userConfigStore.removeUserTemplate(user.uid, template.name)
+                await userConfigStore.renameUserTemplate(user.uid, template.name, trimmedName)
 
                 // 更新当前选择
                 if (
@@ -3007,32 +3154,21 @@ const saveTemplateName = async () => {
     }
 
     try {
-        // 检查是否已存在同名模板
         const existingTemplate = userConfigStore.getUserTemplate(selectedUser.value.uid, newName)
         if (existingTemplate) {
             utilsStore.showMessage('该名称的模板已存在，请使用其他名称', 'error')
             return
         }
 
-        // 获取原模板配置
-        const originalTemplate = userConfigStore.getUserTemplate(
+        await userConfigStore.renameUserTemplate(
             selectedUser.value.uid,
-            currentTemplateName.value
+            currentTemplateName.value,
+            newName
         )
-        if (!originalTemplate) {
-            utilsStore.showMessage('原模板不存在', 'error')
-            cancelEditTemplateName()
-            return
-        }
-
-        // 先添加新模板
-        await userConfigStore.addUserTemplate(selectedUser.value.uid, newName, originalTemplate)
-
-        // 再删除原模板
-        await userConfigStore.removeUserTemplate(selectedUser.value.uid, currentTemplateName.value)
 
         // 更新当前选择
         currentTemplateName.value = newName
+        saveTemplateSelection(selectedUser.value.uid, newName)
 
         utilsStore.showMessage('模板重命名成功', 'success')
         isEditingTemplateName.value = false
@@ -3428,6 +3564,23 @@ const checkUpdate = async () => {
     position: relative;
 }
 
+.template-list-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding-right: 4px;
+}
+
+.template-list-hint {
+    font-size: 12px;
+    color: #909399;
+}
+
+.template-sort-btn {
+    padding: 0;
+}
+
 .template-item {
     display: flex;
     align-items: center;
@@ -3441,6 +3594,15 @@ const checkUpdate = async () => {
 
 .template-item:hover {
     background: #f0f9ff;
+}
+
+.template-item.dragging {
+    opacity: 0.45;
+}
+
+.template-item.drag-over {
+    background: #f0f9ff;
+    box-shadow: inset 0 0 0 1px #409eff;
 }
 
 .template-item.active {

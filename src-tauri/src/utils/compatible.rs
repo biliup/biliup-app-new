@@ -189,6 +189,9 @@ impl CompatibilityConverter {
                 e
             })?;
 
+        let template_order: Vec<String> = template.keys().cloned().collect();
+        let template_updated_at: HashMap<String, u64> =
+            template_order.iter().map(|k| (k.clone(), 0)).collect();
         let user_config = UserConfig {
             user: UserInfo {
                 uid: user.uid,
@@ -201,6 +204,8 @@ impl CompatibilityConverter {
             watermark: 0,
             auto_edit: 0,
             templates: template,
+            template_order,
+            template_updated_at,
         };
 
         let mut config_root = ConfigRoot::default();

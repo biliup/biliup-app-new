@@ -51,6 +51,8 @@ interface UserConfig {
     watermark: number
     auto_edit: number
     templates: Record<string, TemplateConfig> // 模板名 -> 模板配置
+    template_order: string[]
+    template_updated_at: Record<string, number>
 }
 
 // 配置根接口
@@ -65,7 +67,7 @@ interface ConfigRoot {
 // 用户模板组合接口
 interface UserWithTemplates {
     user: User
-    templates: Array<{ name: string; config: TemplateConfig }>
+    templates: Array<{ name: string; config: TemplateConfig; updatedAt: number }>
     expanded: boolean // 是否展开
 }
 
@@ -75,12 +77,117 @@ interface TemplateCommandResponse {
     template?: TemplateConfig
 }
 
+interface TemplateOrderCommandResponse {
+    success: boolean
+    message: string
+    template_order: string[]
+}
+
 export const useUserConfigStore = defineStore('userConfig', () => {
+    const templateNameCollator = new Intl.Collator(
+        ['zh-Hans-u-co-pinyin', 'zh-CN-u-co-pinyin', 'zh-CN', 'en'],
+        {
+            numeric: true,
+            sensitivity: 'base'
+        }
+    )
+
     const configRoot = ref<ConfigRoot | null>(null)
     const configBase = ref<ConfigRoot | null>(null)
     const loginUsers = ref<User[]>([]) // 存储登录用户列表
     const loading = ref(false)
     const error = ref<string | null>(null)
+
+    const getCurrentTimestamp = () => Math.floor(Date.now() / 1000)
+
+    const ensureUserConfigTemplateMetadata = (userConfig: UserConfig) => {
+        userConfig.template_order = Array.isArray(userConfig.template_order)
+            ? userConfig.template_order.filter(name => typeof name === 'string')
+            : []
+        userConfig.template_updated_at = userConfig.template_updated_at || {}
+
+        userConfig.template_order = [...new Set(userConfig.template_order)]
+
+        userConfig.template_order = userConfig.template_order.filter(
+            name => userConfig.templates[name]
+        )
+
+        for (const templateName of Object.keys(userConfig.templates)) {
+            if (!userConfig.template_order.includes(templateName)) {
+                userConfig.template_order.push(templateName)
+            }
+
+            if (typeof userConfig.template_updated_at[templateName] !== 'number') {
+                userConfig.template_updated_at[templateName] = 0
+            }
+        }
+
+        for (const templateName of Object.keys(userConfig.template_updated_at)) {
+            if (!userConfig.templates[templateName]) {
+                delete userConfig.template_updated_at[templateName]
+            }
+        }
+    }
+
+    const normalizeConfigRoot = (configData: ConfigRoot | null) => {
+        if (!configData?.config) {
+            return
+        }
+
+        for (const userConfig of Object.values(configData.config)) {
+            ensureUserConfigTemplateMetadata(userConfig)
+        }
+    }
+
+    const getOrderedTemplateEntries = (userConfig?: UserConfig | null) => {
+        if (!userConfig?.templates) {
+            return []
+        }
+
+        ensureUserConfigTemplateMetadata(userConfig)
+
+        return userConfig.template_order
+            .filter(name => userConfig.templates[name])
+            .map(name => ({
+                name,
+                config: userConfig.templates[name],
+                updatedAt: userConfig.template_updated_at[name] || 0
+            }))
+    }
+
+    const updateTemplateOrderLocally = (userUid: number, templateOrder: string[]) => {
+        const userConfig = configRoot.value?.config[userUid]
+        if (!userConfig) {
+            throw new Error('用户配置不存在')
+        }
+
+        ensureUserConfigTemplateMetadata(userConfig)
+        userConfig.template_order = templateOrder.filter(name => userConfig.templates[name])
+        ensureUserConfigTemplateMetadata(userConfig)
+    }
+
+    const persistTemplateOrder = async (userUid: number, templateOrder: string[]) => {
+        updateTemplateOrderLocally(userUid, templateOrder)
+
+        const userConfig = configRoot.value?.config[userUid]
+        if (!userConfig) {
+            throw new Error('用户配置不存在')
+        }
+
+        const response: TemplateOrderCommandResponse = await invoke('save_template_order', {
+            uid: userUid,
+            templateOrder: userConfig.template_order
+        })
+
+        if (!response?.success) {
+            throw new Error(response?.message || '保存模板顺序失败')
+        }
+
+        userConfig.template_order = response.template_order
+        ensureUserConfigTemplateMetadata(userConfig)
+        await saveConfig()
+        return true
+    }
 
     const userTemplates = computed(() => {
         if (!configRoot.value || loginUsers.value.length === 0) {
@@ -91,13 +198,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         for (const user of loginUsers.value) {
             const userConfig = configRoot.value.config[user.uid]
-            const templates =
-                userConfig && userConfig.templates
-                    ? Object.entries(userConfig.templates).map(([name, config]) => ({
-                          name,
-                          config
-                      }))
-                    : []
+            const templates = getOrderedTemplateEntries(userConfig)
 
             result.push({
                 user,
@@ -164,6 +265,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         error.value = null
         try {
             const configData: ConfigRoot = await invoke('load_config')
+            normalizeConfigRoot(configData)
             configRoot.value = configData
             configBase.value = JSON.parse(JSON.stringify(configData))
             return configData
@@ -181,6 +283,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         error.value = null
         try {
             const configData: ConfigRoot = await invoke('load_config')
+            normalizeConfigRoot(configData)
             configBase.value = JSON.parse(JSON.stringify(configData))
             return configData
         } catch (err) {
@@ -270,6 +373,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         if (!userConfig) {
             throw new Error('用户配置不存在')
         }
+        ensureUserConfigTemplateMetadata(userConfig)
 
         // 检查模板名是否已存在
         if (userConfig.templates[templateName]) {
@@ -290,6 +394,9 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         // 添加模板
         userConfig.templates[templateName] = server_response.template
+        userConfig.template_order.push(templateName)
+        userConfig.template_updated_at[templateName] = getCurrentTimestamp()
+        ensureUserConfigTemplateMetadata(userConfig)
 
         // 保存配置
         await saveConfig()
@@ -312,9 +419,13 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         if (!userConfig || !userConfig.templates[templateName]) {
             throw new Error('模板不存在')
         }
+        ensureUserConfigTemplateMetadata(userConfig)
 
         // 删除模板
         delete userConfig.templates[templateName]
+        userConfig.template_order = userConfig.template_order.filter(name => name !== templateName)
+        delete userConfig.template_updated_at[templateName]
+        ensureUserConfigTemplateMetadata(userConfig)
 
         const server_response: TemplateCommandResponse = await invoke('delete_user_template', {
             uid: userUid,
@@ -350,6 +461,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         if (!userConfig || !userConfig.templates[templateName]) {
             throw new Error('模板不存在')
         }
+        ensureUserConfigTemplateMetadata(userConfig)
 
         const server_response: TemplateCommandResponse = await invoke('update_user_template', {
             uid: userUid,
@@ -363,6 +475,8 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         // 更新模板
         userConfig.templates[templateName] = server_response.template
+        userConfig.template_updated_at[templateName] = getCurrentTimestamp()
+        ensureUserConfigTemplateMetadata(userConfig)
 
         // 保存配置
         await saveConfig()
@@ -385,6 +499,72 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             ...templateConfig,
             aid: undefined // 复制时清除稿件ID
         })
+    }
+
+    const renameUserTemplate = async (userUid: number, oldName: string, newName: string) => {
+        if (!configRoot.value) {
+            throw new Error('配置未加载')
+        }
+
+        const userConfig = configRoot.value.config[userUid]
+        if (!userConfig || !userConfig.templates[oldName]) {
+            throw new Error('原模板不存在')
+        }
+        if (userConfig.templates[newName]) {
+            throw new Error('该名称的模板已存在')
+        }
+
+        ensureUserConfigTemplateMetadata(userConfig)
+
+        const originalTemplate = userConfig.templates[oldName]
+        const nextOrder = userConfig.template_order.map(name => (name === oldName ? newName : name))
+
+        await addUserTemplate(userUid, newName, originalTemplate)
+        await removeUserTemplate(userUid, oldName)
+
+        await persistTemplateOrder(userUid, nextOrder)
+
+        return true
+    }
+
+    const reorderUserTemplates = async (userUid: number, templateOrder: string[]) => {
+        return persistTemplateOrder(userUid, templateOrder)
+    }
+
+    const sortUserTemplates = async (
+        userUid: number,
+        mode: 'name-asc' | 'name-desc' | 'recent-saved'
+    ) => {
+        if (!configRoot.value) {
+            throw new Error('配置未加载')
+        }
+
+        const userConfig = configRoot.value.config[userUid]
+        if (!userConfig) {
+            throw new Error('用户配置不存在')
+        }
+
+        const templateEntries = getOrderedTemplateEntries(userConfig)
+        const sortedNames = [...templateEntries]
+
+        if (mode === 'recent-saved') {
+            sortedNames.sort((left, right) => {
+                if (right.updatedAt !== left.updatedAt) {
+                    return right.updatedAt - left.updatedAt
+                }
+                return templateNameCollator.compare(left.name, right.name)
+            })
+        } else {
+            sortedNames.sort((left, right) => templateNameCollator.compare(left.name, right.name))
+            if (mode === 'name-desc') {
+                sortedNames.reverse()
+            }
+        }
+
+        return persistTemplateOrder(
+            userUid,
+            sortedNames.map(template => template.name)
+        )
     }
 
     // 更新用户基础配置
@@ -487,6 +667,9 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         removeUserTemplate,
         updateUserTemplate,
         duplicateUserTemplate,
+        renameUserTemplate,
+        reorderUserTemplates,
+        sortUserTemplates,
         updateUserConfig,
         updateGlobalConfig,
         createDefaultTemplate
