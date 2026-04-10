@@ -663,6 +663,20 @@
                                             </div>
                                         </el-form-item>
 
+                                        <el-form-item
+                                            v-if="currentForm.season_id && !currentForm.aid"
+                                            label=""
+                                        >
+                                            <el-checkbox
+                                                v-model="currentForm.no_disturbance"
+                                                :true-value="1"
+                                                :false-value="0"
+                                                :disabled="templateLoading"
+                                            >
+                                                此稿件不产生更新推送
+                                            </el-checkbox>
+                                        </el-form-item>
+
                                         <el-form-item label="音质设置">
                                             <div class="checkbox-group">
                                                 <el-checkbox
@@ -1460,6 +1474,7 @@ const hasUnsavedChanges = (
         'lossless_music',
         'no_reprint',
         'open_elec',
+        'no_disturbance',
         'up_selection_reply',
         'up_close_reply',
         'up_close_danmu',
@@ -1765,6 +1780,7 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
                 currentForm.value.lossless_music = 0
                 currentForm.value.no_reprint = 0
                 currentForm.value.open_elec = 0
+                currentForm.value.no_disturbance = 0
                 currentForm.value.up_selection_reply = 0
                 currentForm.value.up_close_reply = 0
                 currentForm.value.up_close_danmu = 0

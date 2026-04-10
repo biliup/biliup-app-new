@@ -117,6 +117,10 @@ impl TemplateConfig {
                 map.insert("topic_detail".to_string(), json!(topic_detail));
             }
 
+            if self.aid.is_none() && self.season_id.is_some() && self.no_disturbance == 1 {
+                map.insert("no_disturbance".to_string(), json!(1));
+            }
+
             map.insert("is_only_self".to_string(), json!(self.is_only_self));
 
             let watermark = Watermark {

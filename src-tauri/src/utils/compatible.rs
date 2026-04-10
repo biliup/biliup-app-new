@@ -165,6 +165,7 @@ impl CompatibilityConverter {
                 lossless_music: streamer_config.lossless_music,
                 no_reprint: streamer_config.no_reprint,
                 open_elec: streamer_config.open_elec,
+                no_disturbance: 0, // 旧版配置没有该字段
                 aid: streamer_config.aid,
                 up_selection_reply: if streamer_config.up_selection_reply {
                     1
