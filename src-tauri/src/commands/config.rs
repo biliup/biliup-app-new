@@ -21,6 +21,13 @@ pub struct TemplateOrderCommandResponse {
     pub template_order: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RenameTemplateCommandResponse {
+    pub success: bool,
+    pub message: String,
+    pub template_order: Vec<String>,
+}
+
 /// 加载配置文件
 #[tauri::command]
 pub async fn load_config(app: AppHandle) -> Result<ConfigRoot, String> {
@@ -162,6 +169,36 @@ pub async fn add_user_template(
         success: true,
         message: "模板添加成功".to_string(),
         template: Some(added),
+    })
+}
+
+#[tauri::command]
+pub async fn rename_user_template(
+    app: AppHandle,
+    uid: u64,
+    old_name: String,
+    new_name: String,
+) -> Result<RenameTemplateCommandResponse, String> {
+    let app_lock = app.state::<Mutex<AppData>>();
+    let app_data = app_lock.lock().await;
+
+    let mut config = app_data.config.lock().await;
+    config
+        .rename_user_template(uid, &old_name, &new_name)
+        .map_err(|e| format!("重命名模板失败: {e}"))?;
+
+    let saved_order = config
+        .config
+        .get(&uid)
+        .map(|user_config| user_config.template_order.clone())
+        .unwrap_or_default();
+
+    info!("重命名模板: uid={}, {} -> {}", uid, old_name, new_name);
+
+    Ok(RenameTemplateCommandResponse {
+        success: true,
+        message: "模板重命名成功".to_string(),
+        template_order: saved_order,
     })
 }
 

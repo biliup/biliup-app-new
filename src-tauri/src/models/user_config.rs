@@ -324,6 +324,42 @@ impl ConfigRoot {
         }
     }
 
+    pub fn rename_user_template(&mut self, uid: u64, old_name: &str, new_name: &str) -> Result<&Self> {
+        if let Some(user_config) = self.config.get_mut(&uid) {
+            if !user_config.templates.contains_key(old_name) {
+                return Err(anyhow::anyhow!("原模板不存在"));
+            }
+
+            if user_config.templates.contains_key(new_name) {
+                return Err(anyhow::anyhow!("该名称的模板已存在"));
+            }
+
+            let template = user_config
+                .templates
+                .remove(old_name)
+                .ok_or_else(|| anyhow::anyhow!("原模板不存在"))?;
+
+            user_config.templates.insert(new_name.to_string(), template);
+
+            if let Some(updated_at) = user_config.template_updated_at.remove(old_name) {
+                user_config
+                    .template_updated_at
+                    .insert(new_name.to_string(), updated_at);
+            }
+
+            for name in &mut user_config.template_order {
+                if name == old_name {
+                    *name = new_name.to_string();
+                }
+            }
+
+            user_config.normalize_template_metadata();
+            Ok(self)
+        } else {
+            Err(anyhow::anyhow!("用户配置不存在"))
+        }
+    }
+
     pub fn default() -> Self {
         Self {
             max_curr: 1,

@@ -83,6 +83,12 @@ interface TemplateOrderCommandResponse {
     template_order: string[]
 }
 
+interface RenameTemplateCommandResponse {
+    success: boolean
+    message: string
+    template_order: string[]
+}
+
 export const useUserConfigStore = defineStore('userConfig', () => {
     const templateNameCollator = new Intl.Collator(
         ['zh-Hans-u-co-pinyin', 'zh-CN-u-co-pinyin', 'zh-CN', 'en'],
@@ -517,12 +523,29 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         ensureUserConfigTemplateMetadata(userConfig)
 
         const originalTemplate = userConfig.templates[oldName]
-        const nextOrder = userConfig.template_order.map(name => (name === oldName ? newName : name))
 
-        await addUserTemplate(userUid, newName, originalTemplate)
-        await removeUserTemplate(userUid, oldName)
+        const response: RenameTemplateCommandResponse = await invoke('rename_user_template', {
+            uid: userUid,
+            oldName,
+            newName
+        })
 
-        await persistTemplateOrder(userUid, nextOrder)
+        if (!response?.success) {
+            throw new Error(response?.message || '模板重命名失败')
+        }
+
+        delete userConfig.templates[oldName]
+        userConfig.templates[newName] = originalTemplate
+
+        const oldUpdatedAt = userConfig.template_updated_at[oldName]
+        delete userConfig.template_updated_at[oldName]
+        userConfig.template_updated_at[newName] =
+            typeof oldUpdatedAt === 'number' ? oldUpdatedAt : getCurrentTimestamp()
+
+        userConfig.template_order = response.template_order
+        ensureUserConfigTemplateMetadata(userConfig)
+
+        await saveConfig()
 
         return true
     }

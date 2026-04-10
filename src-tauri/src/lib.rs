@@ -214,6 +214,7 @@ pub async fn run() {
             add_user_template,
             update_user_template,
             delete_user_template,
+            rename_user_template,
             save_template_order,
             // 其他命令
             get_current_version,
