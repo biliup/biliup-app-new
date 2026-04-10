@@ -106,6 +106,9 @@
             </div>
 
             <div class="panel-footer">
+                <button type="button" class="footer-btn btn-clear" @click="handleClear">
+                    清空
+                </button>
                 <button type="button" class="footer-btn btn-cancel" @click="handleCancel">
                     取消
                 </button>
@@ -413,6 +416,12 @@ const selectSecond = (second: number) => {
 }
 
 const handleCancel = () => {
+    panelVisible.value = false
+    initializeDraftFromModel()
+}
+
+const handleClear = () => {
+    emit('update:modelValue', null)
     panelVisible.value = false
     initializeDraftFromModel()
 }
@@ -736,6 +745,10 @@ function initializeDraftFromModel() {
     color: #606266;
     font-size: 12px;
     cursor: pointer;
+}
+
+.btn-clear {
+    margin-right: auto;
 }
 
 .footer-btn:hover {
