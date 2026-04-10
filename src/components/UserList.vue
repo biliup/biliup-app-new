@@ -32,7 +32,9 @@
                                     </div>
                                     <el-avatar
                                         :src="
-                                            user.expired ? '' : `data:image/jpeg;base64,${user.avatar}`
+                                            user.expired
+                                                ? ''
+                                                : `data:image/jpeg;base64,${user.avatar}`
                                         "
                                         :size="32"
                                         class="user-avatar"

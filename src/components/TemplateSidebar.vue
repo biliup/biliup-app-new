@@ -10,7 +10,12 @@
                 >
                     <span class="highlight-checkbox-text"> 高亮显示<br />自动提交 </span>
                 </el-checkbox>
-                <el-button type="success" size="small" @click="emit('show-login')" :disabled="templateLoading">
+                <el-button
+                    type="success"
+                    size="small"
+                    @click="emit('show-login')"
+                    :disabled="templateLoading"
+                >
                     <el-icon><User /></el-icon>
                     登录用户
                 </el-button>
@@ -95,10 +100,18 @@
                                 </el-button>
                                 <template #dropdown>
                                     <el-dropdown-menu>
-                                        <el-dropdown-item command="name-asc">模板名正序</el-dropdown-item>
-                                        <el-dropdown-item command="name-desc">模板名倒序</el-dropdown-item>
-                                        <el-dropdown-item command="recent-saved">最近保存正序</el-dropdown-item>
-                                        <el-dropdown-item command="recent-saved-desc">最近保存倒序</el-dropdown-item>
+                                        <el-dropdown-item command="name-asc"
+                                            >模板名正序</el-dropdown-item
+                                        >
+                                        <el-dropdown-item command="name-desc"
+                                            >模板名倒序</el-dropdown-item
+                                        >
+                                        <el-dropdown-item command="recent-saved"
+                                            >最近保存正序</el-dropdown-item
+                                        >
+                                        <el-dropdown-item command="recent-saved-desc"
+                                            >最近保存倒序</el-dropdown-item
+                                        >
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
@@ -133,7 +146,9 @@
                                 <div class="template-name">
                                     {{ template.name }}
                                     <span
-                                        v-show="hasUnsavedChanges(userTemplate.user.uid, template.name)"
+                                        v-show="
+                                            hasUnsavedChanges(userTemplate.user.uid, template.name)
+                                        "
                                         class="unsaved-indicator"
                                         title="有未保存的修改"
                                     ></span>
@@ -145,7 +160,12 @@
                             <el-dropdown
                                 @command="
                                     (command: string) =>
-                                        emit('template-command', command, userTemplate.user, template)
+                                        emit(
+                                            'template-command',
+                                            command,
+                                            userTemplate.user,
+                                            template
+                                        )
                                 "
                                 @click.stop
                                 trigger="click"
@@ -156,9 +176,13 @@
                                 </el-button>
                                 <template #dropdown>
                                     <el-dropdown-menu>
-                                        <el-dropdown-item command="duplicate">复制</el-dropdown-item>
+                                        <el-dropdown-item command="duplicate"
+                                            >复制</el-dropdown-item
+                                        >
                                         <el-dropdown-item command="rename">重命名</el-dropdown-item>
-                                        <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                                        <el-dropdown-item command="delete" divided
+                                            >删除</el-dropdown-item
+                                        >
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
@@ -168,7 +192,11 @@
                             <div class="expired-mask-content">
                                 <div class="expired-mask-title">账号登录状态已失效</div>
                                 <div class="expired-mask-desc">请重新登录后再编辑或选择模板</div>
-                                <el-button type="primary" size="small" @click.stop="emit('show-login')">
+                                <el-button
+                                    type="primary"
+                                    size="small"
+                                    @click.stop="emit('show-login')"
+                                >
                                     重新登录
                                 </el-button>
                             </div>
@@ -258,10 +286,7 @@ const hasUnsavedChanges = computed(() => props.hasUnsavedChanges)
 
 const getTemplateKey = (uid: number, templateName: string) => `${uid}-${templateName}`
 
-const setTemplateListRef = (
-    userUid: number,
-    element: Element | { $el?: Element } | null
-) => {
+const setTemplateListRef = (userUid: number, element: Element | { $el?: Element } | null) => {
     if (element instanceof Element) {
         templateListRefs.value[userUid] = element as HTMLElement
         return
@@ -313,9 +338,7 @@ const isTemplateDragEnabled = (userTemplate: UserTemplateGroup) => {
     return !templateLoading.value && !userTemplate.user.expired && userTemplate.templates.length > 1
 }
 
-const canDragUserSections = computed(
-    () => !templateLoading.value && userTemplates.value.length > 1
-)
+const canDragUserSections = computed(() => !templateLoading.value && userTemplates.value.length > 1)
 
 const destroyTemplateSortables = () => {
     for (const sortable of templateListSortables.values()) {
@@ -334,36 +357,34 @@ const destroyTemplateSortable = (userUid: number) => {
     templateListSortables.delete(userUid)
 }
 
-const {
-    syncSortable: syncUserSectionSortable,
-    destroySortable: destroyUserSectionSortable
-} = useUserOrderSortable({
-    containerRef: userSectionListRef,
-    enabled: canDragUserSections,
-    getCurrentOrder: () => userTemplates.value.map(item => item.user.uid),
-    onOrderChange: async nextOrder => {
-        try {
-            await authStore.reorderLoginUsers(nextOrder)
-            ElMessage.success('用户顺序已保存')
-        } catch (error) {
-            console.error('用户排序失败:', error)
-            ElMessage.error(`用户排序失败: ${error}`)
-            await syncUserSectionSortable()
+const { syncSortable: syncUserSectionSortable, destroySortable: destroyUserSectionSortable } =
+    useUserOrderSortable({
+        containerRef: userSectionListRef,
+        enabled: canDragUserSections,
+        getCurrentOrder: () => userTemplates.value.map(item => item.user.uid),
+        onOrderChange: async nextOrder => {
+            try {
+                await authStore.reorderLoginUsers(nextOrder)
+                ElMessage.success('用户顺序已保存')
+            } catch (error) {
+                console.error('用户排序失败:', error)
+                ElMessage.error(`用户排序失败: ${error}`)
+                await syncUserSectionSortable()
+            }
+        },
+        sortable: {
+            animation: 180,
+            draggable: '.user-section',
+            handle: '.user-drag-handle',
+            chosenClass: 'user-drag-source',
+            ghostClass: 'user-drag-placeholder',
+            dragClass: 'user-drag-clone',
+            fallbackClass: 'user-drag-clone',
+            forceFallback: true,
+            fallbackOnBody: true,
+            fallbackTolerance: 4
         }
-    },
-    sortable: {
-        animation: 180,
-        draggable: '.user-section',
-        handle: '.user-drag-handle',
-        chosenClass: 'user-drag-source',
-        ghostClass: 'user-drag-placeholder',
-        dragClass: 'user-drag-clone',
-        fallbackClass: 'user-drag-clone',
-        forceFallback: true,
-        fallbackOnBody: true,
-        fallbackTolerance: 4
-    }
-})
+    })
 
 const createTemplateSortable = (userTemplate: UserTemplateGroup, container: HTMLElement) => {
     const userUid = userTemplate.user.uid

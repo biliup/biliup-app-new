@@ -3726,7 +3726,6 @@ const checkUpdate = async () => {
 .template-name-display.disabled .edit-hint-icon {
     color: #c0c4cc !important;
 }
-
 </style>
 
 <style>

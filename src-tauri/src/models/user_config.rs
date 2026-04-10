@@ -361,7 +361,12 @@ impl ConfigRoot {
         }
     }
 
-    pub fn rename_user_template(&mut self, uid: u64, old_name: &str, new_name: &str) -> Result<&Self> {
+    pub fn rename_user_template(
+        &mut self,
+        uid: u64,
+        old_name: &str,
+        new_name: &str,
+    ) -> Result<&Self> {
         if let Some(user_config) = self.config.get_mut(&uid) {
             if !user_config.templates.contains_key(old_name) {
                 return Err(anyhow::anyhow!("原模板不存在"));
