@@ -533,7 +533,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
     const sortUserTemplates = async (
         userUid: number,
-        mode: 'name-asc' | 'name-desc' | 'recent-saved'
+        mode: 'name-asc' | 'name-desc' | 'recent-saved' | 'recent-saved-desc'
     ) => {
         if (!configRoot.value) {
             throw new Error('配置未加载')
@@ -551,6 +551,13 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             sortedNames.sort((left, right) => {
                 if (right.updatedAt !== left.updatedAt) {
                     return right.updatedAt - left.updatedAt
+                }
+                return templateNameCollator.compare(left.name, right.name)
+            })
+        } else if (mode === 'recent-saved-desc') {
+            sortedNames.sort((left, right) => {
+                if (left.updatedAt !== right.updatedAt) {
+                    return left.updatedAt - right.updatedAt
                 }
                 return templateNameCollator.compare(left.name, right.name)
             })
