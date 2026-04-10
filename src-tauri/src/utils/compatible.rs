@@ -188,6 +188,7 @@ impl CompatibilityConverter {
                 warn!("Cookie验证失败: {}", e);
                 e
             })?;
+        let user_uid = user.uid;
 
         let mut template_order: Vec<String> = template.keys().cloned().collect();
         template_order.sort_unstable();
@@ -195,7 +196,7 @@ impl CompatibilityConverter {
             template_order.iter().map(|k| (k.clone(), 0)).collect();
         let user_config = UserConfig {
             user: UserInfo {
-                uid: user.uid,
+                uid: user_uid,
                 name: user.username,
                 cookie: bilibili.login_info,
             },
@@ -211,6 +212,7 @@ impl CompatibilityConverter {
 
         let mut config_root = ConfigRoot::default();
         config_root.add_user_config(user_config);
+        config_root.user_order = vec![user_uid];
 
         Ok(config_root)
     }

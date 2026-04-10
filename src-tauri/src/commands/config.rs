@@ -28,6 +28,13 @@ pub struct RenameTemplateCommandResponse {
     pub template_order: Vec<String>,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UserOrderCommandResponse {
+    pub success: bool,
+    pub message: String,
+    pub user_order: Vec<u64>,
+}
+
 /// 加载配置文件
 #[tauri::command]
 pub async fn load_config(app: AppHandle) -> Result<ConfigRoot, String> {
@@ -228,5 +235,29 @@ pub async fn save_template_order(
         success: true,
         message: "模板顺序保存成功".to_string(),
         template_order: saved_order,
+    })
+}
+
+#[tauri::command]
+pub async fn save_user_order(
+    app: AppHandle,
+    user_order: Vec<u64>,
+) -> Result<UserOrderCommandResponse, String> {
+    let app_lock = app.state::<Mutex<AppData>>();
+    let app_data = app_lock.lock().await;
+
+    let mut config = app_data.config.lock().await;
+    config
+        .save_user_order(user_order)
+        .map_err(|e| format!("保存用户顺序失败: {e}"))?;
+
+    let saved_order = config.user_order.clone();
+
+    info!("保存用户顺序");
+
+    Ok(UserOrderCommandResponse {
+        success: true,
+        message: "用户顺序保存成功".to_string(),
+        user_order: saved_order,
     })
 }

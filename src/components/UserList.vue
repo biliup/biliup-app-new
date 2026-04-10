@@ -18,58 +18,64 @@
             <template #dropdown>
                 <el-dropdown-menu class="user-dropdown-menu">
                     <div class="user-list-content">
-                        <div
-                            v-for="user in loginUsers"
-                            :key="user.uid"
-                            class="user-item"
-                            :class="{ 'user-item-expired': user.expired }"
-                        >
-                            <div class="user-info">
-                                <el-avatar
-                                    :src="
-                                        user.expired ? '' : `data:image/jpeg;base64,${user.avatar}`
-                                    "
-                                    :size="32"
-                                    class="user-avatar"
-                                    :class="{ 'user-avatar-expired': user.expired }"
-                                >
-                                    {{ user.username.charAt(0) }}
-                                </el-avatar>
-                                <div class="user-details">
-                                    <div class="username">{{ user.username }}</div>
-                                    <div class="user-uid">
-                                        UID: {{ user.uid }}
-                                        <span v-if="user.expired" class="expired-tip"
-                                            >Cookie已过期</span
-                                        >
+                        <div ref="userListRef">
+                            <div
+                                v-for="user in loginUsers"
+                                :key="user.uid"
+                                class="user-item"
+                                :class="{ 'user-item-expired': user.expired }"
+                            >
+                                <div class="user-info">
+                                    <div class="drag-handle" title="拖动排序">
+                                        <span></span>
+                                        <span></span>
+                                    </div>
+                                    <el-avatar
+                                        :src="
+                                            user.expired ? '' : `data:image/jpeg;base64,${user.avatar}`
+                                        "
+                                        :size="32"
+                                        class="user-avatar"
+                                        :class="{ 'user-avatar-expired': user.expired }"
+                                    >
+                                        {{ user.username.charAt(0) }}
+                                    </el-avatar>
+                                    <div class="user-details">
+                                        <div class="username">{{ user.username }}</div>
+                                        <div class="user-uid">
+                                            UID: {{ user.uid }}
+                                            <span v-if="user.expired" class="expired-tip"
+                                                >Cookie已过期</span
+                                            >
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <el-tooltip
-                                :content="
-                                    isUserHasUploadTasks(user.uid)
-                                        ? '请先删除上传队列中属于该用户的任务'
-                                        : '登出用户'
-                                "
-                                placement="top"
-                            >
-                                <el-button
-                                    :disabled="isUserHasUploadTasks(user.uid)"
-                                    @click="handleLogout(user)"
-                                    class="logout-button"
-                                    size="small"
-                                    type="danger"
-                                    plain
+                                <el-tooltip
+                                    :content="
+                                        isUserHasUploadTasks(user.uid)
+                                            ? '请先删除上传队列中属于该用户的任务'
+                                            : '登出用户'
+                                    "
+                                    placement="top"
                                 >
-                                    <div class="exit-icon">
-                                        <div class="exit-figure"></div>
-                                        <div class="exit-door"></div>
-                                        <div class="exit-arrow"></div>
-                                    </div>
-                                    登出
-                                </el-button>
-                            </el-tooltip>
+                                    <el-button
+                                        :disabled="isUserHasUploadTasks(user.uid)"
+                                        @click="handleLogout(user)"
+                                        class="logout-button"
+                                        size="small"
+                                        type="danger"
+                                        plain
+                                    >
+                                        <div class="exit-icon">
+                                            <div class="exit-figure"></div>
+                                            <div class="exit-door"></div>
+                                            <div class="exit-arrow"></div>
+                                        </div>
+                                        登出
+                                    </el-button>
+                                </el-tooltip>
+                            </div>
                         </div>
 
                         <!-- 空状态 -->
@@ -100,11 +106,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useUploadStore } from '../stores/upload'
 import { useUtilsStore } from '../stores/utils'
 import { ElMessageBox } from 'element-plus'
+import Sortable from 'sortablejs'
+import type { SortableEvent } from 'sortablejs'
 import { User, ArrowDown, Plus } from '@element-plus/icons-vue'
 
 // Props & Emits
@@ -117,12 +125,80 @@ const emit = defineEmits<{
 const authStore = useAuthStore()
 const uploadStore = useUploadStore()
 const utilsStore = useUtilsStore()
+const userListRef = ref<HTMLElement | null>(null)
+let userListSortable: Sortable | null = null
 
 // 计算属性
 const loginUsers = computed(() => {
     const users = authStore.loginUsers
     return users
 })
+
+const canDragUsers = computed(() => loginUsers.value.length > 1)
+
+const destroyUserSortable = () => {
+    if (!userListSortable) {
+        return
+    }
+
+    userListSortable.destroy()
+    userListSortable = null
+}
+
+const syncUserSortable = async () => {
+    await nextTick()
+
+    const container = userListRef.value
+    if (!container || !canDragUsers.value) {
+        destroyUserSortable()
+        return
+    }
+
+    destroyUserSortable()
+
+    userListSortable = Sortable.create(container, {
+        animation: 180,
+        draggable: '.user-item',
+        handle: '.drag-handle',
+        chosenClass: 'drag-source',
+        dragClass: 'drag-clone',
+        ghostClass: 'drag-placeholder',
+        fallbackClass: 'drag-clone',
+        forceFallback: true,
+        fallbackOnBody: true,
+        fallbackTolerance: 4,
+        onEnd: async (event: SortableEvent) => {
+            const fromIndex = event.oldDraggableIndex ?? event.oldIndex
+            const toIndex = event.newDraggableIndex ?? event.newIndex
+
+            if (
+                typeof fromIndex !== 'number' ||
+                typeof toIndex !== 'number' ||
+                fromIndex === toIndex
+            ) {
+                return
+            }
+
+            const nextOrder = loginUsers.value.map(user => user.uid)
+            const [movedUid] = nextOrder.splice(fromIndex, 1)
+
+            if (typeof movedUid !== 'number') {
+                return
+            }
+
+            nextOrder.splice(toIndex, 0, movedUid)
+
+            try {
+                await authStore.reorderLoginUsers(nextOrder)
+                utilsStore.showMessage('用户顺序已保存', 'success')
+            } catch (error) {
+                console.error('用户排序失败:', error)
+                utilsStore.showMessage(`用户排序失败: ${error}`, 'error')
+                await syncUserSortable()
+            }
+        }
+    })
+}
 
 // 检查用户是否有上传任务
 const isUserHasUploadTasks = (uid: number): boolean => {
@@ -164,6 +240,22 @@ const handleLogout = async (user: any) => {
         }
     }
 }
+
+watch(
+    () => loginUsers.value,
+    () => {
+        void syncUserSortable()
+    },
+    { deep: true }
+)
+
+onMounted(() => {
+    void syncUserSortable()
+})
+
+onUnmounted(() => {
+    destroyUserSortable()
+})
 </script>
 
 <style scoped>
@@ -266,6 +358,29 @@ const handleLogout = async (user: any) => {
     flex: 1;
 }
 
+.drag-handle {
+    width: 18px;
+    height: 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    cursor: grab;
+    flex-shrink: 0;
+}
+
+.drag-handle:active {
+    cursor: grabbing;
+}
+
+.drag-handle span {
+    width: 10px;
+    height: 2px;
+    border-radius: 999px;
+    background: #94a3b8;
+}
+
 .user-avatar {
     flex-shrink: 0;
 }
@@ -325,6 +440,16 @@ const handleLogout = async (user: any) => {
 .logout-button:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+}
+
+.drag-source {
+    opacity: 0 !important;
+    box-shadow: none !important;
+}
+
+.drag-placeholder {
+    border: 1px dashed #60a5fa;
+    background: #eff6ff;
 }
 
 /* 安全出口样式图标 */

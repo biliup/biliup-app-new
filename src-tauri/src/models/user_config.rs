@@ -1,7 +1,11 @@
 use anyhow::Result;
 use biliup::credential::LoginInfo;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, fs, path::PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    path::PathBuf,
+};
 use tracing::{debug, info};
 
 fn current_timestamp() -> u64 {
@@ -139,6 +143,8 @@ pub struct ConfigRoot {
     #[serde(default = "default_log_level")]
     pub log_level: String,
     #[serde(default)]
+    pub user_order: Vec<u64>,
+    #[serde(default)]
     pub config: HashMap<u64, UserConfig>,
 }
 
@@ -170,9 +176,25 @@ impl ConfigRoot {
     }
 
     pub fn normalize_template_metadata(&mut self) {
+        self.normalize_user_order();
         for user_config in self.config.values_mut() {
             user_config.normalize_template_metadata();
         }
+    }
+
+    fn normalize_user_order(&mut self) {
+        let mut seen = HashSet::new();
+        self.user_order
+            .retain(|uid| self.config.contains_key(uid) && seen.insert(*uid));
+
+        let mut missing_uids: Vec<u64> = self
+            .config
+            .keys()
+            .copied()
+            .filter(|uid| !seen.contains(uid))
+            .collect();
+        missing_uids.sort_unstable();
+        self.user_order.extend(missing_uids);
     }
 
     pub fn new_user_config(
@@ -199,6 +221,9 @@ impl ConfigRoot {
             template_updated_at: HashMap::new(),
         };
         self.config.insert(uid, user_config);
+        if !self.user_order.contains(&uid) {
+            self.user_order.push(uid);
+        }
 
         self
     }
@@ -208,16 +233,26 @@ impl ConfigRoot {
         let mut config = config;
         config.normalize_template_metadata();
         self.config.insert(uid, config);
+        if !self.user_order.contains(&uid) {
+            self.user_order.push(uid);
+        }
 
         self
     }
 
     pub fn remove_user_config(&mut self, uid: u64) -> Result<&Self> {
         if self.config.remove(&uid).is_some() {
+            self.user_order.retain(|id| *id != uid);
             Ok(self)
         } else {
             Err(anyhow::anyhow!("用户配置不存在"))
         }
+    }
+
+    pub fn save_user_order(&mut self, user_order: Vec<u64>) -> Result<&Self> {
+        self.user_order = user_order;
+        self.normalize_user_order();
+        Ok(self)
     }
 
     pub fn save_user_config(
@@ -366,6 +401,7 @@ impl ConfigRoot {
             auto_start: true,
             auto_upload: true,
             log_level: default_log_level(),
+            user_order: Vec::new(),
             config: HashMap::new(),
         }
     }

@@ -1,6 +1,7 @@
 use crate::AppData;
 use crate::models::User;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use tauri::Manager;
 use tokio::sync::Mutex;
 use tracing::info;
@@ -177,14 +178,33 @@ pub async fn login_with_sms(
 #[tauri::command]
 pub async fn get_login_users(app: tauri::AppHandle) -> Result<Vec<User>, String> {
     let app_data = app.state::<Mutex<AppData>>();
+    let app_data = app_data.lock().await;
+    let user_order = app_data.config.lock().await.user_order.clone();
+    let clients = app_data.clients.lock().await;
 
-    Ok(app_data
-        .lock()
-        .await
-        .clients
-        .lock()
-        .await
-        .values()
-        .map(|client| client.user.clone())
-        .collect())
+    let mut users = Vec::new();
+    let mut used_uids = HashSet::new();
+
+    for uid in &user_order {
+        if let Some(client) = clients.get(uid) {
+            users.push(client.user.clone());
+            used_uids.insert(*uid);
+        }
+    }
+
+    let mut missing_users: Vec<(u64, User)> = clients
+        .iter()
+        .filter_map(|(uid, client)| {
+            if used_uids.contains(uid) {
+                None
+            } else {
+                Some((*uid, client.user.clone()))
+            }
+        })
+        .collect();
+
+    missing_users.sort_unstable_by_key(|(uid, _)| *uid);
+    users.extend(missing_users.into_iter().map(|(_, user)| user));
+
+    Ok(users)
 }

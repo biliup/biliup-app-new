@@ -27,7 +27,7 @@
         </div>
 
         <div class="sidebar-content">
-            <div class="user-template-list">
+            <div class="user-template-list" ref="userSectionListRef">
                 <div
                     v-for="userTemplate in userTemplates"
                     :key="userTemplate.user.uid"
@@ -41,6 +41,10 @@
                             'user-header-expired': userTemplate.user.expired
                         }"
                     >
+                        <div class="user-drag-handle" title="拖动用户排序" @click.stop>
+                            <span></span>
+                            <span></span>
+                        </div>
                         <el-avatar
                             :src="
                                 userTemplate.user.expired
@@ -188,6 +192,7 @@ import { ElMessage } from 'element-plus'
 import { ArrowDown, MoreFilled, Plus, Setting, User } from '@element-plus/icons-vue'
 import Sortable, { type SortableEvent } from 'sortablejs'
 import { useUserConfigStore } from '../stores/user_config'
+import { useAuthStore } from '../stores/auth'
 
 interface TemplateUser {
     uid: number
@@ -228,8 +233,11 @@ const emit = defineEmits<{
 }>()
 
 const userConfigStore = useUserConfigStore()
+const authStore = useAuthStore()
 const templateListRefs = ref<Record<number, HTMLElement | null>>({})
 const templateListSortables = new Map<number, Sortable>()
+const userSectionListRef = ref<HTMLElement | null>(null)
+let userSectionSortable: Sortable | null = null
 const skipNextTemplateSelection = ref(false)
 const highlightAutoSubmitting = ref<boolean>(
     localStorage.getItem('highlightAutoSubmitting') === 'true'
@@ -305,11 +313,24 @@ const isTemplateDragEnabled = (userTemplate: UserTemplateGroup) => {
     return !templateLoading.value && !userTemplate.user.expired && userTemplate.templates.length > 1
 }
 
+const canDragUserSections = computed(
+    () => !templateLoading.value && userTemplates.value.length > 1
+)
+
 const destroyTemplateSortables = () => {
     for (const sortable of templateListSortables.values()) {
         sortable.destroy()
     }
     templateListSortables.clear()
+}
+
+const destroyUserSectionSortable = () => {
+    if (!userSectionSortable) {
+        return
+    }
+
+    userSectionSortable.destroy()
+    userSectionSortable = null
 }
 
 const destroyTemplateSortable = (userUid: number) => {
@@ -345,8 +366,8 @@ const createTemplateSortable = (userTemplate: UserTemplateGroup, container: HTML
         onEnd: async (event: SortableEvent) => {
             suppressTemplateSelectionUntil = Date.now() + 300
 
-            const fromIndex = event.oldDraggableIndex
-            const toIndex = event.newDraggableIndex
+            const fromIndex = event.oldDraggableIndex ?? event.oldIndex
+            const toIndex = event.newDraggableIndex ?? event.newIndex
 
             if (
                 typeof fromIndex !== 'number' ||
@@ -414,6 +435,61 @@ const syncTemplateSortables = async () => {
     }
 }
 
+const syncUserSectionSortable = async () => {
+    await nextTick()
+
+    const container = userSectionListRef.value
+    if (!container || !canDragUserSections.value) {
+        destroyUserSectionSortable()
+        return
+    }
+
+    destroyUserSectionSortable()
+
+    userSectionSortable = Sortable.create(container, {
+        animation: 180,
+        draggable: '.user-section',
+        handle: '.user-drag-handle',
+        chosenClass: 'user-drag-source',
+        ghostClass: 'user-drag-placeholder',
+        dragClass: 'user-drag-clone',
+        fallbackClass: 'user-drag-clone',
+        forceFallback: true,
+        fallbackOnBody: true,
+        fallbackTolerance: 4,
+        onEnd: async (event: SortableEvent) => {
+            const fromIndex = event.oldDraggableIndex ?? event.oldIndex
+            const toIndex = event.newDraggableIndex ?? event.newIndex
+
+            if (
+                typeof fromIndex !== 'number' ||
+                typeof toIndex !== 'number' ||
+                fromIndex === toIndex
+            ) {
+                return
+            }
+
+            const nextOrder = userTemplates.value.map(item => item.user.uid)
+            const [movedUid] = nextOrder.splice(fromIndex, 1)
+
+            if (typeof movedUid !== 'number') {
+                return
+            }
+
+            nextOrder.splice(toIndex, 0, movedUid)
+
+            try {
+                await authStore.reorderLoginUsers(nextOrder)
+                ElMessage.success('用户顺序已保存')
+            } catch (error) {
+                console.error('用户排序失败:', error)
+                ElMessage.error(`用户排序失败: ${error}`)
+                await syncUserSectionSortable()
+            }
+        }
+    })
+}
+
 const handleTemplateSortCommand = async (userUid: number, command: string) => {
     if (templateLoading.value) {
         return
@@ -437,16 +513,27 @@ watch(
     () => props.userTemplates,
     () => {
         void syncTemplateSortables()
+        void syncUserSectionSortable()
     },
     { deep: true }
 )
 
+watch(
+    () => props.templateLoading,
+    () => {
+        void syncTemplateSortables()
+        void syncUserSectionSortable()
+    }
+)
+
 onMounted(async () => {
     await syncTemplateSortables()
+    await syncUserSectionSortable()
 })
 
 onUnmounted(() => {
     destroyTemplateSortables()
+    destroyUserSectionSortable()
 })
 </script>
 
@@ -529,6 +616,30 @@ onUnmounted(() => {
     border-radius: 6px;
     cursor: pointer;
     transition: background-color 0.3s;
+}
+
+.user-drag-handle {
+    width: 18px;
+    height: 18px;
+    margin-right: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 2px;
+    cursor: grab;
+    flex-shrink: 0;
+}
+
+.user-drag-handle:active {
+    cursor: grabbing;
+}
+
+.user-drag-handle span {
+    width: 10px;
+    height: 2px;
+    border-radius: 999px;
+    background: #94a3b8;
 }
 
 .user-header:hover {
@@ -828,6 +939,23 @@ onUnmounted(() => {
     font-size: 12px;
     color: #909399;
     margin-top: 2px;
+}
+
+.user-drag-source {
+    opacity: 0 !important;
+    box-shadow: none !important;
+}
+
+.user-drag-placeholder {
+    border-radius: 6px;
+    background: #e0f2fe;
+    box-shadow: inset 0 0 0 1px #60a5fa;
+}
+
+.user-drag-clone {
+    opacity: 0.95;
+    box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
+    transform: rotate(1deg);
 }
 
 .empty-users {

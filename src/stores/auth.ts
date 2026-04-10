@@ -14,9 +14,43 @@ interface LoginResponse {
     message: string
 }
 
+interface UserOrderCommandResponse {
+    success: boolean
+    message: string
+    user_order: number[]
+}
+
 export const useAuthStore = defineStore('auth', () => {
     const loginUsers = ref<User[]>([])
     const isLoggedIn = computed(() => loginUsers.value.length > 0)
+
+    const buildOrderedUsers = (users: User[], userOrder: number[]) => {
+        const userMap = new Map(users.map(user => [user.uid, user]))
+        const used = new Set<number>()
+        const orderedUsers: User[] = []
+
+        for (const uid of userOrder) {
+            if (typeof uid !== 'number' || used.has(uid)) {
+                continue
+            }
+            const user = userMap.get(uid)
+            if (!user) {
+                continue
+            }
+            orderedUsers.push(user)
+            used.add(uid)
+        }
+
+        for (const user of users) {
+            if (used.has(user.uid)) {
+                continue
+            }
+            orderedUsers.push(user)
+            used.add(user.uid)
+        }
+
+        return orderedUsers
+    }
 
     // 获取登录二维码
     const getLoginQR = async (proxy?: string) => {
@@ -139,6 +173,33 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
+    const reorderLoginUsers = async (userOrder: number[]) => {
+        const previousUsers = [...loginUsers.value]
+        const nextUsers = buildOrderedUsers(loginUsers.value, userOrder)
+        const nextOrder = nextUsers.map(user => user.uid)
+
+        // 先本地更新，避免拖拽释放后在请求返回前被旧顺序重渲染回滚
+        loginUsers.value = nextUsers
+
+        try {
+            const response: UserOrderCommandResponse = await invoke('save_user_order', {
+                userOrder: nextOrder
+            })
+
+            if (!response?.success) {
+                throw new Error(response?.message || '保存用户顺序失败')
+            }
+
+            loginUsers.value = buildOrderedUsers(nextUsers, response.user_order)
+            await invoke('save_config', {})
+
+            return true
+        } catch (error) {
+            loginUsers.value = previousUsers
+            throw error
+        }
+    }
+
     return {
         loginUsers,
         isLoggedIn,
@@ -149,6 +210,7 @@ export const useAuthStore = defineStore('auth', () => {
         sendSMSCode,
         loginWithSMS,
         getLoginUsers,
-        logoutUser
+        logoutUser,
+        reorderLoginUsers
     }
 })
