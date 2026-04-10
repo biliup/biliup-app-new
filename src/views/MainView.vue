@@ -773,28 +773,10 @@
                                             </div>
                                         </el-form-item>
                                         <el-form-item v-if="!currentForm.aid" label="定时发布">
-                                            <el-date-picker
+                                            <DataPicker
                                                 v-model="dtimeDate"
-                                                type="datetime"
                                                 placeholder="选择发布时间"
-                                                format="YYYY-MM-DD HH:mm:ss"
                                                 :disabled="templateLoading"
-                                                :disabled-date="
-                                                    (date: Date) => {
-                                                        const now = new Date()
-                                                        const twoHoursLater = new Date(
-                                                            now.getTime() + 2 * 60 * 60 * 1000
-                                                        )
-                                                        const fifteenDaysLater = new Date(
-                                                            now.getTime() + 15 * 24 * 60 * 60 * 1000
-                                                        )
-
-                                                        return (
-                                                            date < twoHoursLater ||
-                                                            date > fifteenDaysLater
-                                                        )
-                                                    }
-                                                "
                                             />
                                         </el-form-item>
 
@@ -1048,6 +1030,7 @@ import VideoList from '../components/VideoList.vue'
 import UserList from '../components/UserList.vue'
 import VideoStatus from '../components/VideoStatus.vue'
 import TagView from '../components/TagView.vue'
+import DataPicker from '../components/DataPicker.vue'
 
 const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
@@ -4133,6 +4116,7 @@ const checkUpdate = async () => {
     cursor: pointer;
     transition: all 0.3s;
     border-bottom: 1px solid #f0f2f5;
+    font-size: 13px;
 }
 
 .category-item:hover {
