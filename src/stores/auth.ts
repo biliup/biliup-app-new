@@ -191,7 +191,6 @@ export const useAuthStore = defineStore('auth', () => {
             }
 
             loginUsers.value = buildOrderedUsers(nextUsers, response.user_order)
-            await invoke('save_config', {})
 
             return true
         } catch (error) {

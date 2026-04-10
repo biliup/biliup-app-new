@@ -193,6 +193,7 @@ import { ArrowDown, MoreFilled, Plus, Setting, User } from '@element-plus/icons-
 import Sortable, { type SortableEvent } from 'sortablejs'
 import { useUserConfigStore } from '../stores/user_config'
 import { useAuthStore } from '../stores/auth'
+import { useUserOrderSortable } from '../composables/useUserOrderSortable'
 
 interface TemplateUser {
     uid: number
@@ -237,7 +238,6 @@ const authStore = useAuthStore()
 const templateListRefs = ref<Record<number, HTMLElement | null>>({})
 const templateListSortables = new Map<number, Sortable>()
 const userSectionListRef = ref<HTMLElement | null>(null)
-let userSectionSortable: Sortable | null = null
 const skipNextTemplateSelection = ref(false)
 const highlightAutoSubmitting = ref<boolean>(
     localStorage.getItem('highlightAutoSubmitting') === 'true'
@@ -324,15 +324,6 @@ const destroyTemplateSortables = () => {
     templateListSortables.clear()
 }
 
-const destroyUserSectionSortable = () => {
-    if (!userSectionSortable) {
-        return
-    }
-
-    userSectionSortable.destroy()
-    userSectionSortable = null
-}
-
 const destroyTemplateSortable = (userUid: number) => {
     const sortable = templateListSortables.get(userUid)
     if (!sortable) {
@@ -342,6 +333,37 @@ const destroyTemplateSortable = (userUid: number) => {
     sortable.destroy()
     templateListSortables.delete(userUid)
 }
+
+const {
+    syncSortable: syncUserSectionSortable,
+    destroySortable: destroyUserSectionSortable
+} = useUserOrderSortable({
+    containerRef: userSectionListRef,
+    enabled: canDragUserSections,
+    getCurrentOrder: () => userTemplates.value.map(item => item.user.uid),
+    onOrderChange: async nextOrder => {
+        try {
+            await authStore.reorderLoginUsers(nextOrder)
+            ElMessage.success('用户顺序已保存')
+        } catch (error) {
+            console.error('用户排序失败:', error)
+            ElMessage.error(`用户排序失败: ${error}`)
+            await syncUserSectionSortable()
+        }
+    },
+    sortable: {
+        animation: 180,
+        draggable: '.user-section',
+        handle: '.user-drag-handle',
+        chosenClass: 'user-drag-source',
+        ghostClass: 'user-drag-placeholder',
+        dragClass: 'user-drag-clone',
+        fallbackClass: 'user-drag-clone',
+        forceFallback: true,
+        fallbackOnBody: true,
+        fallbackTolerance: 4
+    }
+})
 
 const createTemplateSortable = (userTemplate: UserTemplateGroup, container: HTMLElement) => {
     const userUid = userTemplate.user.uid
@@ -433,61 +455,6 @@ const syncTemplateSortables = async () => {
 
         createTemplateSortable(userTemplate, container)
     }
-}
-
-const syncUserSectionSortable = async () => {
-    await nextTick()
-
-    const container = userSectionListRef.value
-    if (!container || !canDragUserSections.value) {
-        destroyUserSectionSortable()
-        return
-    }
-
-    destroyUserSectionSortable()
-
-    userSectionSortable = Sortable.create(container, {
-        animation: 180,
-        draggable: '.user-section',
-        handle: '.user-drag-handle',
-        chosenClass: 'user-drag-source',
-        ghostClass: 'user-drag-placeholder',
-        dragClass: 'user-drag-clone',
-        fallbackClass: 'user-drag-clone',
-        forceFallback: true,
-        fallbackOnBody: true,
-        fallbackTolerance: 4,
-        onEnd: async (event: SortableEvent) => {
-            const fromIndex = event.oldDraggableIndex ?? event.oldIndex
-            const toIndex = event.newDraggableIndex ?? event.newIndex
-
-            if (
-                typeof fromIndex !== 'number' ||
-                typeof toIndex !== 'number' ||
-                fromIndex === toIndex
-            ) {
-                return
-            }
-
-            const nextOrder = userTemplates.value.map(item => item.user.uid)
-            const [movedUid] = nextOrder.splice(fromIndex, 1)
-
-            if (typeof movedUid !== 'number') {
-                return
-            }
-
-            nextOrder.splice(toIndex, 0, movedUid)
-
-            try {
-                await authStore.reorderLoginUsers(nextOrder)
-                ElMessage.success('用户顺序已保存')
-            } catch (error) {
-                console.error('用户排序失败:', error)
-                ElMessage.error(`用户排序失败: ${error}`)
-                await syncUserSectionSortable()
-            }
-        }
-    })
 }
 
 const handleTemplateSortCommand = async (userUid: number, command: string) => {

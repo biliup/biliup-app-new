@@ -229,6 +229,10 @@ pub async fn save_template_order(
         .map(|user_config| user_config.template_order.clone())
         .unwrap_or_default();
 
+    config
+        .save_to_file(&get_config_json_path().map_err(|e| format!("获取配置路径失败: {e}"))?)
+        .map_err(|e| format!("保存模板顺序到配置文件失败: {e}"))?;
+
     info!("保存模板顺序: uid={}", uid);
 
     Ok(TemplateOrderCommandResponse {
@@ -252,6 +256,10 @@ pub async fn save_user_order(
         .map_err(|e| format!("保存用户顺序失败: {e}"))?;
 
     let saved_order = config.user_order.clone();
+
+    config
+        .save_to_file(&get_config_json_path().map_err(|e| format!("获取配置路径失败: {e}"))?)
+        .map_err(|e| format!("保存用户顺序到配置文件失败: {e}"))?;
 
     info!("保存用户顺序");
 

@@ -193,7 +193,6 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         userConfig.template_order = response.template_order
         ensureUserConfigTemplateMetadata(userConfig)
-        await saveConfig()
         return true
     }
 
@@ -319,8 +318,8 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         }
     }
 
-    // 构建用户模板列表 - 现在只需要设置登录用户
-    const buildUserTemplates = async (_users: User[]) => {
+    // 确保用户模板数据可用（登录用户来源由 auth store 统一提供）
+    const ensureUserTemplatesReady = async () => {
         // 确保配置已加载
         if (!configRoot.value) {
             await loadConfig()
@@ -328,6 +327,9 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         return userTemplatesWithExpandedState.value
     }
+
+    // 兼容旧调用，后续可移除
+    const buildUserTemplates = async (_users: User[]) => ensureUserTemplatesReady()
 
     // 切换用户展开/收起状态
     const toggleUserExpanded = (userUid: number) => {
@@ -688,6 +690,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         // 方法
         loadConfig,
         saveConfig,
+        ensureUserTemplatesReady,
         buildUserTemplates,
         toggleUserExpanded,
         getUserTemplates,

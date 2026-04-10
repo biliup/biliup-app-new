@@ -1397,7 +1397,7 @@ const initializeData = async () => {
         if (loginUsers.value.length > 0) {
             await utilsStore.initTypeList(loginUsers.value[0].uid)
             await utilsStore.initTopicList(loginUsers.value[0].uid)
-            await userConfigStore.buildUserTemplates(loginUsers.value)
+            await userConfigStore.ensureUserTemplatesReady()
             await uploadStore.getUploadQueue()
             if (!generalUpdateTimer) {
                 generalUpdateTimer = setInterval(() => {
@@ -2882,7 +2882,7 @@ const refreshAllData = async () => {
         // 重新获取登录用户
         await authStore.getLoginUsers()
         // 重新构建用户模板
-        await userConfigStore.buildUserTemplates(authStore.loginUsers)
+        await userConfigStore.ensureUserTemplatesReady()
         // 重新加载用户配置
         await userConfigStore.loadConfig()
         // 重写

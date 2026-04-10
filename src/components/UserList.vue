@@ -106,14 +106,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useUploadStore } from '../stores/upload'
 import { useUtilsStore } from '../stores/utils'
 import { ElMessageBox } from 'element-plus'
-import Sortable from 'sortablejs'
-import type { SortableEvent } from 'sortablejs'
 import { User, ArrowDown, Plus } from '@element-plus/icons-vue'
+import { useUserOrderSortable } from '../composables/useUserOrderSortable'
 
 // Props & Emits
 const emit = defineEmits<{
@@ -126,7 +125,6 @@ const authStore = useAuthStore()
 const uploadStore = useUploadStore()
 const utilsStore = useUtilsStore()
 const userListRef = ref<HTMLElement | null>(null)
-let userListSortable: Sortable | null = null
 
 // 计算属性
 const loginUsers = computed(() => {
@@ -136,58 +134,12 @@ const loginUsers = computed(() => {
 
 const canDragUsers = computed(() => loginUsers.value.length > 1)
 
-const destroyUserSortable = () => {
-    if (!userListSortable) {
-        return
-    }
-
-    userListSortable.destroy()
-    userListSortable = null
-}
-
-const syncUserSortable = async () => {
-    await nextTick()
-
-    const container = userListRef.value
-    if (!container || !canDragUsers.value) {
-        destroyUserSortable()
-        return
-    }
-
-    destroyUserSortable()
-
-    userListSortable = Sortable.create(container, {
-        animation: 180,
-        draggable: '.user-item',
-        handle: '.drag-handle',
-        chosenClass: 'drag-source',
-        dragClass: 'drag-clone',
-        ghostClass: 'drag-placeholder',
-        fallbackClass: 'drag-clone',
-        forceFallback: true,
-        fallbackOnBody: true,
-        fallbackTolerance: 4,
-        onEnd: async (event: SortableEvent) => {
-            const fromIndex = event.oldDraggableIndex ?? event.oldIndex
-            const toIndex = event.newDraggableIndex ?? event.newIndex
-
-            if (
-                typeof fromIndex !== 'number' ||
-                typeof toIndex !== 'number' ||
-                fromIndex === toIndex
-            ) {
-                return
-            }
-
-            const nextOrder = loginUsers.value.map(user => user.uid)
-            const [movedUid] = nextOrder.splice(fromIndex, 1)
-
-            if (typeof movedUid !== 'number') {
-                return
-            }
-
-            nextOrder.splice(toIndex, 0, movedUid)
-
+const { syncSortable: syncUserSortable, destroySortable: destroyUserSortable } =
+    useUserOrderSortable({
+        containerRef: userListRef,
+        enabled: canDragUsers,
+        getCurrentOrder: () => loginUsers.value.map(user => user.uid),
+        onOrderChange: async nextOrder => {
             try {
                 await authStore.reorderLoginUsers(nextOrder)
                 utilsStore.showMessage('用户顺序已保存', 'success')
@@ -196,9 +148,20 @@ const syncUserSortable = async () => {
                 utilsStore.showMessage(`用户排序失败: ${error}`, 'error')
                 await syncUserSortable()
             }
+        },
+        sortable: {
+            animation: 180,
+            draggable: '.user-item',
+            handle: '.drag-handle',
+            chosenClass: 'drag-source',
+            dragClass: 'drag-clone',
+            ghostClass: 'drag-placeholder',
+            fallbackClass: 'drag-clone',
+            forceFallback: true,
+            fallbackOnBody: true,
+            fallbackTolerance: 4
         }
     })
-}
 
 // 检查用户是否有上传任务
 const isUserHasUploadTasks = (uid: number): boolean => {
