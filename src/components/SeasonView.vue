@@ -270,6 +270,10 @@ watch(selectedSeasonId, value => {
 watch(selectedSectionId, value => {
     emit('update:sectionId', value)
 })
+
+defineExpose({
+    refreshSeasons: loadSeasons
+})
 </script>
 
 <style scoped>

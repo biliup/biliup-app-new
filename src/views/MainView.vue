@@ -815,12 +815,27 @@
                                         </el-form-item>
 
                                         <el-form-item label="加入合集">
-                                            <SeasonView
-                                                v-model="currentForm.season_id"
-                                                v-model:section-id="currentForm.section_id"
-                                                :user-uid="selectedUser?.uid"
-                                                :disabled="templateLoading"
-                                            />
+                                            <div class="season-refresh-row">
+                                                <SeasonView
+                                                    ref="seasonViewRef"
+                                                    v-model="currentForm.season_id"
+                                                    v-model:section-id="currentForm.section_id"
+                                                    :user-uid="selectedUser?.uid"
+                                                    :disabled="templateLoading"
+                                                />
+                                                <el-tooltip content="刷新合集列表" placement="top">
+                                                    <el-button
+                                                        type="info"
+                                                        size="small"
+                                                        circle
+                                                        class="season-refresh-btn"
+                                                        :disabled="templateLoading || !selectedUser?.uid"
+                                                        @click="refreshSeasonList"
+                                                    >
+                                                        <el-icon><refresh /></el-icon>
+                                                    </el-button>
+                                                </el-tooltip>
+                                            </div>
                                         </el-form-item>
 
                                         <el-form-item label="音质设置">
@@ -1067,6 +1082,7 @@ const interactiveDialogOpening = ref(false)
 // 组件引用
 const newTemplateRef = ref<InstanceType<typeof NewTemplete> | null>(null)
 const tagViewRef = ref<InstanceType<typeof TagView> | null>(null)
+const seasonViewRef = ref<InstanceType<typeof SeasonView> | null>(null)
 // 自动提交状态记录 - 记录每个模板的自动提交状态
 const autoSubmittingRecord = ref<Record<string, boolean>>({})
 // 全局自动提交检查间隔
@@ -2161,6 +2177,25 @@ const handleTemplateNameEdit = () => {
 const handleCoverSelection = () => {
     if (!templateLoading.value) {
         selectCoverWithTauri()
+    }
+}
+
+const refreshSeasonList = async () => {
+    if (templateLoading.value) {
+        return
+    }
+
+    if (!selectedUser.value?.uid) {
+        utilsStore.showMessage('请先选择用户和模板', 'warning')
+        return
+    }
+
+    try {
+        await seasonViewRef.value?.refreshSeasons()
+        utilsStore.showMessage('合集列表已刷新', 'success')
+    } catch (error) {
+        console.error('刷新合集列表失败:', error)
+        utilsStore.showMessage(`刷新合集列表失败: ${error}`, 'error')
     }
 }
 
@@ -4027,6 +4062,36 @@ const checkUpdate = async () => {
 
 .interactive-help-icon:hover {
     color: #606266;
+}
+
+.season-refresh-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.season-refresh-row :deep(.season-selector) {
+    flex: 1;
+    min-width: 0;
+}
+
+.season-refresh-btn {
+    flex-shrink: 0;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: #909399;
+}
+
+.season-refresh-btn:hover {
+    background: transparent;
+    color: #409eff;
+}
+
+.season-refresh-btn:disabled {
+    background: transparent;
+    color: #c0c4cc;
 }
 
 /* 表单提示样式 */
