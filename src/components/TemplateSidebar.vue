@@ -95,7 +95,12 @@
                                         handleTemplateSortCommand(userTemplate.user.uid, command)
                                 "
                             >
-                                <el-button link size="small" class="template-sort-btn">
+                                <el-button
+                                    v-if="userTemplate.templates.length > 1"
+                                    link
+                                    size="small"
+                                    class="template-sort-btn"
+                                >
                                     排序
                                 </el-button>
                                 <template #dropdown>
