@@ -793,7 +793,7 @@
                                 <div v-if="currentForm && !currentForm.aid" class="multi-submit-entry">
                                     <el-button
                                         type="warning"
-                                        plain
+                                        size="large"
                                         :loading="separateSubmitting && separateSubmitProcessing"
                                         :disabled="
                                             !separateSubmitting &&
@@ -3986,7 +3986,7 @@ const checkUpdate = async () => {
 .multi-submit-entry {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
 }
 
 .multi-submit-help-icon {
