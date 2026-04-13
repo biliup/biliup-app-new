@@ -23,6 +23,52 @@ interface UploadTask {
 export const useUploadStore = defineStore('upload', () => {
     const uploadQueue = ref<UploadTask[]>([])
     const utilsStore = useUtilsStore()
+    const submitInvokeIntervalMs = 3500
+    const submitRequestQueue: Array<{
+        uid: number
+        upload: any
+        resolve: (value: any) => void
+        reject: (reason?: any) => void
+    }> = []
+    let isSubmitQueueProcessing = false
+    let lastSubmitInvokeAt = 0
+
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+    const processSubmitQueue = async () => {
+        if (isSubmitQueueProcessing) {
+            return
+        }
+
+        isSubmitQueueProcessing = true
+        try {
+            while (submitRequestQueue.length > 0) {
+                const now = Date.now()
+                const waitMs = Math.max(0, submitInvokeIntervalMs - (now - lastSubmitInvokeAt))
+                if (waitMs > 0) {
+                    await sleep(waitMs)
+                }
+
+                const request = submitRequestQueue.shift()
+                if (!request) {
+                    continue
+                }
+
+                const { uid, upload, resolve, reject } = request
+
+                try {
+                    lastSubmitInvokeAt = Date.now()
+                    const result = await invoke('submit', { uid, form: upload })
+                    resolve(result)
+                } catch (error) {
+                    console.error('提交视频失败:', error)
+                    reject(error)
+                }
+            }
+        } finally {
+            isSubmitQueueProcessing = false
+        }
+    }
 
     // 创建上传任务
     const createUploadTask = async (uid: number, template: string, videoFiles: any[]) => {
@@ -152,13 +198,10 @@ export const useUploadStore = defineStore('upload', () => {
 
     // 提交视频
     const submitTemplate = async (uid: number, upload: any) => {
-        try {
-            const result = await invoke('submit', { uid, form: upload })
-            return result
-        } catch (error) {
-            console.error('提交视频失败:', error)
-            throw error
-        }
+        return new Promise((resolve, reject) => {
+            submitRequestQueue.push({ uid, upload, resolve, reject })
+            void processSubmitQueue()
+        })
     }
 
     const getUploadTask = (taskId: string) => {
