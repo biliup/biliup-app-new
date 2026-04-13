@@ -181,12 +181,12 @@ impl CompatibilityConverter {
             template.insert(streamer_name, template_config);
         }
 
-        // 读取cookie
+        // 读取旧登录状态文件
         let cookie_path = get_old_cookie_file_path()?;
         let (bilibili, user) = validate_cookie_in_old_config(&cookie_path)
             .await
             .map_err(|e| {
-                warn!("Cookie验证失败: {}", e);
+                warn!("登录状态验证失败: {}", e);
                 e
             })?;
         let user_uid = user.uid;

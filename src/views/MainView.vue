@@ -3321,7 +3321,7 @@ const cancelEditTemplateName = () => {
 const openUserConfig = (user: any) => {
     if (user?.expired) {
         showLoginDialog.value = true
-        utilsStore.showMessage('该用户 Cookie 已过期，请重新登录', 'warning')
+        utilsStore.showMessage('该用户登录状态已过期，请重新登录', 'warning')
         return
     }
 

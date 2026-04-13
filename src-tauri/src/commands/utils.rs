@@ -359,7 +359,7 @@ pub async fn switch_season(
             .cookie_info
             .get("cookies")
             .and_then(|c| c.as_array())
-            .ok_or("Cookie错误")?
+            .ok_or("登录状态数据错误")?
             .iter()
             .filter_map(|c| c.as_object())
             .find(|c| c["name"] == "bili_jct")

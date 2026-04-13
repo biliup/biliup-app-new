@@ -12,6 +12,14 @@ interface User {
 interface LoginResponse {
     success: boolean
     message: string
+    status?: string
+}
+
+interface SMSCodeResponse {
+    success: boolean
+    message: string
+    needRecaptcha?: boolean
+    recaptchaUrl?: string
 }
 
 interface UserOrderCommandResponse {
@@ -77,51 +85,30 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
-    // Cookie 登录
-    const loginWithCookie = async (cookie: string, proxy?: string) => {
-        try {
-            const response: LoginResponse = await invoke('login_with_cookie', { cookie, proxy })
-            if (response.success) {
-                // 重新获取所有登录用户
-                await getLoginUsers()
-            }
-            return response
-        } catch (error) {
-            console.error('Cookie登录失败:', error)
-            throw error
-        }
-    }
-
-    // 密码登录
-    const loginWithPassword = async (username: string, password: string, proxy?: string) => {
-        try {
-            const response: LoginResponse = await invoke('login_with_password', {
-                username,
-                password,
-                proxy
-            })
-            if (response.success) {
-                // 重新获取所有登录用户
-                await getLoginUsers()
-            }
-            return response
-        } catch (error) {
-            console.error('密码登录失败:', error)
-            throw error
-        }
-    }
-
     // 发送短信验证码
     const sendSMSCode = async (phone: string, countryCode: string = '86', proxy?: string) => {
         try {
-            const response = await invoke('send_sms_code', {
+            const response: SMSCodeResponse = await invoke('send_sms_code', {
                 phone,
-                country_code: countryCode,
+                countryCode,
                 proxy
             })
             return response
         } catch (error) {
             console.error('发送短信验证码失败:', error)
+            throw error
+        }
+    }
+
+    const submitSMSRecaptcha = async (challenge: string, validate: string) => {
+        try {
+            const response: SMSCodeResponse = await invoke('submit_sms_recaptcha', {
+                challenge,
+                validate
+            })
+            return response
+        } catch (error) {
+            console.error('提交短信滑块验证失败:', error)
             throw error
         }
     }
@@ -136,7 +123,7 @@ export const useAuthStore = defineStore('auth', () => {
         try {
             const response: LoginResponse = await invoke('login_with_sms', {
                 phone,
-                country_code: countryCode,
+                countryCode,
                 code,
                 proxy
             })
@@ -204,9 +191,8 @@ export const useAuthStore = defineStore('auth', () => {
         isLoggedIn,
         getLoginQR,
         checkQRLogin,
-        loginWithCookie,
-        loginWithPassword,
         sendSMSCode,
+        submitSMSRecaptcha,
         loginWithSMS,
         getLoginUsers,
         logoutUser,

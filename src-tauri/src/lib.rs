@@ -27,7 +27,7 @@ pub struct MyClient {
 
 pub struct AppData {
     config: Arc<Mutex<ConfigRoot>>,
-    auth_service: AuthService,
+    auth_service: Arc<Mutex<AuthService>>,
     upload_service: UploadService,
     clients: Arc<Mutex<HashMap<u64, MyClient>>>,
     // client: StatelessClient,
@@ -70,7 +70,7 @@ async fn startup() -> Result<AppData> {
                 },
             );
         } else {
-            info!("用户 {} 的 Cookie 无效，跳过自动登录", fallback_name);
+            info!("用户 {} 的登录状态无效，跳过自动登录", fallback_name);
             clients.insert(
                 fallback_uid,
                 MyClient {
@@ -84,7 +84,7 @@ async fn startup() -> Result<AppData> {
     let max_curr = config.max_curr;
     Ok(AppData {
         config: Arc::new(Mutex::new(config)),
-        auth_service: AuthService::new(),
+        auth_service: Arc::new(Mutex::new(AuthService::new())),
         upload_service: UploadService::new(max_curr),
         clients: Arc::new(Mutex::new(clients)),
     })
@@ -160,7 +160,7 @@ pub async fn run() {
         let max_curr = config.max_curr;
         AppData {
             config: Arc::new(Mutex::new(config)),
-            auth_service: AuthService::new(),
+            auth_service: Arc::new(Mutex::new(AuthService::new())),
             upload_service: UploadService::new(max_curr),
             clients: Arc::new(Mutex::new(HashMap::new())),
         }
@@ -192,9 +192,8 @@ pub async fn run() {
             // 认证相关命令
             get_login_qr,
             check_qr_login,
-            login_with_cookie,
-            login_with_password,
             send_sms_code,
+            submit_sms_recaptcha,
             login_with_sms,
             get_login_users,
             logout_user,

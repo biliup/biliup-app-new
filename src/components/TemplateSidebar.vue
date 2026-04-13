@@ -305,7 +305,7 @@ const handleUserExpansion = (userUid: number) => {
     const targetUser = userTemplates.value.find(user => user.user.uid === userUid)?.user
     if (targetUser?.expired) {
         emit('show-login')
-        ElMessage.warning('该用户 Cookie 已过期，请重新登录')
+        ElMessage.warning('该用户登录状态已过期，请重新登录')
         return
     }
 
@@ -326,7 +326,7 @@ const handleTemplateSelection = (user: TemplateUser, templateName: string) => {
 
     if (user.expired) {
         emit('show-login')
-        ElMessage.warning('该用户 Cookie 已过期，请重新登录')
+        ElMessage.warning('该用户登录状态已过期，请重新登录')
         return
     }
 

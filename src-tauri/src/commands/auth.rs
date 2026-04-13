@@ -1,7 +1,12 @@
 use crate::AppData;
-use crate::models::User;
+use crate::models::{ConfigRoot, User};
+use crate::services::{AuthService, QrLoginCheckResult, SmsSendState};
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use serde_json::json;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tauri::Manager;
 use tokio::sync::Mutex;
 use tracing::info;
@@ -10,13 +15,51 @@ use tracing::info;
 pub struct LoginResponse {
     pub success: bool,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub status: Option<String>,
+}
+
+async fn persist_login_success(
+    config: Arc<Mutex<ConfigRoot>>,
+    clients: Arc<Mutex<HashMap<u64, crate::MyClient>>>,
+    bilibili: biliup::bilibili::BiliBili,
+    user: User,
+    proxy: Option<String>,
+) {
+    {
+        let mut config_guard = config.lock().await;
+        if let Some(existing_config) = config_guard.config.get_mut(&user.uid) {
+            existing_config.user.name = user.username.clone();
+            existing_config.user.cookie = bilibili.login_info.clone();
+            existing_config.proxy = proxy.clone();
+        } else {
+            config_guard.new_user_config(
+                user.uid,
+                user.username.clone(),
+                bilibili.login_info.clone(),
+                proxy.clone(),
+            );
+        }
+    }
+
+    clients.lock().await.insert(
+        user.uid,
+        crate::MyClient {
+            bilibili,
+            user: user.clone(),
+        },
+    );
 }
 
 /// 获取登录二维码
 #[tauri::command]
 pub async fn get_login_qr(app: tauri::AppHandle, proxy: Option<String>) -> Result<String, String> {
     let app_data = app.state::<Mutex<AppData>>();
-    let auth_service = &mut app_data.lock().await.auth_service;
+    let auth_service = {
+        let app_data = app_data.lock().await;
+        app_data.auth_service.clone()
+    };
+    let mut auth_service = auth_service.lock().await;
     auth_service.init(proxy.as_deref());
 
     let qrcode = auth_service
@@ -31,59 +74,64 @@ pub async fn get_login_qr(app: tauri::AppHandle, proxy: Option<String>) -> Resul
 #[tauri::command]
 pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, String> {
     let app_lock = app.state::<Mutex<AppData>>();
-    let mut app_data = app_lock.lock().await;
+    let auth_service = {
+        let app_data = app_lock.lock().await;
+        app_data.auth_service.clone()
+    };
 
-    let (bilibili, user) = app_data
-        .auth_service
-        .qr_login()
-        .await
-        .map_err(|e| format!("二维码登录状态失败: {e}"))?;
+    let (check_result, proxy) = {
+        let auth_service = auth_service.lock().await;
+        let check_result = auth_service
+            .check_qr_login()
+            .await
+            .map_err(|e| format!("二维码登录状态失败: {e}"))?;
+        let proxy = auth_service.get_proxy();
+        (check_result, proxy)
+    };
 
-    let proxy = app_data.auth_service.get_proxy();
-    {
-        let mut config_guard = app_data.config.lock().await;
-        if let Some(existing_config) = config_guard.config.get_mut(&user.uid) {
-            existing_config.user.name = user.username.clone();
-            existing_config.user.cookie = bilibili.login_info.clone();
-            existing_config.proxy = proxy;
-        } else {
-            config_guard.new_user_config(
-                user.uid,
-                user.username.clone(),
-                bilibili.login_info.clone(),
-                proxy,
-            );
+    match check_result {
+        QrLoginCheckResult::Success(login_info) => {
+            let (bilibili, user) =
+                AuthService::login_done_with_proxy(&login_info, proxy.as_deref())
+                    .await
+                    .map_err(|e| format!("二维码登录状态失败: {e}"))?;
+
+            let (config, clients) = {
+                let app_data = app_lock.lock().await;
+                (app_data.config.clone(), app_data.clients.clone())
+            };
+            persist_login_success(config, clients, bilibili, user.clone(), proxy).await;
+            auth_service.lock().await.destroy();
+
+            info!("用户：{} - {} 通过二维码登录成功", user.uid, user.username);
+
+            Ok(LoginResponse {
+                success: true,
+                message: "登录成功".to_string(),
+                status: Some("success".to_string()),
+            })
         }
+        QrLoginCheckResult::Pending => Ok(LoginResponse {
+            success: false,
+            message: "等待扫码确认".to_string(),
+            status: Some("pending".to_string()),
+        }),
+        QrLoginCheckResult::Expired(message) => Ok(LoginResponse {
+            success: false,
+            message,
+            status: Some("expired".to_string()),
+        }),
+        QrLoginCheckResult::Error(message) => Ok(LoginResponse {
+            success: false,
+            message,
+            status: Some("error".to_string()),
+        }),
+        QrLoginCheckResult::Idle => Ok(LoginResponse {
+            success: false,
+            message: "请先获取二维码".to_string(),
+            status: Some("idle".to_string()),
+        }),
     }
-
-    app_data.clients.lock().await.insert(
-        user.uid,
-        crate::MyClient {
-            bilibili,
-            user: user.clone(),
-        },
-    );
-    app_data.auth_service.destroy();
-
-    info!("用户：{} - {} 通过二维码登录成功", user.uid, user.username);
-
-    Ok(LoginResponse {
-        success: true,
-        message: "登录成功".to_string(),
-    })
-}
-
-/// Cookie 登录
-#[tauri::command]
-pub async fn login_with_cookie(
-    _cookie: String,
-    _proxy: Option<String>,
-) -> Result<LoginResponse, String> {
-    // TODO: 实现 Cookie 登录逻辑
-    Ok(LoginResponse {
-        success: true,
-        message: "登录成功".to_string(),
-    })
 }
 
 /// 退出登录
@@ -106,50 +154,73 @@ pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, String
     }
 }
 
-/// 密码登录
-#[tauri::command]
-pub async fn login_with_password(
-    app: tauri::AppHandle,
-    username: String,
-    password: String,
-    proxy: Option<String>,
-) -> Result<LoginResponse, String> {
-    let result = tokio::task::spawn_blocking(move || {
-        tokio::runtime::Handle::current().block_on(async {
-            let app_data = app.state::<Mutex<AppData>>();
-            let auth_service = &mut app_data.lock().await.auth_service;
-            auth_service.init(proxy.as_deref());
-
-            auth_service
-                .login_with_username_password(&username, &password)
-                .await
-        })
-    })
-    .await
-    .map_err(|e| format!("任务执行失败: {e}"))?;
-
-    let (_bilibili, _user) = result.map_err(|e| format!("登录失败: {e}"))?;
-    // info!("用户 {} 登录成功", user.username);
-
-    Ok(LoginResponse {
-        success: true,
-        message: "登录成功".to_string(),
-    })
-}
-
 /// 发送短信验证码
 #[tauri::command]
 pub async fn send_sms_code(
+    app: tauri::AppHandle,
     phone: String,
     country_code: String,
-    _proxy: Option<String>,
+    proxy: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    // TODO: 实现发送短信验证码逻辑
-    // 完整手机号格式: +{country_code}{phone}
-    let full_phone = format!("+{country_code}{phone}");
-    info!("发送验证码到: {}", full_phone);
+    let app_lock = app.state::<Mutex<AppData>>();
+    let auth_service = {
+        let app_data = app_lock.lock().await;
+        app_data.auth_service.clone()
+    };
 
-    Ok(serde_json::json!({
+    let phone_number = phone
+        .trim()
+        .parse::<u64>()
+        .map_err(|_| "手机号格式错误".to_string())?;
+    let country_code_number = country_code
+        .trim()
+        .parse::<u32>()
+        .map_err(|_| "国家代码格式错误".to_string())?;
+
+    let mut auth_service = auth_service.lock().await;
+    auth_service.init(proxy.as_deref());
+    let result = auth_service
+        .send_sms_code(phone_number, country_code_number)
+        .await
+        .map_err(|e| format!("发送验证码失败: {e}"))?;
+
+    let full_phone = format!("+{country_code}{phone}");
+    info!("请求发送验证码到: {}", full_phone);
+
+    match result {
+        SmsSendState::Sent => Ok(json!({
+            "success": true,
+            "message": "验证码已发送"
+        })),
+        SmsSendState::NeedRecaptcha(recaptcha_url) => Ok(json!({
+            "success": false,
+            "needRecaptcha": true,
+            "message": "需要先完成滑块验证",
+            "recaptchaUrl": recaptcha_url
+        })),
+    }
+}
+
+/// 提交短信滑块验证参数并继续发送验证码
+#[tauri::command]
+pub async fn submit_sms_recaptcha(
+    app: tauri::AppHandle,
+    challenge: String,
+    validate: String,
+) -> Result<serde_json::Value, String> {
+    let app_lock = app.state::<Mutex<AppData>>();
+    let auth_service = {
+        let app_data = app_lock.lock().await;
+        app_data.auth_service.clone()
+    };
+    let mut auth_service = auth_service.lock().await;
+
+    auth_service
+        .submit_sms_recaptcha(challenge.trim(), validate.trim())
+        .await
+        .map_err(|e| format!("滑块验证提交失败: {e}"))?;
+
+    Ok(json!({
         "success": true,
         "message": "验证码已发送"
     }))
@@ -158,19 +229,73 @@ pub async fn send_sms_code(
 /// 短信登录
 #[tauri::command]
 pub async fn login_with_sms(
+    app: tauri::AppHandle,
     phone: String,
     country_code: String,
     code: String,
-    _proxy: Option<String>,
+    proxy: Option<String>,
 ) -> Result<LoginResponse, String> {
-    // TODO: 实现短信登录逻辑
-    // 完整手机号格式: +{country_code}{phone}
+    let app_lock = app.state::<Mutex<AppData>>();
+    let auth_service = {
+        let app_data = app_lock.lock().await;
+        app_data.auth_service.clone()
+    };
+
+    // 第1步：校验输入并获取 LoginInfo
+    let login_info = {
+        let mut auth_service = auth_service.lock().await;
+
+        if auth_service.get_proxy().is_none() && proxy.is_some() {
+            auth_service.set_proxy_and_credential(proxy.as_deref());
+        }
+
+        let phone_number = phone
+            .trim()
+            .parse::<u64>()
+            .map_err(|_| "手机号格式错误".to_string())?;
+        let country_code_number = country_code
+            .trim()
+            .parse::<u32>()
+            .map_err(|_| "国家代码格式错误".to_string())?;
+        let sms_code = code
+            .trim()
+            .parse::<u32>()
+            .map_err(|_| "验证码格式错误".to_string())?;
+
+        auth_service
+            .login_with_sms_code_and_phone(sms_code, Some(phone_number), Some(country_code_number))
+            .await
+            .map_err(|e| format!("短信登录失败: {e}"))?
+    };
+
+    // 第2步：网络请求（获取用户信息）在锁外执行
+    let proxy_opt = {
+        let auth_service = auth_service.lock().await;
+        auth_service.get_proxy()
+    };
+
+    let (bilibili, user) = AuthService::login_done_with_proxy(&login_info, proxy_opt.as_deref())
+        .await
+        .map_err(|e| format!("短信登录失败: {e}"))?;
+
+    // 第3步：持久化结果
+    let (config, clients) = {
+        let app_data = app_lock.lock().await;
+        (app_data.config.clone(), app_data.clients.clone())
+    };
+    persist_login_success(config, clients, bilibili, user.clone(), proxy_opt).await;
+    auth_service.lock().await.destroy();
+
     let full_phone = format!("+{country_code}{phone}");
-    info!("短信登录: {} 验证码: {}", full_phone, code);
+    info!(
+        "用户：{} - {} 通过短信登录成功，手机号 {}",
+        user.uid, user.username, full_phone
+    );
 
     Ok(LoginResponse {
         success: true,
         message: "登录成功".to_string(),
+        status: None,
     })
 }
 

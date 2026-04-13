@@ -47,7 +47,7 @@
                                         <div class="user-uid">
                                             UID: {{ user.uid }}
                                             <span v-if="user.expired" class="expired-tip"
-                                                >Cookie已过期</span
+                                                >登录状态已过期</span
                                             >
                                         </div>
                                     </div>

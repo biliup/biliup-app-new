@@ -10,6 +10,22 @@
                                 <div v-if="qrCode" class="qr-container">
                                     <img :src="qrCode" alt="登录二维码" class="qr-image" />
                                     <p class="qr-tip">请使用哔哩哔哩APP扫描二维码登录</p>
+                                    <p
+                                        v-if="qrStatusMessage"
+                                        class="qr-status"
+                                        :class="`is-${qrStatusType}`"
+                                    >
+                                        {{ qrStatusMessage }}
+                                    </p>
+                                    <el-button
+                                        type="primary"
+                                        plain
+                                        size="small"
+                                        @click="getQRCode"
+                                        :loading="loading"
+                                    >
+                                        刷新二维码
+                                    </el-button>
                                 </div>
                                 <el-button
                                     v-else
@@ -22,44 +38,8 @@
                             </div>
                         </el-tab-pane>
 
-                        <!-- 用户名密码登录 -->
-                        <el-tab-pane label="密码登录" name="password" disabled>
-                            <div class="password-login">
-                                <el-form
-                                    :model="passwordForm"
-                                    ref="passwordFormRef"
-                                    :rules="passwordRules"
-                                >
-                                    <el-form-item prop="username">
-                                        <el-input
-                                            v-model="passwordForm.username"
-                                            placeholder="手机号/邮箱/用户名"
-                                            prefix-icon="User"
-                                        />
-                                    </el-form-item>
-                                    <el-form-item prop="password">
-                                        <el-input
-                                            v-model="passwordForm.password"
-                                            type="password"
-                                            placeholder="密码"
-                                            prefix-icon="Lock"
-                                            show-password
-                                        />
-                                    </el-form-item>
-                                </el-form>
-                                <el-button
-                                    type="primary"
-                                    @click="loginWithPassword"
-                                    :loading="loading"
-                                    class="login-btn"
-                                >
-                                    登录
-                                </el-button>
-                            </div>
-                        </el-tab-pane>
-
                         <!-- 短信登录 -->
-                        <el-tab-pane label="短信登录" name="sms" disabled>
+                        <el-tab-pane label="短信登录" name="sms">
                             <div class="sms-login">
                                 <el-form :model="smsForm" ref="smsFormRef" :rules="smsRules">
                                     <el-form-item prop="phone">
@@ -68,15 +48,19 @@
                                                 v-model="smsForm.countryCode"
                                                 placeholder="国家"
                                                 class="country-select"
+                                                filterable
+                                                :clearable="false"
+                                                default-first-option
+                                                no-match-text="未找到国家或区号"
                                             >
                                                 <el-option
                                                     v-for="country in countryList"
-                                                    :key="country.code"
+                                                    :key="`${country.code}-${country.name}`"
                                                     :label="`+${country.code} ${country.name}`"
                                                     :value="country.code"
                                                 >
                                                     <span class="country-option">
-                                                        {{ country.flag }} +{{ country.code }}
+                                                        +{{ country.code }}
                                                         {{ country.name }}
                                                     </span>
                                                 </el-option>
@@ -112,30 +96,49 @@
                                         </div>
                                     </el-form-item>
                                 </el-form>
+
+                                <div v-if="smsRecaptcha.visible" class="sms-recaptcha-panel">
+                                    <div class="sms-recaptcha-title">需要滑块验证</div>
+                                    <div class="sms-recaptcha-desc">
+                                        请在浏览器打开下方链接完成滑块验证。打开浏览器开发者工具，
+                                        从 ajax.php 请求的 payload 中获取 challenge， 从响应中获取
+                                        validate。
+                                    </div>
+                                    <el-input
+                                        v-model="smsRecaptcha.url"
+                                        type="textarea"
+                                        :rows="3"
+                                        readonly
+                                        class="recaptcha-url-input"
+                                    />
+                                    <div class="sms-recaptcha-actions">
+                                        <el-button @click="copyRecaptchaUrl" plain>
+                                            复制验证链接
+                                        </el-button>
+                                    </div>
+                                    <div class="sms-recaptcha-fields">
+                                        <el-input
+                                            v-model="smsRecaptcha.challenge"
+                                            placeholder="请输入 challenge"
+                                        />
+                                        <el-input
+                                            v-model="smsRecaptcha.validate"
+                                            placeholder="请输入 validate"
+                                        />
+                                    </div>
+                                    <el-button
+                                        type="warning"
+                                        :loading="sendingCode"
+                                        @click="submitSMSRecaptcha"
+                                        class="login-btn"
+                                    >
+                                        提交滑块验证并发送验证码
+                                    </el-button>
+                                </div>
+
                                 <el-button
                                     type="primary"
                                     @click="loginWithSMS"
-                                    :loading="loading"
-                                    class="login-btn"
-                                >
-                                    登录
-                                </el-button>
-                            </div>
-                        </el-tab-pane>
-
-                        <!-- Cookie登录 -->
-                        <el-tab-pane label="Cookie登录" name="cookie" disabled>
-                            <div class="cookie-login">
-                                <el-input
-                                    v-model="cookieValue"
-                                    type="textarea"
-                                    placeholder="请输入完整的Cookie..."
-                                    :rows="6"
-                                    class="cookie-input"
-                                />
-                                <el-button
-                                    type="primary"
-                                    @click="loginWithCookie"
                                     :loading="loading"
                                     class="login-btn"
                                 >
@@ -245,10 +248,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { useUtilsStore } from '../stores/utils'
+import { COUNTRY_CODE_OPTIONS } from '../utils/country_codes'
 
 // 定义emit事件
 const emit = defineEmits<{
@@ -261,8 +265,11 @@ const utilsStore = useUtilsStore()
 
 const activeTab = ref('qr')
 const qrCode = ref('')
-const cookieValue = ref('')
+const qrStatusMessage = ref('')
+const qrStatusType = ref<'pending' | 'success' | 'warning' | 'error'>('pending')
 const loading = ref(false)
+const qrChecking = ref(false)
+let qrPollTimer: ReturnType<typeof window.setInterval> | null = null
 
 // 高级选项
 const showAdvancedOptions = ref(false)
@@ -278,13 +285,6 @@ const proxyForm = ref({
     password: ''
 })
 
-// 密码登录表单
-const passwordForm = ref({
-    username: '',
-    password: ''
-})
-const passwordFormRef = ref()
-
 // 短信登录表单
 const smsForm = ref({
     phone: '',
@@ -294,123 +294,178 @@ const smsForm = ref({
 const smsFormRef = ref()
 const smsCountdown = ref(0)
 const sendingCode = ref(false)
+let smsCountdownTimer: ReturnType<typeof window.setInterval> | null = null
+const smsRecaptcha = ref({
+    visible: false,
+    url: '',
+    challenge: '',
+    validate: ''
+})
 
-// 国家代码列表
-const countryList = ref([
-    { code: '86', name: '中国', flag: '🇨🇳' },
-    { code: '1', name: '美国', flag: '🇺🇸' },
-    { code: '44', name: '英国', flag: '🇬🇧' },
-    { code: '81', name: '日本', flag: '🇯🇵' },
-    { code: '82', name: '韩国', flag: '🇰🇷' },
-    { code: '65', name: '新加坡', flag: '🇸🇬' },
-    { code: '852', name: '香港', flag: '🇭🇰' },
-    { code: '853', name: '澳门', flag: '🇲🇴' },
-    { code: '886', name: '台湾', flag: '🇹🇼' },
-    { code: '61', name: '澳大利亚', flag: '🇦🇺' },
-    { code: '33', name: '法国', flag: '🇫🇷' },
-    { code: '49', name: '德国', flag: '🇩🇪' },
-    { code: '39', name: '意大利', flag: '🇮🇹' },
-    { code: '7', name: '俄罗斯', flag: '🇷🇺' },
-    { code: '91', name: '印度', flag: '🇮🇳' }
-])
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (typeof error === 'string' && error.trim()) {
+        return error
+    }
 
-// 表单验证规则
-const passwordRules = {
-    username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
-    password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+    if (error && typeof error === 'object') {
+        const message = Reflect.get(error, 'message')
+        if (typeof message === 'string' && message.trim()) {
+            return message
+        }
+    }
+
+    return fallback
 }
 
+const resetSMSRecaptcha = () => {
+    smsRecaptcha.value.visible = false
+    smsRecaptcha.value.url = ''
+    smsRecaptcha.value.challenge = ''
+    smsRecaptcha.value.validate = ''
+}
+
+const startSMSCountdown = () => {
+    if (smsCountdownTimer !== null) {
+        window.clearInterval(smsCountdownTimer)
+        smsCountdownTimer = null
+    }
+
+    smsCountdown.value = 60
+    smsCountdownTimer = window.setInterval(() => {
+        smsCountdown.value--
+        if (smsCountdown.value <= 0) {
+            if (smsCountdownTimer !== null) {
+                window.clearInterval(smsCountdownTimer)
+                smsCountdownTimer = null
+            }
+        }
+    }, 1000)
+}
+
+const clearSMSCountdown = () => {
+    if (smsCountdownTimer !== null) {
+        window.clearInterval(smsCountdownTimer)
+        smsCountdownTimer = null
+    }
+    smsCountdown.value = 0
+}
+
+const copyRecaptchaUrl = async () => {
+    if (!smsRecaptcha.value.url) {
+        return
+    }
+
+    try {
+        await navigator.clipboard.writeText(smsRecaptcha.value.url)
+        utilsStore.showMessage('验证链接已复制', 'success')
+    } catch {
+        utilsStore.showMessage('复制失败，请手动复制链接', 'warning')
+    }
+}
+
+// 国家代码列表
+const countryList = ref(COUNTRY_CODE_OPTIONS)
+
+// 表单验证规则
 const smsRules = {
     phone: [{ required: true, message: '请输入手机号', trigger: 'blur' }],
     code: [{ required: true, message: '请输入验证码', trigger: 'blur' }]
 }
 
+const stopQRPolling = () => {
+    if (qrPollTimer !== null) {
+        window.clearInterval(qrPollTimer)
+        qrPollTimer = null
+    }
+    qrChecking.value = false
+}
+
+const pollQRLogin = async () => {
+    if (!qrCode.value || qrChecking.value) {
+        return
+    }
+
+    qrChecking.value = true
+    try {
+        const response = await authStore.checkQRLogin()
+        if (response.success) {
+            stopQRPolling()
+            qrStatusType.value = 'success'
+            qrStatusMessage.value = response.message || '登录成功'
+            utilsStore.showMessage('登录成功！', 'success')
+            emit('login-success')
+            return
+        }
+
+        if (response.status === 'pending') {
+            qrStatusType.value = 'pending'
+            qrStatusMessage.value = response.message || '等待扫码确认'
+            return
+        }
+
+        if (response.status === 'expired') {
+            stopQRPolling()
+            qrStatusType.value = 'warning'
+            qrStatusMessage.value = response.message || '二维码已过期，请刷新后重试'
+            utilsStore.showMessage(qrStatusMessage.value, 'warning')
+            return
+        }
+
+        if (response.status === 'idle') {
+            stopQRPolling()
+            qrStatusType.value = 'warning'
+            qrStatusMessage.value = response.message || '请重新获取二维码'
+            return
+        }
+
+        stopQRPolling()
+        qrStatusType.value = 'error'
+        qrStatusMessage.value = response.message || '二维码登录失败'
+        utilsStore.showMessage(qrStatusMessage.value, 'error')
+    } catch (error) {
+        stopQRPolling()
+        qrStatusType.value = 'error'
+        qrStatusMessage.value = getErrorMessage(error, '检查登录状态失败')
+        utilsStore.showMessage(qrStatusMessage.value, 'error')
+    } finally {
+        qrChecking.value = false
+    }
+}
+
+const startQRPolling = () => {
+    stopQRPolling()
+    qrPollTimer = window.setInterval(() => {
+        void pollQRLogin()
+    }, 1500)
+    void pollQRLogin()
+}
+
+watch(activeTab, tab => {
+    if (tab === 'sms') {
+        stopQRPolling()
+        qrCode.value = ''
+        qrStatusMessage.value = ''
+        qrStatusType.value = 'pending'
+    }
+})
+
 // 获取二维码
 const getQRCode = async () => {
+    stopQRPolling()
     loading.value = true
     emit('loading-change', true)
     try {
         const proxyUrl = buildProxyUrl()
         const response = (await authStore.getLoginQR(proxyUrl)) as any
         qrCode.value = response
-
-        // 检查登录状态
-        checkQRLogin()
+        qrStatusType.value = 'pending'
+        qrStatusMessage.value = '等待扫码确认'
+        startQRPolling()
     } catch (error) {
-        utilsStore.showMessage('获取二维码失败', 'error')
-    } finally {
-        loading.value = false
-        emit('loading-change', false)
-    }
-}
-
-// 检查二维码登录状态
-const checkQRLogin = async () => {
-    if (!qrCode.value) return
-    try {
-        const response = await authStore.checkQRLogin()
-        if (response.success) {
-            utilsStore.showMessage('登录成功！', 'success')
-            emit('login-success')
-        } else {
-            utilsStore.showMessage(response.message || '登录失败', 'error')
-        }
-    } catch (error) {
-        console.error('检查登录状态失败:', error)
-    }
-}
-
-// Cookie登录
-const loginWithCookie = async () => {
-    if (!cookieValue.value.trim()) {
-        utilsStore.showMessage('请输入Cookie', 'warning')
-        return
-    }
-
-    loading.value = true
-    emit('loading-change', true)
-    try {
-        const proxyUrl = buildProxyUrl()
-        const response = await authStore.loginWithCookie(cookieValue.value, proxyUrl)
-        if (response.success) {
-            utilsStore.showMessage('登录成功！', 'success')
-            emit('login-success')
-        } else {
-            utilsStore.showMessage(response.message || '登录失败', 'error')
-        }
-    } catch (error) {
-        utilsStore.showMessage('登录失败', 'error')
-    } finally {
-        loading.value = false
-        emit('loading-change', false)
-    }
-}
-
-// 密码登录
-const loginWithPassword = async () => {
-    try {
-        await passwordFormRef.value.validate()
-    } catch {
-        return
-    }
-
-    loading.value = true
-    emit('loading-change', true)
-    try {
-        const proxyUrl = buildProxyUrl()
-        const response = await authStore.loginWithPassword(
-            passwordForm.value.username,
-            passwordForm.value.password,
-            proxyUrl
-        )
-        if (response.success) {
-            utilsStore.showMessage('登录成功！', 'success')
-            emit('login-success')
-        } else {
-            utilsStore.showMessage(response.message || '登录失败', 'error')
-        }
-    } catch (error) {
-        utilsStore.showMessage('登录失败', 'error')
+        qrCode.value = ''
+        qrStatusType.value = 'error'
+        qrStatusMessage.value = ''
+        utilsStore.showMessage(getErrorMessage(error, '获取二维码失败'), 'error')
     } finally {
         loading.value = false
         emit('loading-change', false)
@@ -435,20 +490,48 @@ const sendSMSCode = async () => {
             proxyUrl
         )) as any
         if (response.success) {
+            resetSMSRecaptcha()
             utilsStore.showMessage('验证码已发送', 'success')
-            // 开始倒计时
-            smsCountdown.value = 60
-            const timer = setInterval(() => {
-                smsCountdown.value--
-                if (smsCountdown.value <= 0) {
-                    clearInterval(timer)
-                }
-            }, 1000)
+            startSMSCountdown()
+        } else if (response.needRecaptcha && response.recaptchaUrl) {
+            smsRecaptcha.value.visible = true
+            smsRecaptcha.value.url = response.recaptchaUrl
+            smsRecaptcha.value.challenge = ''
+            smsRecaptcha.value.validate = ''
+            utilsStore.showMessage(response.message || '需要先完成滑块验证', 'warning')
         } else {
             utilsStore.showMessage(response.message || '发送失败', 'error')
         }
     } catch (error) {
-        utilsStore.showMessage('发送验证码失败', 'error')
+        utilsStore.showMessage(getErrorMessage(error, '发送验证码失败'), 'error')
+    } finally {
+        sendingCode.value = false
+        emit('loading-change', false)
+    }
+}
+
+const submitSMSRecaptcha = async () => {
+    if (!smsRecaptcha.value.challenge.trim() || !smsRecaptcha.value.validate.trim()) {
+        utilsStore.showMessage('请输入 challenge 和 validate', 'warning')
+        return
+    }
+
+    sendingCode.value = true
+    emit('loading-change', true)
+    try {
+        const response = await authStore.submitSMSRecaptcha(
+            smsRecaptcha.value.challenge,
+            smsRecaptcha.value.validate
+        )
+        if (response.success) {
+            resetSMSRecaptcha()
+            utilsStore.showMessage('验证码已发送', 'success')
+            startSMSCountdown()
+        } else {
+            utilsStore.showMessage(response.message || '发送失败', 'error')
+        }
+    } catch (error) {
+        utilsStore.showMessage(getErrorMessage(error, '滑块验证提交失败'), 'error')
     } finally {
         sendingCode.value = false
         emit('loading-change', false)
@@ -474,13 +557,15 @@ const loginWithSMS = async () => {
             proxyUrl
         )
         if (response.success) {
+            resetSMSRecaptcha()
+            clearSMSCountdown()
             utilsStore.showMessage('登录成功！', 'success')
             emit('login-success')
         } else {
             utilsStore.showMessage(response.message || '登录失败', 'error')
         }
     } catch (error) {
-        utilsStore.showMessage('登录失败', 'error')
+        utilsStore.showMessage(getErrorMessage(error, '登录失败'), 'error')
     } finally {
         loading.value = false
         emit('loading-change', false)
@@ -512,7 +597,10 @@ const buildProxyUrl = () => {
     return proxyUrl
 }
 
-onMounted(() => {})
+onBeforeUnmount(() => {
+    stopQRPolling()
+    clearSMSCountdown()
+})
 </script>
 
 <style scoped>
@@ -562,11 +650,19 @@ onMounted(() => {})
     padding: 4px;
 }
 
+.login-tabs :deep(.el-tabs__nav) {
+    display: flex;
+    width: 100%;
+}
+
 .login-tabs :deep(.el-tabs__active-bar) {
     display: none;
 }
 
 .login-tabs :deep(.el-tabs__item) {
+    flex: 1;
+    justify-content: center;
+    padding: 0 8px;
     border-radius: 8px;
     transition: all 0.3s;
     color: #64748b;
@@ -585,27 +681,6 @@ onMounted(() => {})
     align-items: center;
     gap: 6px;
     font-size: 14px;
-}
-
-.login-form {
-    width: 100%;
-}
-
-.form-input {
-    margin-bottom: 16px;
-}
-
-.form-input :deep(.el-input__wrapper) {
-    border-radius: 12px;
-    padding: 0 16px;
-    border: 2px solid #e2e8f0;
-    transition: all 0.3s;
-}
-
-.form-input :deep(.el-input__wrapper:hover),
-.form-input :deep(.el-input__wrapper.is-focus) {
-    border-color: #667eea;
-    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .remember-item {
@@ -670,6 +745,28 @@ onMounted(() => {})
     color: #64748b;
     font-size: 14px;
     margin-bottom: 12px;
+}
+
+.qr-status {
+    margin: 0 0 12px;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.qr-status.is-pending {
+    color: #64748b;
+}
+
+.qr-status.is-success {
+    color: #15803d;
+}
+
+.qr-status.is-warning {
+    color: #b45309;
+}
+
+.qr-status.is-error {
+    color: #b91c1c;
 }
 
 .refresh-qr {
@@ -748,24 +845,42 @@ onMounted(() => {})
     color: white;
 }
 
-/* Cookie登录样式 */
-.cookie-login {
-    padding: 20px 0;
-}
-
-.cookie-input {
-    margin-bottom: 24px;
-}
-
-.cookie-input :deep(.el-textarea__inner) {
-    border-radius: 12px;
-    border: 2px solid #e2e8f0;
+.sms-recaptcha-panel {
+    margin: 16px 0 24px;
     padding: 16px;
+    border-radius: 12px;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
 }
 
-.cookie-input :deep(.el-textarea__inner:hover),
-.cookie-input :deep(.el-textarea__inner:focus) {
-    border-color: #667eea;
+.sms-recaptcha-title {
+    color: #9a3412;
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.sms-recaptcha-desc {
+    color: #7c2d12;
+    font-size: 13px;
+    line-height: 1.6;
+    margin-bottom: 12px;
+}
+
+.recaptcha-url-input {
+    margin-bottom: 12px;
+}
+
+.sms-recaptcha-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+.sms-recaptcha-fields {
+    display: grid;
+    gap: 12px;
+    margin-bottom: 16px;
 }
 
 /* 其他登录方式 */
