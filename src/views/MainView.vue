@@ -790,19 +790,20 @@
                                             : '上传完成后自动提交'
                                     }}
                                 </el-button>
-                                <div v-if="currentForm && !currentForm.aid" class="multi-submit-entry">
+                                <div
+                                    v-if="currentForm && !currentForm.aid"
+                                    class="multi-submit-entry"
+                                >
                                     <el-button
                                         type="warning"
                                         size="large"
                                         :loading="separateSubmitting && separateSubmitProcessing"
                                         :disabled="
                                             !separateSubmitting &&
-                                            (
-                                                submitting ||
+                                            (submitting ||
                                                 templateLoading ||
                                                 !currentForm.videos ||
-                                                currentForm.videos.length === 0
-                                            )
+                                                currentForm.videos.length === 0)
                                         "
                                         @click="
                                             separateSubmitting
@@ -1203,12 +1204,16 @@ const finalizeSeparateSubmitMode = () => {
     }
 
     const targetTemplate =
-        userConfigStore.configRoot?.config?.[submitContext.uid]?.templates?.[submitContext.templateName]
+        userConfigStore.configRoot?.config?.[submitContext.uid]?.templates?.[
+            submitContext.templateName
+        ]
     const remainingVideos = targetTemplate?.videos || []
     const hasUploadingVideos = remainingVideos.some(video => !(video.complete && video.path === ''))
     const hasPendingReadyVideos = remainingVideos.some(
         video =>
-            video.complete && video.path === '' && !separateSubmitAttemptedVideoIds.value.has(video.id)
+            video.complete &&
+            video.path === '' &&
+            !separateSubmitAttemptedVideoIds.value.has(video.id)
     )
 
     if (hasUploadingVideos || hasPendingReadyVideos) {
@@ -1350,11 +1355,7 @@ const submitTemplateAsSeparatePosts = async () => {
 
     try {
         // 确保所有视频都在上传队列中（已存在任务会被自动跳过）
-        await uploadStore.createUploadTask(
-            submitUid,
-            submitTemplateName,
-            sourceVideos
-        )
+        await uploadStore.createUploadTask(submitUid, submitTemplateName, sourceVideos)
 
         if (userConfigStore.configRoot?.auto_start) {
             setTimeout(async () => {
@@ -1607,7 +1608,8 @@ watch(
                 }
 
                 const { uid, templateName } = parsed
-                const template = userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
+                const template =
+                    userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
                 if (!template?.videos) {
                     return `${key}:missing`
                 }
