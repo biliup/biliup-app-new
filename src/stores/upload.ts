@@ -23,7 +23,7 @@ interface UploadTask {
 export const useUploadStore = defineStore('upload', () => {
     const uploadQueue = ref<UploadTask[]>([])
     const utilsStore = useUtilsStore()
-    const submitInvokeIntervalMs = 3500
+    const submitInvokeIntervalMs = 5000
     const submitRequestQueue: Array<{
         uid: number
         upload: any
@@ -57,12 +57,13 @@ export const useUploadStore = defineStore('upload', () => {
                 const { uid, upload, resolve, reject } = request
 
                 try {
-                    lastSubmitInvokeAt = Date.now()
                     const result = await invoke('submit', { uid, form: upload })
                     resolve(result)
                 } catch (error) {
                     console.error('提交视频失败:', error)
                     reject(error)
+                } finally {
+                    lastSubmitInvokeAt = Date.now()
                 }
             }
         } finally {
@@ -198,7 +199,7 @@ export const useUploadStore = defineStore('upload', () => {
 
     // 提交视频
     const submitTemplate = async (uid: number, upload: any) => {
-        return new Promise((resolve, reject) => {
+        return new Promise<any>((resolve, reject) => {
             submitRequestQueue.push({ uid, upload, resolve, reject })
             void processSubmitQueue()
         })
