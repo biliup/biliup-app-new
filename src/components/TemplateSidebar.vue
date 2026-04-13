@@ -88,6 +88,7 @@
                         <div class="template-list-toolbar">
                             <span class="template-list-hint"></span>
                             <el-dropdown
+                                v-if="userTemplate.templates.length > 1"
                                 trigger="click"
                                 :disabled="templateLoading || userTemplate.user.expired"
                                 @command="
@@ -95,12 +96,7 @@
                                         handleTemplateSortCommand(userTemplate.user.uid, command)
                                 "
                             >
-                                <el-button
-                                    v-if="userTemplate.templates.length > 1"
-                                    link
-                                    size="small"
-                                    class="template-sort-btn"
-                                >
+                                <el-button link size="small" class="template-sort-btn">
                                     排序
                                 </el-button>
                                 <template #dropdown>
