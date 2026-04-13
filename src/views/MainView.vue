@@ -770,6 +770,7 @@
                                     :loading="submitting"
                                     @click="submitTemplate"
                                     :disabled="
+                                        separateSubmitting ||
                                         templateLoading ||
                                         !currentForm.videos ||
                                         currentForm.videos.length === 0 ||
@@ -789,6 +790,41 @@
                                             : '上传完成后自动提交'
                                     }}
                                 </el-button>
+                                <div v-if="currentForm && !currentForm.aid" class="multi-submit-entry">
+                                    <el-button
+                                        type="warning"
+                                        plain
+                                        :loading="separateSubmitting && separateSubmitProcessing"
+                                        :disabled="
+                                            !separateSubmitting &&
+                                            (
+                                                submitting ||
+                                                templateLoading ||
+                                                !currentForm.videos ||
+                                                currentForm.videos.length === 0
+                                            )
+                                        "
+                                        @click="
+                                            separateSubmitting
+                                                ? stopSeparateSubmit()
+                                                : submitTemplateAsSeparatePosts()
+                                        "
+                                    >
+                                        {{
+                                            separateSubmitting
+                                                ? '停止多稿件提交'
+                                                : '以多稿件模式分别提交视频'
+                                        }}
+                                    </el-button>
+                                    <el-tooltip
+                                        content="使用此功能时，将不再以分p模式提交视频，而是针对每一个视频单独提交一份稿件，稿件名即为当前的‘分p’名，其他内容完全复用当前模板内容，无法进行自定义。每条视频提交成功后会自动从当前视频列表移除。"
+                                        placement="top"
+                                    >
+                                        <el-icon class="multi-submit-help-icon">
+                                            <QuestionFilled />
+                                        </el-icon>
+                                    </el-tooltip>
+                                </div>
                                 <div class="form-tip" v-if="lastSubmit">
                                     最后提交时间: {{ lastSubmit }}
                                 </div>
@@ -910,7 +946,14 @@ const showGlobalConfigDialog = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
+const separateSubmitting = ref(false)
+const separateSubmitProcessing = ref(false)
+const separateSubmitCancelled = ref(false)
+const separateSubmitContext = ref<{ uid: number; templateName: string } | null>(null)
 const templateLoading = ref(false) // 模板加载状态锁
+const separateSubmitAttemptedVideoIds = ref<Set<string>>(new Set())
+const separateSubmitSuccessCount = ref(0)
+const separateSubmitFailCount = ref(0)
 
 // 视频状态对话框
 const showVideoStatusDialog = ref(false)
@@ -923,11 +966,27 @@ const tagViewRef = ref<InstanceType<typeof TagView> | null>(null)
 const seasonViewRef = ref<InstanceType<typeof SeasonView> | null>(null)
 // 自动提交状态记录 - 记录每个模板的自动提交状态
 const autoSubmittingRecord = ref<Record<string, boolean>>({})
-// 全局自动提交检查间隔
-let autoSubmitInterval: number | null = null
+const autoSubmitProcessingKeys = ref<Set<string>>(new Set())
 
 // 生成模板键名
 const getTemplateKey = (uid: number, templateName: string) => `${uid}-${templateName}`
+
+// 解析模板键名，支持模板名包含 "-"
+const parseTemplateKey = (templateKey: string): { uid: number; templateName: string } | null => {
+    const separatorIndex = templateKey.indexOf('-')
+    if (separatorIndex <= 0) {
+        return null
+    }
+
+    const uid = Number.parseInt(templateKey.slice(0, separatorIndex), 10)
+    const templateName = templateKey.slice(separatorIndex + 1)
+
+    if (Number.isNaN(uid) || !templateName) {
+        return null
+    }
+
+    return { uid, templateName }
+}
 
 // 获取当前模板的自动提交状态
 const getCurrentAutoSubmitting = computed(() => {
@@ -956,16 +1015,20 @@ const checkAutoSubmitAll = async () => {
     const templateKeys = Object.keys(autoSubmittingRecord.value)
 
     for (const templateKey of templateKeys) {
-        const [uidStr, templateName] = templateKey.split('-', 2)
-        const uid = parseInt(uidStr)
+        const parsed = parseTemplateKey(templateKey)
+        if (!parsed) continue
 
-        if (isNaN(uid) || !templateName) continue
+        const { uid, templateName } = parsed
 
         // 获取用户和模板配置
         const user = loginUsers.value.find(u => u.uid === uid)
         if (!user || !userConfigStore.configRoot?.config[uid]?.templates[templateName]) {
             // 如果用户或模板不存在，清除自动提交状态
             setAutoSubmitting(uid, templateName, false)
+            continue
+        }
+
+        if (autoSubmitProcessingKeys.value.has(templateKey)) {
             continue
         }
 
@@ -977,11 +1040,14 @@ const checkAutoSubmitAll = async () => {
 
             if (allUploaded && autoSubmittingRecord.value[templateKey]) {
                 // 文件已全部上传完成，执行提交
+                autoSubmitProcessingKeys.value.add(templateKey)
                 setAutoSubmitting(uid, templateName, false)
                 try {
-                    await performTemplateSubmit(uid, templateName, template)
+                    await performTemplateSubmit(uid, templateName, template, { showLoading: false })
                 } catch (error) {
                     console.error(`模板 ${templateKey} 自动提交失败:`, error)
+                } finally {
+                    autoSubmitProcessingKeys.value.delete(templateKey)
                 }
             }
         } else {
@@ -989,27 +1055,56 @@ const checkAutoSubmitAll = async () => {
             setAutoSubmitting(uid, templateName, false)
         }
     }
-
-    // 如果没有模板在自动提交，停止间隔检查
-    if (!hasAnyAutoSubmitting.value && autoSubmitInterval) {
-        clearInterval(autoSubmitInterval)
-        autoSubmitInterval = null
-    }
 }
 
-// 启动全局自动提交检查
-const startAutoSubmitCheck = () => {
-    if (!autoSubmitInterval) {
-        autoSubmitInterval = setInterval(checkAutoSubmitAll, 1000)
+const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
+    if (!(resp && resp.aid && utilsStore.hasSeason)) {
+        return
+    }
+
+    try {
+        const old_season_id = await utilsStore.getVideoSeason(uid, resp.aid)
+        let add = old_season_id && old_season_id !== 0 ? false : true
+
+        if (template && old_season_id !== template.season_id && template.videos[0]?.cid) {
+            const new_season_id = template.season_id || 0
+            const new_section_id = template.section_id || 0
+            await utilsStore.switchSeason(
+                uid,
+                resp.aid,
+                template.videos[0]?.cid,
+                new_season_id,
+                new_section_id,
+                template.title,
+                add
+            )
+
+            const season_title =
+                utilsStore.seasonlist.find((s: any) => s.season_id === template.season_id)?.title ||
+                template.season_id
+            utilsStore.showMessage(`视频${resp.bvid}加入合集${season_title}`, 'success')
+            console.log(`视频${resp.bvid}加入合集${season_title}`, 'success')
+        }
+    } catch (error) {
+        console.error('设置合集失败: ', error)
+        utilsStore.showMessage(`设置合集失败: ${error}`, 'error')
     }
 }
 
 // 执行模板提交
-const performTemplateSubmit = async (uid: number, templateName: string, template: any) => {
+const performTemplateSubmit = async (
+    uid: number,
+    templateName: string,
+    template: any,
+    options?: { showLoading?: boolean }
+) => {
     const user = loginUsers.value.find(u => u.uid === uid)
     if (!user) throw new Error('用户不存在')
 
-    submitting.value = true
+    const showLoading = options?.showLoading ?? true
+    if (showLoading) {
+        submitting.value = true
+    }
     try {
         const resp = (await uploadStore.submitTemplate(uid, template)) as any
 
@@ -1021,35 +1116,7 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
         utilsStore.showMessage(`视频${resp.bvid}提交成功 (模板: ${templateName})`, 'success')
         console.log(`视频${resp.bvid}提交成功 (模板: ${templateName})`, 'success')
 
-        if (resp && resp.aid && utilsStore.hasSeason) {
-            try {
-                const old_season_id = await utilsStore.getVideoSeason(uid, resp.aid)
-                let add = old_season_id && old_season_id !== 0 ? false : true
-
-                if (template && old_season_id !== template.season_id && template.videos[0]?.cid) {
-                    const new_season_id = template.season_id || 0
-                    const new_section_id = template.section_id || 0
-                    await utilsStore.switchSeason(
-                        uid,
-                        resp.aid,
-                        template.videos[0]?.cid,
-                        new_season_id,
-                        new_section_id,
-                        template.title,
-                        add
-                    )
-
-                    const season_title =
-                        utilsStore.seasonlist.find((s: any) => s.season_id === template.season_id)
-                            ?.title || template.season_id
-                    utilsStore.showMessage(`视频${resp.bvid}加入合集${season_title}`, 'success')
-                    console.log(`视频${resp.bvid}加入合集${season_title}`, 'success')
-                }
-            } catch (error) {
-                console.error('设置合集失败: ', error)
-                utilsStore.showMessage(`设置合集失败: ${error}`, 'error')
-            }
-        }
+        await syncSeasonAfterSubmit(uid, resp, template)
 
         setTimeout(async () => {
             try {
@@ -1076,13 +1143,237 @@ const performTemplateSubmit = async (uid: number, templateName: string, template
             } catch (error) {
                 utilsStore.showMessage(`${error}`, 'error')
             } finally {
-                submitting.value = false
+                if (showLoading) {
+                    submitting.value = false
+                }
             }
         }, 500)
     } catch (error) {
         console.error('模板提交失败:', error)
         utilsStore.showMessage(`模板提交失败: ${error}`, 'error')
-        submitting.value = false
+        if (showLoading) {
+            submitting.value = false
+        }
+    }
+}
+
+const resetSeparateSubmitState = () => {
+    separateSubmitting.value = false
+    separateSubmitProcessing.value = false
+    separateSubmitCancelled.value = false
+    separateSubmitContext.value = null
+    separateSubmitAttemptedVideoIds.value.clear()
+    separateSubmitSuccessCount.value = 0
+    separateSubmitFailCount.value = 0
+}
+
+const stopSeparateSubmit = () => {
+    if (!separateSubmitting.value) {
+        return
+    }
+
+    separateSubmitCancelled.value = true
+    separateSubmitting.value = false
+    utilsStore.showMessage('已停止多稿件提交，当前进行中的提交结束后将退出', 'info')
+
+    if (!separateSubmitProcessing.value) {
+        finalizeSeparateSubmitMode()
+    }
+}
+
+const finalizeSeparateSubmitMode = () => {
+    const submitContext = separateSubmitContext.value
+    if (!submitContext) {
+        resetSeparateSubmitState()
+        return
+    }
+
+    const wasCancelled = separateSubmitCancelled.value
+    if (wasCancelled) {
+        const successCount = separateSubmitSuccessCount.value
+        const failCount = separateSubmitFailCount.value
+        if (successCount > 0 || failCount > 0) {
+            utilsStore.showMessage(
+                `多稿件提交已停止，已成功 ${successCount} 个，失败 ${failCount} 个`,
+                'warning'
+            )
+        }
+        resetSeparateSubmitState()
+        return
+    }
+
+    const targetTemplate =
+        userConfigStore.configRoot?.config?.[submitContext.uid]?.templates?.[submitContext.templateName]
+    const remainingVideos = targetTemplate?.videos || []
+    const hasUploadingVideos = remainingVideos.some(video => !(video.complete && video.path === ''))
+    const hasPendingReadyVideos = remainingVideos.some(
+        video =>
+            video.complete && video.path === '' && !separateSubmitAttemptedVideoIds.value.has(video.id)
+    )
+
+    if (hasUploadingVideos || hasPendingReadyVideos) {
+        return
+    }
+
+    const successCount = separateSubmitSuccessCount.value
+    const failCount = separateSubmitFailCount.value
+
+    if (successCount > 0 || failCount > 0) {
+        lastSubmit.value = new Date().toLocaleString()
+    }
+
+    if (failCount === 0) {
+        utilsStore.showMessage(`多稿件提交完成，共成功 ${successCount} 个`, 'success')
+    } else {
+        utilsStore.showMessage(
+            `多稿件提交完成，成功 ${successCount} 个，失败 ${failCount} 个`,
+            'warning'
+        )
+    }
+
+    resetSeparateSubmitState()
+}
+
+const processSeparateSubmitQueue = async () => {
+    if (!separateSubmitting.value || separateSubmitProcessing.value) {
+        return
+    }
+
+    separateSubmitProcessing.value = true
+    try {
+        const submitContext = separateSubmitContext.value
+        if (!submitContext) {
+            resetSeparateSubmitState()
+            return
+        }
+
+        const { uid, templateName } = submitContext
+        const targetTemplate = userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
+        if (!targetTemplate) {
+            resetSeparateSubmitState()
+            utilsStore.showMessage('多稿件提交目标模板不存在，已停止提交', 'warning')
+            return
+        }
+
+        while (true) {
+            if (!separateSubmitting.value || separateSubmitCancelled.value) {
+                break
+            }
+
+            const readyVideo = (targetTemplate.videos || []).find(
+                video =>
+                    video.complete &&
+                    video.path === '' &&
+                    !separateSubmitAttemptedVideoIds.value.has(video.id)
+            )
+
+            if (!readyVideo) {
+                break
+            }
+
+            separateSubmitAttemptedVideoIds.value.add(readyVideo.id)
+            const singleVideo = JSON.parse(JSON.stringify(readyVideo))
+            const singleTemplate = JSON.parse(JSON.stringify(targetTemplate))
+            const fallbackTitle = singleTemplate.title
+
+            singleTemplate.aid = undefined
+            singleTemplate.videos = [singleVideo]
+            singleTemplate.title = (singleVideo.title || '').trim() || fallbackTitle
+
+            try {
+                const resp = (await uploadStore.submitTemplate(uid, singleTemplate)) as any
+                separateSubmitSuccessCount.value++
+                await syncSeasonAfterSubmit(uid, resp, singleTemplate)
+
+                const removeIndex = targetTemplate.videos.findIndex(v => v.id === readyVideo.id)
+                if (removeIndex > -1) {
+                    targetTemplate.videos.splice(removeIndex, 1)
+                }
+            } catch (error) {
+                separateSubmitFailCount.value++
+                const videoTitle = (readyVideo.title || '').trim() || readyVideo.id
+                utilsStore.showMessage(`多稿件提交失败（${videoTitle}）: ${error}`, 'error')
+                console.error('多稿件模式提交失败: ', error)
+            }
+        }
+    } finally {
+        separateSubmitProcessing.value = false
+        finalizeSeparateSubmitMode()
+    }
+}
+
+const submitTemplateAsSeparatePosts = async () => {
+    if (!selectedUser.value || !currentTemplateName.value || !currentForm.value) {
+        utilsStore.showMessage('请先选择模板', 'error')
+        return
+    }
+
+    const submitUid = selectedUser.value.uid
+    const submitTemplateName = currentTemplateName.value
+    const targetTemplate = currentForm.value
+
+    if (separateSubmitting.value) {
+        return
+    }
+
+    if (targetTemplate.aid) {
+        utilsStore.showMessage('仅新增稿件支持此功能', 'warning')
+        return
+    }
+
+    const sourceVideos = targetTemplate.videos || []
+    if (sourceVideos.length === 0) {
+        utilsStore.showMessage('当前没有可提交的视频', 'warning')
+        return
+    }
+
+    try {
+        await ElMessageBox.confirm(
+            `即将按多稿件模式提交 ${sourceVideos.length} 个视频。每个视频将单独提交为一份稿件，确认继续吗？`,
+            '确认多稿件提交',
+            {
+                confirmButtonText: '确认提交',
+                cancelButtonText: '取消',
+                type: 'warning'
+            }
+        )
+    } catch {
+        return
+    }
+
+    separateSubmitting.value = true
+    separateSubmitContext.value = { uid: submitUid, templateName: submitTemplateName }
+    separateSubmitCancelled.value = false
+    separateSubmitSuccessCount.value = 0
+    separateSubmitFailCount.value = 0
+    separateSubmitAttemptedVideoIds.value.clear()
+
+    try {
+        // 确保所有视频都在上传队列中（已存在任务会被自动跳过）
+        await uploadStore.createUploadTask(
+            submitUid,
+            submitTemplateName,
+            sourceVideos
+        )
+
+        if (userConfigStore.configRoot?.auto_start) {
+            setTimeout(async () => {
+                try {
+                    await autoStartWaitingTasks()
+                } catch (error) {
+                    console.error('自动开始任务失败:', error)
+                }
+            }, 500)
+        }
+
+        utilsStore.showMessage('已开启多稿件提交，视频上传完成后将自动逐条提交', 'info')
+        await processSeparateSubmitQueue()
+    } catch (error) {
+        console.error('开启多稿件提交失败:', error)
+        utilsStore.showMessage(`开启多稿件提交失败: ${error}`, 'error')
+        resetSeparateSubmitState()
+    } finally {
+        // 提交过程改为异步持续模式，不在这里关闭 loading
     }
 }
 const lastSubmit = ref<string>('')
@@ -1282,6 +1573,59 @@ watch(
     }
 )
 
+watch(
+    () => {
+        if (!separateSubmitting.value || !separateSubmitContext.value) {
+            return ''
+        }
+
+        const { uid, templateName } = separateSubmitContext.value
+        const targetTemplate = userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
+        if (!targetTemplate?.videos) {
+            return 'missing'
+        }
+
+        return targetTemplate.videos
+            .map(video => `${video.id}:${video.complete ? 1 : 0}:${video.path || ''}`)
+            .join('|')
+    },
+    () => {
+        if (separateSubmitting.value) {
+            void processSeparateSubmitQueue()
+        }
+    }
+)
+
+watch(
+    () => {
+        const keys = Object.keys(autoSubmittingRecord.value).sort()
+        return keys
+            .map(key => {
+                const parsed = parseTemplateKey(key)
+                if (!parsed) {
+                    return `${key}:invalid`
+                }
+
+                const { uid, templateName } = parsed
+                const template = userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
+                if (!template?.videos) {
+                    return `${key}:missing`
+                }
+                const state = template.videos
+                    .map(video => `${video.id}:${video.complete ? 1 : 0}:${video.path || ''}`)
+                    .join(',')
+                return `${key}:${state}`
+            })
+            .join('|')
+    },
+    () => {
+        if (hasAnyAutoSubmitting.value) {
+            void checkAutoSubmitAll()
+        }
+    },
+    { immediate: true }
+)
+
 const getInteractiveConfirmKey = () => {
     if (!selectedUser.value?.uid) return ''
     return `${selectedUser.value.uid}`
@@ -1385,16 +1729,13 @@ onUnmounted(() => {
         keyboardCleanup()
     }
 
-    // 清理自动提交间隔检查
-    if (autoSubmitInterval) {
-        clearInterval(autoSubmitInterval)
-        autoSubmitInterval = null
-    }
-
     if (generalUpdateTimer) {
         clearInterval(generalUpdateTimer)
         generalUpdateTimer = null
     }
+
+    resetSeparateSubmitState()
+    autoSubmitProcessingKeys.value.clear()
 
     // 清理所有自动提交状态
     autoSubmittingRecord.value = {}
@@ -2756,7 +3097,7 @@ const submitTemplate = async () => {
                 utilsStore.showMessage(`添加到上传队列失败: ${error}`, 'error')
             }
             setAutoSubmitting(selectedUser.value.uid, currentTemplateName.value, true)
-            startAutoSubmitCheck()
+            void checkAutoSubmitAll()
             utilsStore.showMessage('已启动自动提交，上传完成后将自动提交', 'info')
         } else {
             // 第二次点击，取消自动提交
@@ -3640,6 +3981,23 @@ const checkUpdate = async () => {
 
 .upload-actions .el-button {
     min-width: 140px;
+}
+
+.multi-submit-entry {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.multi-submit-help-icon {
+    color: #909399;
+    cursor: pointer;
+    font-size: 14px;
+    transition: color 0.2s ease;
+}
+
+.multi-submit-help-icon:hover {
+    color: #606266;
 }
 
 /* 拖拽覆盖层样式 */
