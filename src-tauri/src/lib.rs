@@ -222,7 +222,7 @@ pub async fn run() {
             read_dir_recursive,
             upload_cover,
             download_cover,
-            get_type_list,
+            get_archive_pre,
             get_topic_list,
             search_topics,
             get_season_list,

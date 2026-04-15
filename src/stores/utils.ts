@@ -4,10 +4,35 @@ import { invoke } from '@tauri-apps/api/core'
 import { ElMessage } from 'element-plus'
 
 export const useUtilsStore = defineStore('template', () => {
-    const typelist = ref<any[]>([])
+    const archieve_pre = ref<any>(null)
     const topiclist = ref<any[]>([])
     const seasonlist = ref<any[]>([])
     const hasSeason = ref<boolean>(false)
+
+    const common_staff_conf = computed(() => {
+        const conf = archieve_pre.value?.common_staff_conf || {}
+
+        const titles = Array.isArray(conf.titles)
+            ? [...new Set(conf.titles.map((item: any) => String(item).trim()).filter(Boolean))]
+            : []
+
+        const missions = Array.isArray(conf.missions)
+            ? [
+                  ...new Set(
+                      conf.missions
+                          .map((item: any) => Number(item))
+                          .filter((item: number) => Number.isInteger(item) && item > 0)
+                  )
+              ]
+            : []
+
+        return {
+            max_staff: Number(conf.max_staff) > 0 ? Number(conf.max_staff) : 10,
+            title_ids: conf.title_ids ?? null,
+            titles,
+            missions
+        }
+    })
 
     const getCurrentVersion = async () => {
         try {
@@ -62,12 +87,12 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
-    const initTypeList = async (uid: number) => {
+    const initArchievePre = async (uid: number) => {
         try {
-            typelist.value = await invoke('get_type_list', { uid })
-            return typelist
+            archieve_pre.value = await invoke('get_archive_pre', { uid })
+            return archieve_pre
         } catch (error) {
-            console.error('获取分区列表失败:', error)
+            console.error('获取archieve pre失败:', error)
             throw error
         }
     }
@@ -217,7 +242,9 @@ export const useUtilsStore = defineStore('template', () => {
     }
 
     return {
-        typelist: computed(() => typelist.value),
+        archieve_pre: computed(() => archieve_pre.value),
+        typelist: computed<any[]>(() => (archieve_pre.value?.typelist || []) as any[]),
+        common_staff_conf,
         topiclist: computed(() => topiclist.value),
         seasonlist: computed(() => seasonlist.value),
         getCurrentVersion,
@@ -225,7 +252,7 @@ export const useUtilsStore = defineStore('template', () => {
         readDirRecursive,
         uploadCover,
         downloadCover,
-        initTypeList,
+        initArchievePre,
         initTopicList,
         searchTopics,
         getVideoDetail,

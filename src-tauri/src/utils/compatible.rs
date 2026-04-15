@@ -158,6 +158,7 @@ impl CompatibilityConverter {
                 interactive: streamer_config.interactive,
                 mission_id: streamer_config.mission_id,
                 topic_id: None,   // 旧版配置没有topic_id
+                topic_name: None, // 旧版配置没有topic_name
                 season_id: None,  // 旧版配置没有season_id
                 section_id: None, // 旧版配置没有section_id
                 is_only_self: 0,  // 旧版配置没有is_only_self
@@ -176,6 +177,8 @@ impl CompatibilityConverter {
                 up_close_danmu: if streamer_config.up_close_danmu { 1 } else { 0 },
                 atomic_int: streamer_config.atomic_int,
                 watermark: 0, // 默认关闭
+                is_360: -1,   // 默认不是360度视频
+                staff: None,  // 旧版配置没有staff字段
             };
 
             template.insert(streamer_name, template_config);

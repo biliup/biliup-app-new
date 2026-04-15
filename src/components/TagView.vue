@@ -9,14 +9,15 @@
         <el-tag
             v-for="(tag, index) in modelValue"
             :key="`${tag}-${index}`"
-            closable
+            :closable="!disabled && !isLockedFirstTag(index, tag)"
             @close="removeTag(tag)"
             @click.stop="selectTag(index)"
             @keydown="handleTagKeydown($event, index)"
             class="tag-item"
             :class="{
                 'tag-selected': selectedTagIndex === index,
-                'tag-editing': editingTagIndex === index
+                'tag-editing': editingTagIndex === index,
+                'tag-locked': isLockedFirstTag(index, tag)
             }"
             tabindex="0"
             v-show="editingTagIndex !== index"
@@ -32,6 +33,9 @@
             v-model="editingTagValue"
             size="small"
             placeholder="修改标签"
+            :disabled="
+                disabled || isLockedFirstTag(editingTagIndex, modelValue[editingTagIndex] || '')
+            "
             @blur="handleEditFinish"
             @keydown.enter="handleEditFinish"
             @keydown.esc="cancelEditTag"
@@ -44,6 +48,7 @@
             v-model="newTag"
             size="small"
             placeholder="按回车键添加"
+            :disabled="disabled"
             @keyup.enter="addTag(true)"
             @blur="addTag(false)"
             @keydown="handleNewTagKeydown"
@@ -51,7 +56,13 @@
             @focusout="removeKeyboardListener"
             class="tag-input-field"
         />
-        <el-button v-else size="small" @click.stop="showTagInput" class="add-tag-btn">
+        <el-button
+            v-else
+            size="small"
+            @click.stop="showTagInput"
+            class="add-tag-btn"
+            :disabled="disabled"
+        >
             + 添加标签
         </el-button>
         <span class="tag-count">{{ modelValue.length }}/12</span>
@@ -67,6 +78,8 @@ const utilsStore = useUtilsStore()
 // Props
 interface Props {
     modelValue: string[]
+    lockedFirstTag?: string
+    disabled?: boolean
 }
 
 const props = defineProps<Props>()
@@ -89,8 +102,16 @@ const editingTagIndex = ref<number>(-1)
 const editingTagValue = ref<string>('')
 const hasShownDuplicateWarning = ref<boolean>(false)
 
+const isLockedFirstTag = (index: number, tag: string) => {
+    return index === 0 && Boolean(props.lockedFirstTag) && tag === props.lockedFirstTag
+}
+
 // 方法
 const showTagInput = () => {
+    if (props.disabled) {
+        return
+    }
+
     // 如果正在编辑标签，先保存
     if (editingTagIndex.value >= 0) {
         finishEditTag()
@@ -157,8 +178,15 @@ const addTag = (keepInput = false) => {
 }
 
 const removeTag = (tag: string) => {
+    if (props.disabled) {
+        return
+    }
+
     const index = props.modelValue.indexOf(tag)
     if (index > -1) {
+        if (isLockedFirstTag(index, tag)) {
+            return
+        }
         const newTags = [...props.modelValue]
         newTags.splice(index, 1)
         emit('update:modelValue', newTags)
@@ -215,6 +243,10 @@ const selectTag = (index: number) => {
 
 // 开始编辑标签
 const startEditTag = (index: number) => {
+    if (props.disabled || isLockedFirstTag(index, props.modelValue[index] || '')) {
+        return
+    }
+
     editingTagIndex.value = index
     editingTagValue.value = props.modelValue[index]
     selectedTagIndex.value = -1
@@ -286,6 +318,10 @@ const cancelEditTag = () => {
 
 // 处理标签的键盘事件
 const handleTagKeydown = (event: KeyboardEvent, index: number) => {
+    if (props.disabled || isLockedFirstTag(index, props.modelValue[index] || '')) {
+        return
+    }
+
     if (event.key === 'Backspace' || event.key === 'Delete') {
         hasShownDuplicateWarning.value = false
         event.preventDefault()
@@ -510,6 +546,16 @@ defineExpose({
 
 .tag-item.tag-editing {
     display: none;
+}
+
+.tag-item.tag-locked {
+    background-color: #f2f3f5;
+    border-color: #dcdfe6;
+    color: #909399;
+}
+
+.tag-item.tag-locked:hover {
+    background-color: #f2f3f5;
 }
 
 .tag-editing-field {

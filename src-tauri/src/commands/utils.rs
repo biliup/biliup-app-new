@@ -6,9 +6,12 @@ use tauri::Manager;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
-use crate::utils::crypto::encode_base64;
-use crate::utils::file_utils::{self, FileEntry};
 use crate::{AppData, models::TemplateConfig};
+use crate::{models::user_config::Credit, utils::crypto::encode_base64};
+use crate::{
+    models::user_config::Staff,
+    utils::file_utils::{self, FileEntry},
+};
 
 #[tauri::command]
 pub async fn get_current_version() -> Result<String, String> {
@@ -96,7 +99,7 @@ pub async fn download_cover(
 }
 
 #[tauri::command]
-pub async fn get_type_list(app: tauri::AppHandle, uid: u64) -> Result<Value, String> {
+pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, String> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
@@ -111,8 +114,8 @@ pub async fn get_type_list(app: tauri::AppHandle, uid: u64) -> Result<Value, Str
         .await
     {
         Ok(res) => {
-            debug!("获取分区列表成功: {}", res);
-            Ok(res["data"]["typelist"].clone())
+            debug!("获取archieve pre成功: {}", res);
+            Ok(res["data"].clone())
         }
         Err(e) => Err(e.to_string()),
     }
@@ -245,66 +248,147 @@ pub async fn get_video_detail(
         .map_err(|e| format!("解析视频 ID 失败: {e}"))?;
 
     let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
 
-    let true_desc = match app_data.clients.lock().await.get(&uid) {
-        Some(client) => {
-            match client
-                .bilibili
-                .client
-                .get(format!(
-                    "https://api.bilibili.com/x/web-interface/view?{vid}",
-                ))
-                .send()
-                .await
-            {
-                Ok(response) => match response.json::<Value>().await {
-                    Ok(res) => res["data"]["desc"].as_str().unwrap_or("").to_string(),
-                    Err(e) => {
-                        error!("解析稿件描述响应失败: {:?}", e);
-                        "".to_string()
-                    }
-                },
-                Err(e) => {
-                    error!("获取稿件描述请求失败: {:?}", e);
-                    "".to_string()
-                }
-            }
-        }
-        None => {
-            error!("用户未登录或不存在，无法获取稿件描述");
-            "".to_string()
-        }
+    // 取出所需数据后立即释放锁，避免在网络 I/O 期间持有互斥锁
+    let (bilibili, proxy) = {
+        let app_data = app_lock.lock().await;
+        let proxy = app_data
+            .config
+            .lock()
+            .await
+            .config
+            .get(&uid)
+            .and_then(|c| c.proxy.clone());
+        let clients = app_data.clients.lock().await;
+        let bilibili = clients
+            .get(&uid)
+            .ok_or("用户未登录或不存在")?
+            .bilibili
+            .clone();
+        (bilibili, proxy)
     };
 
-    let proxy: Option<String> = app_data
-        .config
-        .lock()
-        .await
-        .config
-        .get(&uid)
-        .and_then(|c| c.proxy.clone());
-
-    match app_data
-        .clients
-        .lock()
-        .await
-        .get(&uid)
-        .ok_or("用户未登录或不存在")?
-        .bilibili
+    // 第1步：通过创作者 API 获取基础 TemplateConfig
+    let res = bilibili
         .video_data(&vid, proxy.as_deref())
         .await
+        .map_err(|e| e.to_string())?;
+    let mut template_config = TemplateConfig::from_bilibili_res(res).map_err(|e| e.to_string())?;
+
+    match bilibili
+        .client
+        .get(format!(
+            "https://member.bilibili.com/x/vupre/web/archive/view?topic_grey=1&{vid}&t={}",
+            chrono::Utc::now().timestamp() * 1000
+        ))
+        .send()
+        .await
     {
-        Ok(res) => {
-            let mut template_config =
-                TemplateConfig::from_bilibili_res(res).map_err(|e| e.to_string())?;
-            if !true_desc.is_empty() {
-                template_config.desc = true_desc;
+        Ok(response) => match response.json::<Value>().await {
+            Ok(res) => {
+                debug!("获取稿件 web 接口数据成功: {}", res);
+                if let Some(data) = res.get("data") {
+                    let archive_data = data.get("archive").unwrap_or(data);
+
+                    if let Some(desc) = archive_data["desc"].as_str().filter(|s| !s.is_empty()) {
+                        template_config.desc = desc.to_string();
+                    }
+                    if let Some(arr) = archive_data["desc_v2"].as_array() {
+                        let credits: Vec<Credit> = arr
+                            .iter()
+                            .filter_map(|item| {
+                                let type_id = item["type"].as_i64()? as i8;
+                                let raw_text = item["raw_text"].as_str()?.to_string();
+                                let biz_id = item.get("biz_id").and_then(|v| {
+                                    if let Some(id) = v.as_u64() {
+                                        if id == 0 { None } else { Some(id.to_string()) }
+                                    } else {
+                                        v.as_str().map(|s| s.to_string())
+                                    }
+                                });
+                                Some(Credit {
+                                    type_id,
+                                    raw_text,
+                                    biz_id,
+                                })
+                            })
+                            .collect();
+                        if !credits.is_empty() {
+                            template_config.desc_v2 = Some(credits);
+                        }
+                    }
+                    if let Some(dynamic) =
+                        archive_data["dynamic"].as_str().filter(|s| !s.is_empty())
+                    {
+                        template_config.dynamic = dynamic.to_string();
+                    }
+                    // mission_id：活动 ID
+                    if let Some(mission_id) = archive_data["mission_id"].as_u64() {
+                        template_config.mission_id = Some(mission_id as u32);
+                    }
+                    if let Some(topic_id) = archive_data["topic_id"].as_u64() {
+                        template_config.topic_id = Some(topic_id as u32);
+                    }
+                    if let Some(topic_name) = archive_data["topic_name"]
+                        .as_str()
+                        .or_else(|| data["topic_name"].as_str())
+                        .filter(|s| !s.is_empty())
+                    {
+                        template_config.topic_name = Some(topic_name.to_string());
+                    }
+                    if let Some(rights) = archive_data.get("rights").or_else(|| data.get("rights"))
+                    {
+                        template_config.is_360 =
+                            rights.get("is_360").and_then(|v| v.as_i64()).unwrap_or(-1);
+                    }
+                    if let Some(staff) = data
+                        .get("staffs")
+                        .or_else(|| archive_data.get("staffs"))
+                        .or_else(|| data.get("staff"))
+                    {
+                        if let Some(arr) = staff.as_array() {
+                            let staff_vec: Vec<Staff> = arr
+                                .iter()
+                                .filter_map(|item| {
+                                    let title = item
+                                        .get("apply_title")
+                                        .and_then(|v| v.as_str())
+                                        .or_else(|| item.get("title").and_then(|v| v.as_str()))
+                                        .unwrap_or("")
+                                        .to_string();
+                                    let mid = item
+                                        .get("apply_staff_mid")
+                                        .and_then(|v| v.as_u64())
+                                        .or_else(|| item.get("mid").and_then(|v| v.as_u64()))
+                                        .unwrap_or(0);
+                                    if title.is_empty() || mid == 0 {
+                                        None
+                                    } else {
+                                        Some(Staff {
+                                            title,
+                                            mid,
+                                            is_del: 0,
+                                        })
+                                    }
+                                })
+                                .collect();
+                            if !staff_vec.is_empty() {
+                                template_config.staff = Some(staff_vec);
+                            }
+                        }
+                    }
+                }
             }
-            Ok(template_config)
+            Err(e) => {
+                error!("解析 web 接口响应失败: {:?}", e);
+            }
+        },
+        Err(e) => {
+            error!("请求 web 接口失败: {:?}", e);
         }
-        Err(e) => Err(e.to_string()),
     }
+
+    Ok(template_config)
 }
 
 #[tauri::command]

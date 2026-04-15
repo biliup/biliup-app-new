@@ -475,16 +475,30 @@
                                             <TagView
                                                 ref="tagViewRef"
                                                 v-model="tags"
+                                                :locked-first-tag="lockedFirstTag"
                                                 :disabled="templateLoading"
                                             />
                                         </el-form-item>
 
-                                        <el-form-item v-if="!currentForm.aid" label="参与活动">
+                                        <el-form-item label="参与活动">
                                             <TopicView
                                                 v-model="currentForm.mission_id"
                                                 v-model:topic-id="currentForm.topic_id"
+                                                v-model:topic-name="currentForm.topic_name"
                                                 :user-uid="selectedUser?.uid"
                                                 mode="selector"
+                                                :disabled="
+                                                    templateLoading || Boolean(currentForm.aid)
+                                                "
+                                            />
+                                        </el-form-item>
+
+                                        <el-form-item v-if="!staffFieldDisabled" label="联合投稿">
+                                            <StaffView
+                                                v-model="currentForm.staff"
+                                                :is-edit-mode="Boolean(currentForm.aid)"
+                                                :role-options="availableStaffRoles"
+                                                :max-staff="maxStaffCount"
                                                 :disabled="templateLoading"
                                             />
                                         </el-form-item>
@@ -760,6 +774,18 @@
                                                 仅自己可见
                                             </el-checkbox>
                                         </el-form-item>
+                                        <el-form-item
+                                            v-if="Boolean(currentForm.aid)"
+                                            label="全景视频"
+                                        >
+                                            <el-checkbox
+                                                v-model="currentForm.is_360"
+                                                :true-value="1"
+                                                :false-value="-1"
+                                                :disabled="templateLoading"
+                                            >
+                                            </el-checkbox>
+                                        </el-form-item>
                                     </div>
                                 </el-collapse-transition>
                             </el-card>
@@ -929,6 +955,7 @@ import UserList from '../components/UserList.vue'
 import VideoStatus from '../components/VideoStatus.vue'
 import TagView from '../components/TagView.vue'
 import DataPicker from '../components/DataPicker.vue'
+import StaffView from '../components/StaffView.vue'
 
 const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
@@ -972,6 +999,7 @@ const separateSubmitFailedVideoNames = ref<string[]>([])
 const showVideoStatusDialog = ref(false)
 const interactiveConfirmShown = ref<Record<string, boolean>>({})
 const interactiveDialogOpening = ref(false)
+const onlySelfDialogOpening = ref(false)
 
 // 组件引用
 const newTemplateRef = ref<InstanceType<typeof NewTemplete> | null>(null)
@@ -1588,6 +1616,47 @@ const currentForm = computed({
 
 const tags = ref<string[]>([])
 
+const lockedFirstTag = computed(() => {
+    const first = tags.value[0] || ''
+    const topicName = currentForm.value?.topic_name || ''
+    if (!first || !topicName) {
+        return undefined
+    }
+    return first === topicName ? first : undefined
+})
+
+const commonStaffConf = computed(() => utilsStore.common_staff_conf)
+const availableStaffRoles = computed<string[]>(() => {
+    const titles = commonStaffConf.value?.titles
+    return Array.isArray(titles) ? (titles as string[]) : []
+})
+const maxStaffCount = computed<number>(() => commonStaffConf.value?.max_staff || 10)
+const missionSupportsStaff = computed(() => {
+    const missionId = Number(currentForm.value?.mission_id || 0)
+    if (!missionId) {
+        return false
+    }
+    return (commonStaffConf.value?.missions || []).includes(missionId)
+})
+
+const currentUserFans = computed<number | null>(() => {
+    const archivePre = utilsStore.archieve_pre as any
+    return archivePre?.myinfo?.follower
+})
+
+const lowFansNeedsSupportedMission = computed(() => {
+    if (currentUserFans.value === null) {
+        return false
+    }
+    return currentUserFans.value < 1000
+})
+
+const staffFieldDisabled = computed(() => {
+    const onlySelfInvisible = Number(currentForm.value?.is_only_self || 0) === 1
+    const blockedByFansRule = lowFansNeedsSupportedMission.value
+    return onlySelfInvisible || (blockedByFansRule && !missionSupportsStaff.value)
+})
+
 // 日期选择器的计算属性 - 处理时间戳转换
 const dtimeDate = computed({
     get() {
@@ -1845,6 +1914,35 @@ watch(
     }
 )
 
+watch(
+    () => currentForm.value?.is_only_self,
+    async (newValue, oldValue) => {
+        if (!currentForm.value || onlySelfDialogOpening.value || templateLoading.value) return
+        if (Number(newValue || 0) !== 1 || Number(oldValue || 0) === 1) return
+
+        const staffList = Array.isArray(currentForm.value.staff) ? currentForm.value.staff : []
+        if (staffList.length === 0) return
+
+        onlySelfDialogOpening.value = true
+        try {
+            await ElMessageBox.confirm(
+                '仅自己可见时无法进行联合投稿，如果继续，将清空联合投稿信息，是否继续。',
+                '提示',
+                {
+                    confirmButtonText: '继续',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                }
+            )
+            currentForm.value.staff = []
+        } catch {
+            currentForm.value.is_only_self = 0
+        } finally {
+            onlySelfDialogOpening.value = false
+        }
+    }
+)
+
 let keyboardCleanup: (() => void) | null = null
 
 const forwardConsole = (fnName: keyof Console, logger: (level: string, ...args: any[]) => void) => {
@@ -1897,7 +1995,7 @@ const initializeData = async () => {
 
         // 构建用户模板列表
         if (loginUsers.value.length > 0) {
-            await utilsStore.initTypeList(loginUsers.value[0].uid)
+            await utilsStore.initArchievePre(loginUsers.value[0].uid)
             await utilsStore.initTopicList(loginUsers.value[0].uid)
             await userConfigStore.ensureUserTemplatesReady()
             await uploadStore.getUploadQueue()
@@ -1956,6 +2054,7 @@ const hasUnsavedChanges = (
         'interactive',
         'mission_id',
         'topic_id',
+        'topic_name',
         'season_id',
         'section_id',
         'dolby',
@@ -1967,7 +2066,9 @@ const hasUnsavedChanges = (
         'up_close_reply',
         'up_close_danmu',
         'is_only_self',
-        'watermark'
+        'watermark',
+        'is_360',
+        'staff'
     ]
 
     for (const field of fieldsToCompare) {
@@ -2252,6 +2353,7 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
                 tags.value = []
                 // 通过组件引用清空TagView的状态
                 tagViewRef.value?.clearTags()
+                currentForm.value.staff = undefined
                 break
 
             case 'description':
@@ -2274,6 +2376,7 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
                 currentForm.value.up_close_danmu = 0
                 currentForm.value.atomic_int = 0
                 currentForm.value.is_only_self = 0
+                currentForm.value.is_360 = -1
                 break
         }
 
@@ -2506,9 +2609,12 @@ const selectTemplate = async (user: any, templateName: string) => {
     try {
         lastSubmit.value = ''
 
+         // 切换模板时，按模板所属用户重新初始化投稿前信息与活动列表
+        await utilsStore.initArchievePre(user.uid)
+        await utilsStore.initTopicList(user.uid)
+
         selectedUser.value = user
         currentTemplateName.value = templateName
-
         // 滚动到顶部
         nextTick(() => {
             if (contentWrapperRef.value) {

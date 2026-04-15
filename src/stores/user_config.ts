@@ -29,6 +29,7 @@ export interface TemplateConfig {
     interactive: number
     mission_id?: number
     topic_id?: number
+    topic_name?: string
     season_id?: number
     section_id?: number
     dolby: number
@@ -43,6 +44,8 @@ export interface TemplateConfig {
     atomic_int: number
     is_only_self: number
     watermark: number
+    is_360: number
+    staff?: Array<{ title: string; mid: number; is_del: number }>
 }
 
 interface UserConfig {
@@ -252,6 +255,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         interactive: 0,
         mission_id: undefined,
         topic_id: undefined,
+        topic_name: undefined,
         season_id: undefined,
         section_id: undefined,
         dolby: 0,
@@ -265,7 +269,9 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         up_close_danmu: 0,
         atomic_int: 0,
         is_only_self: 0,
-        watermark: 0
+        watermark: 0,
+        is_360: -1,
+        staff: undefined
     })
 
     // 配置文件操作

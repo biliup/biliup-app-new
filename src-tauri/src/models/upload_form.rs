@@ -106,7 +106,6 @@ impl TemplateConfig {
         let extra_fields = {
             let mut map = std::collections::HashMap::new();
 
-            // 构建topic_detail
             let topic_detail = self.topic_id.map(|id| TopicDetail {
                 from_topic_id: Some(id),
                 from_source: None,
@@ -128,10 +127,17 @@ impl TemplateConfig {
             };
             map.insert("watermark".to_string(), json!(watermark));
 
-            // todo!
-            {
-                map.insert("is_360".to_string(), json!(-1)); // 默认不是360度视频
-            }
+            map.insert("is_360".to_string(), json!(self.is_360));
+
+            map.insert(
+                "staffs".to_string(),
+                json!(self.staff.map(|staffs| {
+                    staffs
+                        .into_iter()
+                        .filter(|staff| staff.is_del == 0 && staff.mid != 0 && !staff.title.is_empty())
+                        .collect::<Vec<_>>()
+                })),
+            );
 
             Some(map)
         };
@@ -173,6 +179,11 @@ impl BilibiliForm {
     pub fn try_into_studio(self) -> Result<bilibili::Studio> {
         let self_str = serde_json::to_string(&self)?;
         let studio: biliup::bilibili::Studio = serde_json::from_str(&self_str)?;
+
+        trace!(
+            "转换为B站提交表单: \n{}",
+            serde_json::to_string_pretty(&studio)?
+        );
         Ok(studio)
     }
 }

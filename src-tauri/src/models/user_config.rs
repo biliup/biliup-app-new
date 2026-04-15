@@ -1,5 +1,4 @@
 use anyhow::Result;
-use biliup::bilibili::Credit;
 use biliup::credential::LoginInfo;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -26,6 +25,24 @@ pub struct Subtitle {
     pub open: u8,
     #[serde(default)]
     pub lan: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct Credit {
+    #[serde(rename = "type")]
+    pub type_id: i8,
+    pub raw_text: String,
+    pub biz_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct Staff {
+    #[serde(default)]
+    pub title: String,
+    #[serde(default)]
+    pub mid: u64,
+    #[serde(default)]
+    pub is_del: u8,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -85,6 +102,8 @@ pub struct TemplateConfig {
     #[serde(default)]
     pub topic_id: Option<u32>,
     #[serde(default)]
+    pub topic_name: Option<String>,
+    #[serde(default)]
     pub season_id: Option<u64>,
     #[serde(default)]
     pub section_id: Option<u64>,
@@ -112,6 +131,10 @@ pub struct TemplateConfig {
     pub is_only_self: u8,
     #[serde(default)]
     pub watermark: u8,
+    #[serde(default)]
+    pub is_360: i64,
+    #[serde(default)]
+    pub staff: Option<Vec<Staff>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -523,6 +546,7 @@ impl Default for TemplateConfig {
             interactive: 0,
             mission_id: None,
             topic_id: None,
+            topic_name: None,
             season_id: None,
             section_id: None,
             dolby: 0,
@@ -537,6 +561,8 @@ impl Default for TemplateConfig {
             atomic_int: 0,
             is_only_self: 0,
             watermark: 0,
+            is_360: -1,
+            staff: None,
         }
     }
 }

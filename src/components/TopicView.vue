@@ -3,25 +3,27 @@
     <div class="topic-selector">
         <div class="topic-selector-wrapper">
             <el-button
-                @click="showTopicDialog = true"
+                @click="openDialog"
                 class="topic-select-button"
-                :type="selectedTopic ? 'primary' : 'default'"
+                :type="selectedTopicName ? 'primary' : 'default'"
+                :disabled="disabled"
             >
-                <span v-if="selectedTopic" class="selected-topic-text">
-                    {{ selectedTopic.topic_name }}
+                <span v-if="selectedTopicName" class="selected-topic-text">
+                    {{ selectedTopicName }}
                 </span>
                 <span v-else class="placeholder-text">请输入</span>
             </el-button>
             <div class="action-buttons">
                 <el-button
-                    v-if="selectedTopic"
+                    v-if="selectedTopicName"
                     @click="clearSelection"
                     class="clear-button"
                     size="small"
                     text
+                    :disabled="disabled"
                     :icon="Close"
                 />
-                <el-icon class="arrow-icon" @click="showTopicDialog = true">
+                <el-icon class="arrow-icon" @click="openDialog">
                     <arrow-down />
                 </el-icon>
             </div>
@@ -57,6 +59,7 @@
                         v-model="selectedIndex"
                         class="topic-radio-group"
                         name="topicSelection"
+                        @change="handleRadioGroupChange"
                     >
                         <div class="topic-grid-container">
                             <div
@@ -64,11 +67,7 @@
                                 :key="`topic-${topic.topic_id}-${topic.mission_id}`"
                                 class="topic-item-compact"
                             >
-                                <el-radio
-                                    :value="index"
-                                    class="topic-radio-compact"
-                                    @change="selectTopic(topic.mission_id, topic.topic_id)"
-                                >
+                                <el-radio :value="index" class="topic-radio-compact">
                                     <div class="topic-content">
                                         <span class="topic-title-compact">{{
                                             topic.topic_name
@@ -77,6 +76,12 @@
                                             <span class="activity-badge-compact">{{
                                                 topic.activity_text
                                             }}</span>
+                                            <span
+                                                v-if="supportsCommonStaff(topic.mission_id)"
+                                                class="staff-badge-compact"
+                                            >
+                                                联合投稿
+                                            </span>
                                             <span class="play-count-compact">
                                                 {{ formatPlayCount(topic.arc_play_vv) }}
                                             </span>
@@ -96,7 +101,6 @@
 
             <template #footer>
                 <div class="dialog-footer">
-                    <el-button @click="showTopicDialog = false">取消</el-button>
                     <el-button type="primary" @click="confirmSelection">确定</el-button>
                 </div>
             </template>
@@ -113,6 +117,8 @@ import { ArrowDown, Search, Loading, Close } from '@element-plus/icons-vue'
 interface Props {
     modelValue?: number // mission_id
     topicId?: number // topic_id
+    topicName?: string
+    disabled?: boolean
     userUid?: number
     mode?: 'selector' | 'full' // selector: 仅显示选择器, full: 显示完整界面
 }
@@ -125,6 +131,7 @@ const props = withDefaults(defineProps<Props>(), {
 const emit = defineEmits<{
     'update:modelValue': [value: number | undefined]
     'update:topicId': [value: number | undefined]
+    'update:topicName': [value: string | undefined]
 }>()
 
 const utilsStore = useUtilsStore()
@@ -144,6 +151,10 @@ interface Topic {
 const filteredTopics = ref<Topic[]>([])
 const selectedMissionId = ref<number | undefined>(props.modelValue)
 const selectedTopicId = ref<number | undefined>(props.topicId)
+const selectedTopicName = ref<string | undefined>(props.topicName)
+const pendingMissionId = ref<number | undefined>(props.modelValue)
+const pendingTopicId = ref<number | undefined>(props.topicId)
+const pendingTopicName = ref<string | undefined>(props.topicName)
 const selectedIndex = ref<number | undefined>() // 新增：用于radio group的选中索引
 const searchKeyword = ref('')
 const showTopicDialog = ref(false)
@@ -162,12 +173,16 @@ const allTopics = computed(() => {
     return uniqueTopics
 })
 
-const selectedTopic = computed(() => {
-    return filteredTopics.value.find(
-        topic =>
-            topic.mission_id === selectedMissionId.value && topic.topic_id === selectedTopicId.value
-    )
+const commonStaffMissionSet = computed(() => {
+    const missions = Array.isArray(utilsStore.common_staff_conf?.missions)
+        ? (utilsStore.common_staff_conf.missions as number[])
+        : []
+    return new Set<number>(missions)
 })
+
+const supportsCommonStaff = (missionId: number) => {
+    return commonStaffMissionSet.value.has(Number(missionId))
+}
 
 // 格式化播放量
 const formatPlayCount = (count: number): string => {
@@ -274,10 +289,27 @@ const performRemoteSearch = async (query: string) => {
     }
 }
 
-// 选择话题
-const selectTopic = (missionId: number, topicId: number) => {
-    selectedMissionId.value = missionId
-    selectedTopicId.value = topicId
+const syncPendingFromSelected = () => {
+    pendingMissionId.value = selectedMissionId.value
+    pendingTopicId.value = selectedTopicId.value
+    pendingTopicName.value = selectedTopicName.value
+}
+
+const openDialog = () => {
+    if (props.disabled) {
+        return
+    }
+
+    syncPendingFromSelected()
+    updateSelectedIndex()
+    showTopicDialog.value = true
+}
+
+// 选择话题（仅更新弹窗内待确认值）
+const selectTopic = (missionId: number, topicId: number, topicName?: string) => {
+    pendingMissionId.value = missionId
+    pendingTopicId.value = topicId
+    pendingTopicName.value = topicName
 
     // 更新selectedIndex以保持radio的选中状态
     const index = filteredTopics.value.findIndex(
@@ -288,28 +320,53 @@ const selectTopic = (missionId: number, topicId: number) => {
     }
 }
 
+const handleRadioGroupChange = (newIndex: string | number | boolean | undefined) => {
+    if (newIndex === undefined || newIndex === null || typeof newIndex !== 'number') {
+        return
+    }
+
+    const topic = filteredTopics.value[newIndex]
+    if (!topic) {
+        return
+    }
+
+    selectTopic(topic.mission_id, topic.topic_id, topic.topic_name)
+}
+
 // 确认选择
 const confirmSelection = () => {
+    selectedMissionId.value = pendingMissionId.value
+    selectedTopicId.value = pendingTopicId.value
+    selectedTopicName.value = pendingTopicName.value
     showTopicDialog.value = false
 }
 
 // 清空选择
 const clearSelection = () => {
+    if (props.disabled) {
+        return
+    }
     selectedMissionId.value = undefined
     selectedTopicId.value = undefined
+    selectedTopicName.value = undefined
+    pendingMissionId.value = undefined
+    pendingTopicId.value = undefined
+    pendingTopicName.value = undefined
     selectedIndex.value = undefined
 }
 
 // 处理对话框关闭
 const handleDialogClose = (done: () => void) => {
+    syncPendingFromSelected()
+    updateSelectedIndex()
     done()
 }
 
 // 更新selectedIndex的辅助函数
 const updateSelectedIndex = () => {
-    if (selectedMissionId.value !== undefined && selectedTopicId.value !== undefined) {
+    if (pendingMissionId.value !== undefined && pendingTopicId.value !== undefined) {
         const index = filteredTopics.value.findIndex(
-            t => t.mission_id === selectedMissionId.value && t.topic_id === selectedTopicId.value
+            t => t.mission_id === pendingMissionId.value && t.topic_id === pendingTopicId.value
         )
         selectedIndex.value = index !== -1 ? index : undefined
     } else {
@@ -322,6 +379,9 @@ watch(
     () => props.modelValue,
     newValue => {
         selectedMissionId.value = newValue
+        if (!showTopicDialog.value) {
+            pendingMissionId.value = newValue
+        }
     }
 )
 
@@ -330,17 +390,22 @@ watch(
     () => props.topicId,
     newValue => {
         selectedTopicId.value = newValue
+        if (!showTopicDialog.value) {
+            pendingTopicId.value = newValue
+        }
     }
 )
 
-// 监听selectedIndex变化，更新实际的选中值
-watch(selectedIndex, newIndex => {
-    if (newIndex !== undefined && filteredTopics.value[newIndex]) {
-        const topic = filteredTopics.value[newIndex]
-        selectedMissionId.value = topic.mission_id
-        selectedTopicId.value = topic.topic_id
+// 监听topicName变化
+watch(
+    () => props.topicName,
+    newValue => {
+        selectedTopicName.value = newValue
+        if (!showTopicDialog.value) {
+            pendingTopicName.value = newValue
+        }
     }
-})
+)
 
 // 监听selectedMissionId变化，向父组件发送更新
 watch(selectedMissionId, newValue => {
@@ -350,6 +415,11 @@ watch(selectedMissionId, newValue => {
 // 监听selectedTopicId变化，向父组件发送更新
 watch(selectedTopicId, newValue => {
     emit('update:topicId', newValue)
+})
+
+// 监听selectedTopicName变化，向父组件发送更新
+watch(selectedTopicName, newValue => {
+    emit('update:topicName', newValue)
 })
 
 // 监听allTopics变化，更新过滤列表
@@ -510,7 +580,7 @@ onUnmounted(() => {
 }
 
 .topic-list {
-    max-height: 300px;
+    max-height: 360px;
     overflow-y: auto;
     border: none;
     border-radius: 0;
@@ -537,6 +607,7 @@ onUnmounted(() => {
     transition: all 0.2s;
     background: #fff;
     overflow: hidden;
+    min-height: 60px;
 }
 
 .topic-item-compact:hover {
@@ -549,12 +620,12 @@ onUnmounted(() => {
     margin: 0;
     display: flex;
     align-items: center;
-    padding: 8px;
+    padding: 8px 10px 8px 6px;
     cursor: pointer;
 }
 
 :deep(.topic-radio-compact .el-radio__input) {
-    margin-right: 6px;
+    margin-right: 0px;
     margin-top: 0;
     flex-shrink: 0;
 }
@@ -573,12 +644,13 @@ onUnmounted(() => {
 }
 
 :deep(.topic-radio-compact .el-radio__label) {
-    padding-left: 0;
+    padding-left: 0px;
     font-weight: normal;
     color: #18191c;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 1.3;
     width: 100%;
+    min-width: 0;
     overflow: hidden;
 }
 
@@ -588,11 +660,12 @@ onUnmounted(() => {
     gap: 4px;
     width: 100%;
     min-width: 0;
+    overflow: hidden;
 }
 
 .topic-title-compact {
     font-weight: normal;
-    font-size: 13px;
+    font-size: 12px;
     color: #18191c;
     line-height: 1.3;
     overflow: hidden;
@@ -603,9 +676,10 @@ onUnmounted(() => {
 .topic-meta {
     display: flex;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
+    justify-content: space-between;
     width: 100%;
+    min-width: 0;
 }
 
 .activity-badge-compact {
@@ -613,10 +687,24 @@ onUnmounted(() => {
     color: #00aeec;
     padding: 1px 6px;
     border-radius: 3px;
-    font-size: 11px;
+    font-size: 9px;
     white-space: nowrap;
     flex-shrink: 0;
-    max-width: 60%;
+    max-width: 40%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.staff-badge-compact {
+    background: #eef9f1;
+    color: #2f9e58;
+    border: 1px solid #ccebd8;
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 9px;
+    white-space: nowrap;
+    flex-shrink: 0;
+    max-width: 40%;
     overflow: hidden;
     text-overflow: ellipsis;
 }
