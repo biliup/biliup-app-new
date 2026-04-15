@@ -1,4 +1,5 @@
 use anyhow::Result;
+use biliup::bilibili::Credit;
 use biliup::credential::LoginInfo;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -64,7 +65,7 @@ pub struct TemplateConfig {
     #[serde(default)]
     pub desc: String,
     #[serde(default)]
-    pub desc_v2: Option<String>,
+    pub desc_v2: Option<Vec<Credit>>,
     #[serde(default)]
     pub dynamic: String, // 粉丝动态
     #[serde(default)]

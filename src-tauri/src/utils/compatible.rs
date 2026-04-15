@@ -132,7 +132,7 @@ impl CompatibilityConverter {
                 cover: streamer_config.cover,
                 title: streamer_config.title,
                 desc: streamer_config.desc,
-                desc_v2: streamer_config.desc_v2,
+                desc_v2: None,
                 dynamic: streamer_config.dynamic,
                 subtitle: streamer_config.subtitle,
                 tag: streamer_config.tag,

@@ -40,7 +40,7 @@ pub struct BilibiliForm {
     /// 视频简介
     pub desc: String,
     /// 视频简介v2
-    pub desc_v2: Option<()>,
+    pub desc_v2: Option<Vec<bilibili::Credit>>,
     /// 空间动态
     pub dynamic: String,
     pub subtitle: Subtitle,
