@@ -24,6 +24,13 @@ pub struct Subtitle {
     pub lan: String,
 }
 
+#[derive(PartialEq, Deserialize, Serialize, Debug, Clone)]
+pub struct CompatibleCredit {
+    pub type_id: u8,
+    pub raw_text: String,
+    pub biz_id: Option<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BilibiliForm {
     /// 是否转载, 1-自制 2-转载
@@ -40,7 +47,7 @@ pub struct BilibiliForm {
     /// 视频简介
     pub desc: String,
     /// 视频简介v2
-    pub desc_v2: Option<Vec<bilibili::Credit>>,
+    pub desc_v2: Option<Vec<CompatibleCredit>>,
     /// 空间动态
     pub dynamic: String,
     pub subtitle: Subtitle,
@@ -103,6 +110,25 @@ impl TemplateConfig {
     }
 
     pub fn into_bilibili_form(self) -> BilibiliForm {
+        let desc_v2 = self.desc_v2.and_then(|credits| {
+            let new_credits = credits
+                .into_iter()
+                .filter(|item| (item.r#type == 1 || item.r#type == 2) && !item.raw_text.is_empty())
+                .map(|c| CompatibleCredit {
+                    type_id: c.r#type,
+                    biz_id: if c.r#type == 2 && !c.biz_id.is_empty() {
+                        Some(c.biz_id)
+                    } else {
+                        None
+                    },
+                    raw_text: c.raw_text,
+                })
+                .collect::<Vec<_>>();
+            (!new_credits.is_empty()).then_some(new_credits)
+        });
+
+        let desc_format_id = if desc_v2.is_some() { 9999 } else { 0 };
+
         let extra_fields = {
             let mut map = std::collections::HashMap::new();
 
@@ -150,9 +176,9 @@ impl TemplateConfig {
             tid: self.tid as u16,
             cover: self.cover.replace("https:", ""),
             title: self.title,
-            desc_format_id: 0, // 默认值
+            desc_format_id,
             desc: self.desc,
-            desc_v2: None,
+            desc_v2,
             dynamic: self.dynamic,
             subtitle: Subtitle {
                 open: if self.open_subtitle { 1 } else { 0 },

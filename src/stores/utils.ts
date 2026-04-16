@@ -2,26 +2,13 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { ElMessage } from 'element-plus'
+import type { MentionUserGroup } from '../types/mention'
 
 export const useUtilsStore = defineStore('template', () => {
     const archieve_pre = ref<any>(null)
     const topiclist = ref<any[]>([])
     const seasonlist = ref<any[]>([])
     const hasSeason = ref<boolean>(false)
-
-    interface MentionUserItem {
-        face: string
-        fans: number
-        name: string
-        official_verify_type: number
-        uid: string
-    }
-
-    interface MentionUserGroup {
-        group_name: string
-        group_type: number
-        items: MentionUserItem[]
-    }
 
     const common_staff_conf = computed(() => {
         const conf = archieve_pre.value?.common_staff_conf || {}

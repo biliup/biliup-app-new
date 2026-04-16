@@ -1,6 +1,7 @@
 use biliup::bilibili::BiliBili;
 use serde_json::{Value, json};
 use std::str::FromStr;
+use std::time::{Duration, SystemTime};
 use std::{fs::File, io::Read, path::Path};
 use tauri::Manager;
 use tokio::sync::Mutex;
@@ -64,6 +65,24 @@ fn normalize_face_url(face_url: &str) -> String {
     } else {
         face_url.to_string()
     }
+}
+
+fn normalize_desc_v2_tokens(tokens: Vec<Credit>) -> Vec<Credit> {
+    let mut normalized: Vec<Credit> = Vec::with_capacity(tokens.len());
+
+    for token in tokens {
+        if let Some(last) = normalized.last_mut()
+            && last.r#type == 1
+            && token.r#type == 1
+        {
+            last.raw_text.push_str(&token.raw_text);
+            continue;
+        }
+
+        normalized.push(token);
+    }
+
+    normalized
 }
 
 #[tauri::command]
@@ -336,6 +355,23 @@ pub async fn search_mention(
 
         for (face_url, file_name) in avatar_jobs {
             let save_path = cache_dir.join(&file_name);
+
+            // 命中近 1 天缓存时直接复用，减少重复下载请求
+            let is_fresh_cache = match tokio::fs::metadata(&save_path).await {
+                Ok(meta) => match meta.modified() {
+                    Ok(modified_at) => match SystemTime::now().duration_since(modified_at) {
+                        Ok(elapsed) => elapsed < Duration::from_secs(24 * 60 * 60),
+                        Err(_) => false,
+                    },
+                    Err(_) => false,
+                },
+                Err(_) => false,
+            };
+
+            if is_fresh_cache {
+                continue;
+            }
+
             match download_client.get(&face_url).send().await {
                 Ok(response) => match response.bytes().await {
                     Ok(bytes) => {
@@ -475,28 +511,17 @@ pub async fn get_video_detail(
                     if let Some(desc) = archive_data["desc"].as_str().filter(|s| !s.is_empty()) {
                         template_config.desc = desc.to_string();
                     }
-                    if let Some(arr) = archive_data["desc_v2"].as_array() {
-                        let credits: Vec<Credit> = arr
-                            .iter()
-                            .filter_map(|item| {
-                                let type_id = item["type"].as_i64()? as i8;
-                                let raw_text = item["raw_text"].as_str()?.to_string();
-                                let biz_id = item.get("biz_id").and_then(|v| {
-                                    if let Some(id) = v.as_u64() {
-                                        if id == 0 { None } else { Some(id.to_string()) }
-                                    } else {
-                                        v.as_str().map(|s| s.to_string())
-                                    }
-                                });
-                                Some(Credit {
-                                    type_id,
-                                    raw_text,
-                                    biz_id,
-                                })
-                            })
-                            .collect();
-                        if !credits.is_empty() {
-                            template_config.desc_v2 = Some(credits);
+                    if !archive_data["desc_v2"].is_null() {
+                        match serde_json::from_value::<Vec<Credit>>(archive_data["desc_v2"].clone()) {
+                            Ok(credits) => {
+                                let cleaned_credits = normalize_desc_v2_tokens(credits);
+                                if !cleaned_credits.is_empty() {
+                                    template_config.desc_v2 = Some(cleaned_credits);
+                                }
+                            }
+                            Err(e) => {
+                                warn!("解析 desc_v2 失败: {}", e);
+                            }
                         }
                     }
                     if let Some(dynamic) =

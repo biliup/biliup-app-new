@@ -11,6 +11,14 @@ interface User {
     expired: boolean
 }
 
+export interface DescV2Item {
+    biz_id: string
+    raw_text: string
+    type: number
+    sub_type: number
+    sub_biz_id: string
+}
+
 // 模板配置接口
 export interface TemplateConfig {
     copyright: number // 1: 自制, 2: 转载
@@ -19,7 +27,7 @@ export interface TemplateConfig {
     cover: string // 封面URL
     title: string
     desc: string
-    desc_v2?: string
+    desc_v2?: DescV2Item[]
     dynamic: string // 粉丝动态
     subtitle: { open: number; lan: string }
     tag: string // 逗号分隔的标签

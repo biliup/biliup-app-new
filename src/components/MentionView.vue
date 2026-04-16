@@ -29,33 +29,13 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { readFile } from '@tauri-apps/plugin-fs'
 import { useUtilsStore } from '../stores/utils'
-
-interface MentionUserItem {
-    face: string
-    fans: number
-    name: string
-    official_verify_type: number
-    uid: string
-}
-
-interface MentionUserGroup {
-    group_name: string
-    group_type: number
-    items: MentionUserItem[]
-}
-
-interface MentionOption {
-    value: string
-    uid: string
-    name: string
-    face: string
-    avatarSrc: string
-    fans: number
-    groupName: string
-    showGroupLabel: boolean
-}
+import {
+    createMentionAvatarCache,
+    createDebouncedRequestScheduler,
+    queryMentionOptions
+} from '../composables/useMentionSearchShared'
+import type { MentionOption, MentionUserItem } from '../types/mention'
 
 const props = withDefaults(
     defineProps<{
@@ -80,12 +60,9 @@ const emit = defineEmits<{
 
 const utilsStore = useUtilsStore()
 const inputValue = ref(props.modelValue || '')
-const debounceTimer = ref<number | null>(null)
 const refreshTimer = ref<number | null>(null)
-const currentRequestId = ref(0)
-const avatarCacheDir = ref('')
-const avatarUrlCache = ref(new Map<string, string>())
-const avatarLoading = ref(new Map<string, Promise<string>>())
+const avatarCache = createMentionAvatarCache(async () => await utilsStore.getAvatarCacheDir())
+const searchScheduler = createDebouncedRequestScheduler(props.debounceMs)
 
 const userUid = computed(() => Number(props.userUid || 0))
 
@@ -98,13 +75,6 @@ watch(
     }
 )
 
-const clearDebounce = () => {
-    if (debounceTimer.value !== null) {
-        window.clearTimeout(debounceTimer.value)
-        debounceTimer.value = null
-    }
-}
-
 const clearRefresh = () => {
     if (refreshTimer.value !== null) {
         window.clearTimeout(refreshTimer.value)
@@ -112,120 +82,11 @@ const clearRefresh = () => {
     }
 }
 
-const normalizePath = (path: string) => path.replace(/\\/g, '/')
-
-const resolveMimeType = (fileName: string) => {
-    const lower = fileName.toLowerCase()
-    if (lower.endsWith('.png')) return 'image/png'
-    if (lower.endsWith('.webp')) return 'image/webp'
-    if (lower.endsWith('.gif')) return 'image/gif'
-    return 'image/jpeg'
-}
-
-const buildAvatarSrc = (fileName: string) => {
-    if (!fileName) {
-        return ''
-    }
-    return avatarUrlCache.value.get(fileName) || ''
-}
-
-const loadAvatarFromCache = async (fileName: string) => {
-    if (!avatarCacheDir.value || !fileName) {
-        return ''
-    }
-
-    const cached = avatarUrlCache.value.get(fileName)
-    if (cached) {
-        return cached
-    }
-
-    const loading = avatarLoading.value.get(fileName)
-    if (loading) {
-        return loading
-    }
-
-    const fullPath = `${normalizePath(avatarCacheDir.value)}/${fileName}`
-    const task = readFile(fullPath)
-        .then(bytes => {
-            const normalizedBytes = Uint8Array.from(bytes)
-            const blob = new Blob([normalizedBytes], { type: resolveMimeType(fileName) })
-            const url = URL.createObjectURL(blob)
-            avatarUrlCache.value.set(fileName, url)
-            return url
-        })
-        .catch(() => '')
-        .finally(() => {
-            avatarLoading.value.delete(fileName)
-        })
-
-    avatarLoading.value.set(fileName, task)
-    return task
-}
-
-const ensureAvatarCacheDir = async () => {
-    if (avatarCacheDir.value) {
-        return avatarCacheDir.value
-    }
-    const path = await utilsStore.getAvatarCacheDir()
-    avatarCacheDir.value = path || ''
-    return avatarCacheDir.value
-}
-
 onBeforeUnmount(() => {
-    clearDebounce()
+    searchScheduler.dispose()
     clearRefresh()
-    for (const url of avatarUrlCache.value.values()) {
-        URL.revokeObjectURL(url)
-    }
-    avatarUrlCache.value.clear()
-    avatarLoading.value.clear()
+    avatarCache.dispose()
 })
-
-const buildOptions = (groups: MentionUserGroup[]): MentionOption[] => {
-    const options: MentionOption[] = []
-    for (const group of groups || []) {
-        let first = true
-        for (const item of group.items || []) {
-            options.push({
-                value: item.name,
-                uid: String(item.uid || ''),
-                name: item.name || '',
-                face: item.face || '',
-                avatarSrc: buildAvatarSrc(item.face || ''),
-                fans: Number(item.fans || 0),
-                groupName: group.group_name || '其他',
-                showGroupLabel: first
-            })
-            first = false
-        }
-    }
-    return options
-}
-
-const hydrateAvatars = async (
-    groups: MentionUserGroup[],
-    requestId: number,
-    callback: (items: MentionOption[]) => void
-) => {
-    const files = new Set<string>()
-    for (const group of groups || []) {
-        for (const item of group.items || []) {
-            if (item.face) {
-                files.add(item.face)
-            }
-        }
-    }
-
-    if (files.size === 0) {
-        return
-    }
-
-    await Promise.all(Array.from(files).map(file => loadAvatarFromCache(file)))
-    if (requestId !== currentRequestId.value) {
-        return
-    }
-    callback(buildOptions(groups))
-}
 
 const fetchSuggestions = (queryString: string, callback: (items: MentionOption[]) => void) => {
     const uid = userUid.value
@@ -234,46 +95,44 @@ const fetchSuggestions = (queryString: string, callback: (items: MentionOption[]
         return
     }
 
-    clearDebounce()
+    searchScheduler.cancel()
     clearRefresh()
-    const requestId = ++currentRequestId.value
-
-    debounceTimer.value = window.setTimeout(async () => {
+    searchScheduler.run(async requestId => {
         try {
-            try {
-                await ensureAvatarCacheDir()
-            } catch {
-                avatarCacheDir.value = ''
-            }
-            const groups = await utilsStore.searchMention(uid, queryString || '')
-            if (requestId !== currentRequestId.value) {
-                return
-            }
-            const normalizedGroups = groups as MentionUserGroup[]
-            callback(buildOptions(normalizedGroups))
-            void hydrateAvatars(normalizedGroups, requestId, callback)
+            await queryMentionOptions({
+                uid,
+                query: queryString || '',
+                requestId,
+                isLatest: searchScheduler.isLatest,
+                searchMention: (targetUid, query) => utilsStore.searchMention(targetUid, query),
+                avatarCache,
+                applyOptions: options => callback(options)
+            })
 
             // 候选列表打开后轻量刷新一次，尽快展示刚写入缓存的头像
             refreshTimer.value = window.setTimeout(async () => {
                 try {
-                    const refreshedGroups = await utilsStore.searchMention(uid, queryString || '')
-                    if (requestId !== currentRequestId.value) {
-                        return
-                    }
-                    const normalizedRefreshedGroups = refreshedGroups as MentionUserGroup[]
-                    callback(buildOptions(normalizedRefreshedGroups))
-                    void hydrateAvatars(normalizedRefreshedGroups, requestId, callback)
+                    await queryMentionOptions({
+                        uid,
+                        query: queryString || '',
+                        requestId,
+                        isLatest: searchScheduler.isLatest,
+                        searchMention: (targetUid, query) =>
+                            utilsStore.searchMention(targetUid, query),
+                        avatarCache,
+                        applyOptions: options => callback(options)
+                    })
                 } catch {
                     // 轻量刷新失败时保留首屏结果
                 }
             }, 500)
         } catch {
-            if (requestId !== currentRequestId.value) {
+            if (!searchScheduler.isLatest(requestId)) {
                 return
             }
             callback([])
         }
-    }, props.debounceMs)
+    })
 }
 
 const handleSelect = (item: MentionOption) => {

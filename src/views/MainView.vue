@@ -541,27 +541,13 @@
 
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.description" class="card-content">
-                                        <el-form-item label="简介">
-                                            <el-input
-                                                v-model="currentForm.desc"
-                                                type="textarea"
-                                                :rows="6"
-                                                placeholder="请输入视频简介"
-                                                maxlength="2000"
-                                                show-word-limit
-                                                :disabled="templateLoading"
-                                            />
-                                        </el-form-item>
-
-                                        <el-form-item label="粉丝动态">
-                                            <el-input
-                                                v-model="currentForm.dynamic"
-                                                placeholder="发布时的动态内容"
-                                                maxlength="233"
-                                                show-word-limit
-                                                :disabled="templateLoading"
-                                            />
-                                        </el-form-item>
+                                        <DescView
+                                            v-model:desc="currentForm.desc"
+                                            v-model:desc-v2="currentForm.desc_v2"
+                                            v-model:dynamic="currentForm.dynamic"
+                                            :user-uid="selectedUser?.uid"
+                                            :disabled="templateLoading"
+                                        />
                                     </div>
                                 </el-collapse-transition>
                             </el-card>
@@ -957,6 +943,7 @@ import VideoStatus from '../components/VideoStatus.vue'
 import TagView from '../components/TagView.vue'
 import DataPicker from '../components/DataPicker.vue'
 import StaffView from '../components/StaffView.vue'
+import DescView from '../components/DescView.vue'
 
 const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
@@ -2036,6 +2023,30 @@ const initializeData = async () => {
     }
 }
 
+const isPlainObject = (value: unknown): value is Record<string, any> => {
+    return Object.prototype.toString.call(value) === '[object Object]'
+}
+
+const normalizeForCompare = (value: any): any => {
+    if (Array.isArray(value)) {
+        return value.map(item => normalizeForCompare(item))
+    }
+
+    if (isPlainObject(value)) {
+        const sorted: Record<string, any> = {}
+        for (const key of Object.keys(value).sort()) {
+            sorted[key] = normalizeForCompare(value[key])
+        }
+        return sorted
+    }
+
+    return value
+}
+
+const stableStringify = (value: any): string => {
+    return JSON.stringify(normalizeForCompare(value))
+}
+
 const hasUnsavedChanges = (
     baseTemplateData: TemplateConfig,
     currentTemplateData: TemplateConfig
@@ -2048,6 +2059,7 @@ const hasUnsavedChanges = (
         'source',
         'tid',
         'desc',
+        'desc_v2',
         'dynamic',
         'tag',
         'dtime',
@@ -2084,9 +2096,9 @@ const hasUnsavedChanges = (
             continue
         }
 
-        if (JSON.stringify(currentValue) !== JSON.stringify(baseValue)) {
-            // console.log(field, '有改动')
-            // console.log('current: ', JSON.stringify(currentValue), 'vs', JSON.stringify(baseValue))
+        if (stableStringify(currentValue) !== stableStringify(baseValue)) {
+            console.log(field, '有改动')
+            console.log('current: ', stableStringify(currentValue), 'vs', stableStringify(baseValue))
             return true
         }
     }
@@ -2107,8 +2119,8 @@ const hasUnsavedChanges = (
         const videoFieldsToCompare = ['title', 'filename', 'desc', 'path', 'cid']
         for (const field of videoFieldsToCompare) {
             if (
-                JSON.stringify((currentVideo as any)[field]) !==
-                JSON.stringify((baseVideo as any)[field])
+                stableStringify((currentVideo as any)[field]) !==
+                stableStringify((baseVideo as any)[field])
             ) {
                 return true
             }
@@ -2359,6 +2371,7 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
 
             case 'description':
                 currentForm.value.desc = ''
+                currentForm.value.desc_v2 = undefined
                 currentForm.value.dynamic = ''
                 break
 
@@ -2643,7 +2656,7 @@ const selectTemplate = async (user: any, templateName: string) => {
                             userConfigStore.configRoot?.config[user.uid].templates[templateName]
                         if (
                             currentTemplateData &&
-                            hasUnsavedChanges(currentTemplateData, newTemplate)
+                            hasUnsavedChanges(newTemplate, currentTemplateData)
                         ) {
                             await ElMessageBox.confirm(
                                 `检测到本地模板内容与bilibili不一致，是否刷新？（此操作会丢失所有未保存的更改）`,

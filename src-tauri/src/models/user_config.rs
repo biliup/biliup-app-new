@@ -30,9 +30,15 @@ pub struct Subtitle {
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct Credit {
     #[serde(rename = "type")]
-    pub type_id: i8,
+    pub r#type: u8,
+    #[serde(default)]
     pub raw_text: String,
-    pub biz_id: Option<String>,
+    #[serde(default)]
+    pub biz_id: String,
+    #[serde(default)]
+    pub sub_type: u8,
+    #[serde(default)]
+    pub sub_biz_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
