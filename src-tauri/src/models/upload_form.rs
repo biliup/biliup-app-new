@@ -134,7 +134,9 @@ impl TemplateConfig {
                 json!(self.staff.map(|staffs| {
                     staffs
                         .into_iter()
-                        .filter(|staff| staff.is_del == 0 && staff.mid != 0 && !staff.title.is_empty())
+                        .filter(|staff| {
+                            staff.is_del == 0 && staff.mid != 0 && !staff.title.is_empty()
+                        })
                         .collect::<Vec<_>>()
                 })),
             );

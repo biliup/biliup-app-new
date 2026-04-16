@@ -9,6 +9,20 @@ export const useUtilsStore = defineStore('template', () => {
     const seasonlist = ref<any[]>([])
     const hasSeason = ref<boolean>(false)
 
+    interface MentionUserItem {
+        face: string
+        fans: number
+        name: string
+        official_verify_type: number
+        uid: string
+    }
+
+    interface MentionUserGroup {
+        group_name: string
+        group_type: number
+        items: MentionUserItem[]
+    }
+
     const common_staff_conf = computed(() => {
         const conf = archieve_pre.value?.common_staff_conf || {}
 
@@ -74,6 +88,16 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
+    const getAvatarCacheDir = async () => {
+        try {
+            const cacheDir = await invoke<string>('get_avatar_cache_dir')
+            return cacheDir
+        } catch (error) {
+            console.error('获取头像缓存目录失败:', error)
+            throw error
+        }
+    }
+
     const downloadCover = async (uid: number, url: string) => {
         if (!url) {
             return undefined
@@ -113,6 +137,20 @@ export const useUtilsStore = defineStore('template', () => {
             return results
         } catch (error) {
             console.error('搜索话题失败:', error)
+            throw error
+        }
+    }
+
+    const searchMention = async (uid: number, keyword?: string) => {
+        try {
+            const query = (keyword || '').trim()
+            const groups = await invoke<MentionUserGroup[]>('search_mention', {
+                uid,
+                keyword: query || undefined
+            })
+            return groups || []
+        } catch (error) {
+            console.error('搜索@用户失败:', error)
             throw error
         }
     }
@@ -249,12 +287,14 @@ export const useUtilsStore = defineStore('template', () => {
         seasonlist: computed(() => seasonlist.value),
         getCurrentVersion,
         getFileSize,
+        getAvatarCacheDir,
         readDirRecursive,
         uploadCover,
         downloadCover,
         initArchievePre,
         initTopicList,
         searchTopics,
+        searchMention,
         getVideoDetail,
         hasSeason,
         getSeasonList,

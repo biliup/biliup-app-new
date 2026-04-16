@@ -10,8 +10,68 @@ use crate::{AppData, models::TemplateConfig};
 use crate::{models::user_config::Credit, utils::crypto::encode_base64};
 use crate::{
     models::user_config::Staff,
-    utils::file_utils::{self, FileEntry},
+    utils::{file_utils::{self, FileEntry}, get_avatar_cache_path},
 };
+
+#[derive(serde::Serialize)]
+pub struct MentionUserItem {
+    face: String,
+    fans: u64,
+    name: String,
+    official_verify_type: i64,
+    uid: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct MentionUserGroup {
+    group_name: String,
+    group_type: i64,
+    items: Vec<MentionUserItem>,
+}
+
+fn extract_avatar_filename(face_url: &str, uid: &str) -> String {
+    let raw_name = face_url
+        .split('?')
+        .next()
+        .unwrap_or(face_url)
+        .rsplit('/')
+        .next()
+        .unwrap_or("")
+        .trim();
+
+    if raw_name.is_empty() {
+        return format!("{uid}.jpg");
+    }
+
+    // 仅保留文件名安全字符，避免路径穿越
+    let safe_name: String = raw_name
+        .chars()
+        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '.' || *ch == '_' || *ch == '-')
+        .collect();
+
+    if safe_name.is_empty() {
+        format!("{uid}.jpg")
+    } else {
+        safe_name
+    }
+}
+
+fn normalize_face_url(face_url: &str) -> String {
+    if face_url.starts_with("//") {
+        format!("https:{face_url}")
+    } else if face_url.starts_with("http://") {
+        face_url.replacen("http://", "https://", 1)
+    } else {
+        face_url.to_string()
+    }
+}
+
+#[tauri::command]
+pub async fn get_avatar_cache_dir() -> Result<String, String> {
+    get_avatar_cache_path()
+        .map(|path| path.to_string_lossy().to_string())
+        .map_err(|e| format!("获取头像缓存路径失败: {e}"))
+}
 
 #[tauri::command]
 pub async fn get_current_version() -> Result<String, String> {
@@ -174,6 +234,128 @@ pub async fn search_topics(
             },
             Err(e) => Err(e.to_string()),
         }
+}
+
+#[tauri::command]
+pub async fn search_mention(
+    app: tauri::AppHandle,
+    uid: u64,
+    keyword: Option<String>,
+) -> Result<Vec<MentionUserGroup>, String> {
+    let client = {
+        let app_lock = app.state::<Mutex<AppData>>();
+        let app_data = app_lock.lock().await;
+        app_data
+            .clients
+            .lock()
+            .await
+            .get(&uid)
+            .ok_or("用户未登录或不存在")?
+            .bilibili
+            .client
+            .clone()
+    };
+
+    let mut request = client
+        .get("https://api.bilibili.com/x/polymer/web-dynamic/v1/mention/search")
+        .query(&[("uid", uid.to_string())]);
+
+    if let Some(keyword) = keyword
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+    {
+        request = request.query(&[("keyword", keyword)]);
+    }
+
+    let res = request
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<Value>()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if res["code"].as_i64().unwrap_or(-1) != 0 {
+        return Err(res["message"]
+            .as_str()
+            .unwrap_or("搜索用户失败")
+            .to_string());
+    }
+
+    let groups = res["data"]["groups"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+
+    let mut avatar_jobs: Vec<(String, String)> = Vec::new();
+
+    let parsed_groups = groups
+        .iter()
+        .map(|group| {
+            let items = group["items"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default()
+                .iter()
+                .map(|item| {
+                    let uid = item["uid"].as_str().unwrap_or("0").to_string();
+                    let face_url = normalize_face_url(item["face"].as_str().unwrap_or(""));
+                    let face = extract_avatar_filename(&face_url, &uid);
+
+                    if !face_url.is_empty() {
+                        avatar_jobs.push((face_url, face.clone()));
+                    }
+
+                    MentionUserItem {
+                        face,
+                        fans: item["fans"].as_u64().unwrap_or(0),
+                        name: item["name"].as_str().unwrap_or("").to_string(),
+                        official_verify_type: item["official_verify_type"].as_i64().unwrap_or(-1),
+                        uid,
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            MentionUserGroup {
+                group_name: group["group_name"].as_str().unwrap_or("其他").to_string(),
+                group_type: group["group_type"].as_i64().unwrap_or(0),
+                items,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let download_client = client.clone();
+    tokio::spawn(async move {
+        let cache_dir = match get_avatar_cache_path() {
+            Ok(path) => path,
+            Err(e) => {
+                warn!("创建头像缓存目录失败: {}", e);
+                return;
+            }
+        };
+
+        for (face_url, file_name) in avatar_jobs {
+            let save_path = cache_dir.join(&file_name);
+            match download_client.get(&face_url).send().await {
+                Ok(response) => match response.bytes().await {
+                    Ok(bytes) => {
+                        if let Err(e) = tokio::fs::write(&save_path, bytes).await {
+                            warn!(
+                                "写入头像缓存失败: {} -> {} ({})",
+                                face_url,
+                                save_path.display(),
+                                e
+                            );
+                        }
+                    }
+                    Err(e) => warn!("读取头像响应失败: {} ({})", face_url, e),
+                },
+                Err(e) => warn!("下载头像失败: {} ({})", face_url, e),
+            }
+        }
+    });
+
+    Ok(parsed_groups)
 }
 
 #[tauri::command]

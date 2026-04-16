@@ -63,13 +63,13 @@
                         />
                     </el-select>
                 </el-form-item>
-                <el-form-item label="UID" required>
-                    <el-input
+                <el-form-item label="UID/昵称" required>
+                    <MentionView
                         v-model="form.mid"
-                        placeholder="请输入 UID"
-                        inputmode="numeric"
-                        maxlength="20"
-                        @input="onMidInput"
+                        :user-uid="userUid"
+                        placeholder="请输入 UID 或昵称"
+                        :disabled="disabled"
+                        @select="onMentionSelect"
                     />
                 </el-form-item>
             </el-form>
@@ -85,6 +85,7 @@
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
+import MentionView from './MentionView.vue'
 
 interface StaffMember {
     title: string
@@ -98,6 +99,7 @@ const props = defineProps<{
     maxStaff?: number
     isEditMode?: boolean
     disabled?: boolean
+    userUid?: number
 }>()
 
 const emit = defineEmits<{
@@ -121,9 +123,7 @@ const staffList = computed(() =>
     }))
 )
 
-const onMidInput = (value: string) => {
-    form.value.mid = value.replace(/\D/g, '')
-}
+const userUid = computed(() => Number(props.userUid || 0))
 
 const getMaxStaff = () => {
     return props.maxStaff && props.maxStaff > 0 ? props.maxStaff : 10
@@ -142,6 +142,10 @@ const openDialog = () => {
     dialogVisible.value = true
 }
 
+const onMentionSelect = (item: { uid: string }) => {
+    form.value.mid = String(item.uid || '')
+}
+
 const addStaff = () => {
     if (isEditMode.value) {
         ElMessage.warning('编辑稿件模板不允许新增联合投稿成员')
@@ -149,7 +153,7 @@ const addStaff = () => {
     }
 
     const title = form.value.title
-    const mid = Number.parseInt(form.value.mid, 10)
+    const mid = Number.parseInt((form.value.mid || '').trim(), 10)
 
     if (!title) {
         ElMessage.warning('请选择职能')
@@ -157,7 +161,7 @@ const addStaff = () => {
     }
 
     if (!Number.isInteger(mid) || mid <= 0) {
-        ElMessage.warning('UID 只能输入正整数')
+        ElMessage.warning('请输入有效 UID，或从昵称搜索结果中选择')
         return
     }
 

@@ -496,6 +496,7 @@
                                         <el-form-item v-if="!staffFieldDisabled" label="联合投稿">
                                             <StaffView
                                                 v-model="currentForm.staff"
+                                                :user-uid="selectedUser?.uid"
                                                 :is-edit-mode="Boolean(currentForm.aid)"
                                                 :role-options="availableStaffRoles"
                                                 :max-staff="maxStaffCount"
@@ -2609,7 +2610,7 @@ const selectTemplate = async (user: any, templateName: string) => {
     try {
         lastSubmit.value = ''
 
-         // 切换模板时，按模板所属用户重新初始化投稿前信息与活动列表
+        // 切换模板时，按模板所属用户重新初始化投稿前信息与活动列表
         await utilsStore.initArchievePre(user.uid)
         await utilsStore.initTopicList(user.uid)
 

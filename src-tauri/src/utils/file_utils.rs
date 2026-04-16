@@ -133,6 +133,19 @@ pub fn get_log_path() -> Result<PathBuf> {
     Ok(log_dir)
 }
 
+/// 获取头像缓存路径
+pub fn get_avatar_cache_path() -> Result<PathBuf> {
+    let config_dir = get_config_dir()?;
+    let avatar_cache_dir = config_dir.join("avatar_cache");
+
+    // 确保头像缓存目录存在
+    if !avatar_cache_dir.exists() {
+        fs::create_dir_all(&avatar_cache_dir)?;
+    }
+
+    Ok(avatar_cache_dir)
+}
+
 /// 获取应用配置目录路径
 pub fn get_config_dir() -> Result<PathBuf> {
     let appdata_dir = dirs::config_dir().ok_or_else(|| anyhow::anyhow!("无法获取 APPDATA 目录"))?;
