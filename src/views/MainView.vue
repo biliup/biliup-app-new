@@ -787,6 +787,7 @@
                             <!-- 上传操作区域 -->
                             <div class="upload-actions">
                                 <el-button
+                                    v-if="!separateSubmitting"
                                     type="primary"
                                     size="large"
                                     :loading="submitting"
@@ -808,12 +809,14 @@
                                         !getCurrentAutoSubmitting
                                             ? currentTemplate?.aid
                                                 ? '编辑稿件'
-                                                : '新增稿件'
+                                                : '新增单个稿件'
                                             : '上传完成后自动提交'
                                     }}
                                 </el-button>
                                 <div
-                                    v-if="currentForm && !currentForm.aid"
+                                    v-if="
+                                        currentForm && !currentForm.aid && !getCurrentAutoSubmitting
+                                    "
                                     class="multi-submit-entry"
                                 >
                                     <el-button
