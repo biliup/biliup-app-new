@@ -2127,7 +2127,12 @@ const hasUnsavedChanges = (
 
         if (stableStringify(currentValue) !== stableStringify(baseValue)) {
             console.log(field, '有改动')
-            console.log('current: ', stableStringify(currentValue), 'vs', stableStringify(baseValue))
+            console.log(
+                'current: ',
+                stableStringify(currentValue),
+                'vs',
+                stableStringify(baseValue)
+            )
             return true
         }
     }

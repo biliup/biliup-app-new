@@ -11,7 +11,10 @@ use crate::{AppData, models::TemplateConfig};
 use crate::{models::user_config::Credit, utils::crypto::encode_base64};
 use crate::{
     models::user_config::Staff,
-    utils::{file_utils::{self, FileEntry}, get_avatar_cache_path},
+    utils::{
+        file_utils::{self, FileEntry},
+        get_avatar_cache_path,
+    },
 };
 
 #[derive(serde::Serialize)]
@@ -517,7 +520,8 @@ pub async fn get_video_detail(
                         .map(|value| value.to_string())
                         .or_else(|| data["state_desc"].as_str().map(|value| value.to_string()));
                     if !archive_data["desc_v2"].is_null() {
-                        match serde_json::from_value::<Vec<Credit>>(archive_data["desc_v2"].clone()) {
+                        match serde_json::from_value::<Vec<Credit>>(archive_data["desc_v2"].clone())
+                        {
                             Ok(credits) => {
                                 let cleaned_credits = normalize_desc_v2_tokens(credits);
                                 if !cleaned_credits.is_empty() {

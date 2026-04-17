@@ -99,7 +99,9 @@ let popupPositionListenersBound = false
 
 const userUid = computed(() => Number(props.userUid || 0))
 const utilsStore = useUtilsStore()
-const mentionAvatarCache = createMentionAvatarCache(async () => await utilsStore.getAvatarCacheDir())
+const mentionAvatarCache = createMentionAvatarCache(
+    async () => await utilsStore.getAvatarCacheDir()
+)
 const mentionSearchScheduler = createDebouncedRequestScheduler(220)
 
 const dynamicModel = computed({
@@ -171,10 +173,12 @@ const buildEditorDoc = (text: string) => {
 }
 
 const buildEditorDocFromDescV2 = (tokens: DescV2Token[]) => {
-    const paragraphs: Array<{ type: 'paragraph'; content: any[] }> = [{
-        type: 'paragraph',
-        content: []
-    }]
+    const paragraphs: Array<{ type: 'paragraph'; content: any[] }> = [
+        {
+            type: 'paragraph',
+            content: []
+        }
+    ]
 
     const pushParagraph = () => {
         paragraphs.push({ type: 'paragraph', content: [] })
@@ -394,7 +398,6 @@ const handleMentionSelect = (item: { uid: string; name: string }) => {
     hideMentionPicker()
 }
 
-
 const resolveEditorDocFromProps = (desc: string | undefined, descV2: DescV2Token[] | undefined) => {
     const normalized = normalizeDescV2(descV2)
     if (normalized.length > 0) {
@@ -577,28 +580,25 @@ watch(
     }
 )
 
-watch(
-    [() => props.desc, () => props.descV2],
-    ([nextDesc, nextDescV2]) => {
-        const incomingDesc = nextDesc || ''
-        const normalizedDescV2 = normalizeDescV2(nextDescV2)
-        const incomingDescV2Signature = getDescV2Signature(normalizedDescV2)
+watch([() => props.desc, () => props.descV2], ([nextDesc, nextDescV2]) => {
+    const incomingDesc = nextDesc || ''
+    const normalizedDescV2 = normalizeDescV2(nextDescV2)
+    const incomingDescV2Signature = getDescV2Signature(normalizedDescV2)
 
-        if (
-            incomingDesc === lastSyncedDesc.value &&
-            incomingDescV2Signature === lastSyncedDescV2Signature.value
-        ) {
-            return
-        }
-
-        lastSyncedDesc.value = incomingDesc
-        lastSyncedDescV2Signature.value = incomingDescV2Signature
-        editorReadyForEmit = false
-        setEditorDoc(resolveEditorDocFromProps(incomingDesc, normalizedDescV2))
-        editorReadyForEmit = true
-        updateMentionTriggerState(editor.value)
+    if (
+        incomingDesc === lastSyncedDesc.value &&
+        incomingDescV2Signature === lastSyncedDescV2Signature.value
+    ) {
+        return
     }
-)
+
+    lastSyncedDesc.value = incomingDesc
+    lastSyncedDescV2Signature.value = incomingDescV2Signature
+    editorReadyForEmit = false
+    setEditorDoc(resolveEditorDocFromProps(incomingDesc, normalizedDescV2))
+    editorReadyForEmit = true
+    updateMentionTriggerState(editor.value)
+})
 </script>
 
 <style scoped>
