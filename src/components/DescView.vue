@@ -6,6 +6,12 @@
                     <EditorContent v-if="editor" :editor="editor" class="tiptap-editor" />
                 </div>
                 <div
+                    class="desc-word-limit"
+                    :class="{ reached: currentDescLength >= DESC_MAX_LENGTH }"
+                >
+                    {{ currentDescLength }}/{{ DESC_MAX_LENGTH }}
+                </div>
+                <div
                     v-if="showMentionPicker"
                     class="mention-inline-popup"
                     :style="mentionPopupStyle"
@@ -67,6 +73,7 @@ import type { MentionOption } from '../types/mention'
 import type { DescV2Item } from '../stores/user_config'
 
 type DescV2Token = DescV2Item
+const DESC_MAX_LENGTH = 2000
 
 const props = defineProps<{
     desc?: string
@@ -86,6 +93,8 @@ let suppressEditorSync = false
 let editorReadyForEmit = false
 const lastSyncedDesc = ref('')
 const lastSyncedDescV2Signature = ref('[]')
+const lastAcceptedEditorDoc = ref<any | null>(null)
+const currentDescLength = ref(0)
 const showMentionPicker = ref(false)
 const mentionQuery = ref('')
 const mentionRange = ref<{ from: number; to: number } | null>(null)
@@ -507,11 +516,22 @@ const editor = useEditor({
             ? buildDescTextFromDescV2(nextDescV2)
             : instance.getText({ blockSeparator: '\n' })
 
+        if (nextDesc.length > DESC_MAX_LENGTH) {
+            const fallbackDoc =
+                lastAcceptedEditorDoc.value ||
+                resolveEditorDocFromProps(lastSyncedDesc.value, normalizeDescV2(props.descV2))
+            setEditorDoc(fallbackDoc)
+            currentDescLength.value = lastSyncedDesc.value.length
+            return
+        }
+
         emit('update:desc', nextDesc)
         emit('update:descV2', hasMention ? nextDescV2 : undefined)
 
         lastSyncedDesc.value = nextDesc
         lastSyncedDescV2Signature.value = hasMention ? getDescV2Signature(nextDescV2) : '[]'
+        lastAcceptedEditorDoc.value = instance.getJSON()
+        currentDescLength.value = nextDesc.length
     },
     onSelectionUpdate({ editor: instance }) {
         if (!editorReadyForEmit || suppressEditorSync) {
@@ -536,7 +556,10 @@ watch(
         const incomingDesc = props.desc || ''
         lastSyncedDesc.value = incomingDesc
         lastSyncedDescV2Signature.value = getDescV2Signature(normalizedDescV2)
-        setEditorDoc(resolveEditorDocFromProps(incomingDesc, normalizedDescV2))
+        const nextDoc = resolveEditorDocFromProps(incomingDesc, normalizedDescV2)
+        setEditorDoc(nextDoc)
+        lastAcceptedEditorDoc.value = nextDoc
+        currentDescLength.value = incomingDesc.length
         editorReadyForEmit = true
         updateMentionTriggerState(instance)
     },
@@ -595,7 +618,10 @@ watch([() => props.desc, () => props.descV2], ([nextDesc, nextDescV2]) => {
     lastSyncedDesc.value = incomingDesc
     lastSyncedDescV2Signature.value = incomingDescV2Signature
     editorReadyForEmit = false
-    setEditorDoc(resolveEditorDocFromProps(incomingDesc, normalizedDescV2))
+    const nextDoc = resolveEditorDocFromProps(incomingDesc, normalizedDescV2)
+    setEditorDoc(nextDoc)
+    lastAcceptedEditorDoc.value = nextDoc
+    currentDescLength.value = incomingDesc.length
     editorReadyForEmit = true
     updateMentionTriggerState(editor.value)
 })
@@ -604,6 +630,18 @@ watch([() => props.desc, () => props.descV2], ([nextDesc, nextDescV2]) => {
 <style scoped>
 .desc-editor-block {
     width: 100%;
+}
+
+.desc-word-limit {
+    margin-top: 6px;
+    text-align: right;
+    color: #909399;
+    font-size: 12px;
+    line-height: 1;
+}
+
+.desc-word-limit.reached {
+    color: #f56c6c;
 }
 
 .tiptap-shell {
