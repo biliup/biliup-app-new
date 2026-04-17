@@ -108,6 +108,13 @@
                                         <refresh />
                                     </el-icon>
                                 </el-tooltip>
+                                <span
+                                    v-if="currentTemplate?.aid && archiveStateDesc"
+                                    class="archive-state-badge"
+                                    :class="archiveStateClass"
+                                >
+                                    {{ archiveStateDesc }} ({{ archiveState }})
+                                </span>
                                 <h3
                                     v-if="!isEditingTemplateName"
                                     @click="handleTemplateNameEdit"
@@ -1581,6 +1588,26 @@ const currentTemplate = computed(() => {
     return userConfig.templates[currentTemplateName.value]
 })
 
+const archiveState = computed(() => {
+    const value = currentTemplate.value?.state
+    return typeof value === 'number' ? value : 0
+})
+
+const archiveStateDesc = computed(() => {
+    const desc = currentTemplate.value?.state_desc || ''
+    return desc.trim()
+})
+
+const archiveStateClass = computed(() => {
+    if (archiveState.value === 0) {
+        return 'state-ok'
+    }
+    if (archiveState.value > 0) {
+        return 'state-neutral'
+    }
+    return 'state-error'
+})
+
 // 当前表单数据 - 直接操作模板配置
 const currentForm = computed({
     get() {
@@ -2081,7 +2108,9 @@ const hasUnsavedChanges = (
         'is_only_self',
         'watermark',
         'is_360',
-        'staff'
+        'staff',
+        'state',
+        'state_desc'
     ]
 
     for (const field of fieldsToCompare) {
@@ -3698,6 +3727,9 @@ const checkUpdate = async () => {
 }
 
 .template-name-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
     flex: 1;
     margin-right: 20px;
 }
@@ -3737,6 +3769,29 @@ const checkUpdate = async () => {
 
 .template-name-input {
     max-width: 300px;
+}
+
+.archive-state-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    line-height: 1.4;
+    color: #fff;
+    white-space: nowrap;
+}
+
+.archive-state-badge.state-ok {
+    background: #67c23a;
+}
+
+.archive-state-badge.state-neutral {
+    background: #909399;
+}
+
+.archive-state-badge.state-error {
+    background: #f56c6c;
 }
 
 .refresh-btn {

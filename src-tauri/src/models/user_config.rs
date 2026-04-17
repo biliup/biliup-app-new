@@ -141,6 +141,10 @@ pub struct TemplateConfig {
     pub is_360: i64,
     #[serde(default)]
     pub staff: Option<Vec<Staff>>,
+    #[serde(default)]
+    pub state: Option<i64>,
+    #[serde(default)]
+    pub state_desc: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -569,6 +573,8 @@ impl Default for TemplateConfig {
             watermark: 0,
             is_360: -1,
             staff: None,
+            state: None,
+            state_desc: None,
         }
     }
 }

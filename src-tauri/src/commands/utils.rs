@@ -193,7 +193,7 @@ pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, S
         .await
     {
         Ok(res) => {
-            debug!("获取archieve pre成功: {}", res);
+            // debug!("获取archieve pre成功: {}", res);
             Ok(res["data"].clone())
         }
         Err(e) => Err(e.to_string()),
@@ -221,7 +221,7 @@ pub async fn get_topic_list(app: tauri::AppHandle, uid: u64) -> Result<Value, St
         .await
     {
         Ok(res) => {
-            debug!("获取话题列表成功: {}", res);
+            // debug!("获取话题列表成功: {}", res);
             Ok(res["data"]["topics"].clone())
         }
         Err(e) => Err(e.to_string()),
@@ -410,7 +410,7 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, S
             .await
         {
             Ok(res) => {
-                debug!("获取合集列表成功: {}", res);
+                // debug!("获取合集列表成功: {}", res);
                 let mut season_vec = Vec::new();
 
                 let seasons = res["data"]["seasons"].as_array()
@@ -504,13 +504,18 @@ pub async fn get_video_detail(
     {
         Ok(response) => match response.json::<Value>().await {
             Ok(res) => {
-                debug!("获取稿件 web 接口数据成功: {}", res);
+                // debug!("获取稿件 web 接口数据成功: {}", res);
                 if let Some(data) = res.get("data") {
                     let archive_data = data.get("archive").unwrap_or(data);
 
                     if let Some(desc) = archive_data["desc"].as_str().filter(|s| !s.is_empty()) {
                         template_config.desc = desc.to_string();
                     }
+                    template_config.state = archive_data["state"].as_i64();
+                    template_config.state_desc = archive_data["state_desc"]
+                        .as_str()
+                        .map(|value| value.to_string())
+                        .or_else(|| data["state_desc"].as_str().map(|value| value.to_string()));
                     if !archive_data["desc_v2"].is_null() {
                         match serde_json::from_value::<Vec<Credit>>(archive_data["desc_v2"].clone()) {
                             Ok(credits) => {
@@ -623,7 +628,7 @@ pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Resu
         .await
     {
         Ok(res) => {
-            debug!("获取稿件合集信息成功: {}", res);
+            // debug!("获取稿件合集信息成功: {}", res);
             Ok(res["data"]["id"].as_u64().unwrap_or(0))
         }
         Err(e) => Err(e.to_string()),

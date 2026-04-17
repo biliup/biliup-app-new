@@ -54,6 +54,8 @@ export interface TemplateConfig {
     watermark: number
     is_360: number
     staff?: Array<{ title: string; mid: number; is_del: number }>
+    state?: number
+    state_desc?: string
 }
 
 interface UserConfig {
@@ -279,7 +281,9 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         is_only_self: 0,
         watermark: 0,
         is_360: -1,
-        staff: undefined
+        staff: undefined,
+        state: undefined,
+        state_desc: undefined
     })
 
     // 配置文件操作

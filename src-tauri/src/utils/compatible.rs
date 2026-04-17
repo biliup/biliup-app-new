@@ -179,6 +179,8 @@ impl CompatibilityConverter {
                 watermark: 0, // 默认关闭
                 is_360: -1,   // 默认不是360度视频
                 staff: None,  // 旧版配置没有staff字段
+                state: None,
+                state_desc: None,
             };
 
             template.insert(streamer_name, template_config);
