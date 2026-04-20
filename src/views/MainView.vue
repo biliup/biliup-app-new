@@ -606,7 +606,7 @@
                                             </div>
                                         </el-form-item>
                                         <el-form-item v-if="!currentForm.aid" label="定时发布">
-                                            <DataPicker
+                                            <DatePicker
                                                 v-model="dtimeDate"
                                                 placeholder="选择发布时间"
                                                 :disabled="templateLoading"
@@ -951,7 +951,7 @@ import VideoList from '../components/VideoList.vue'
 import UserList from '../components/UserList.vue'
 import VideoStatus from '../components/VideoStatus.vue'
 import TagView from '../components/TagView.vue'
-import DataPicker from '../components/DataPicker.vue'
+import DatePicker from '../components/DatePicker.vue'
 import StaffView from '../components/StaffView.vue'
 import DescView from '../components/DescView.vue'
 

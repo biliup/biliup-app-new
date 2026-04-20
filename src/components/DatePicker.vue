@@ -1,5 +1,5 @@
 <template>
-    <div class="data-picker" ref="rootRef">
+    <div class="date-picker" ref="rootRef">
         <button
             type="button"
             class="picker-trigger"
@@ -147,7 +147,7 @@ const emit = defineEmits<{
 const rootRef = ref<HTMLElement | null>(null)
 const panelVisible = ref(false)
 
-const minDateTime = () => new Date(Date.now() + 2 * 60 * 60 * 1000)
+const minDateTime = () => new Date(Date.now() + 5 * 60 * 1000)
 const maxDateTime = () => new Date(Date.now() + 15 * 24 * 60 * 60 * 1000)
 
 const selectedDay = ref<Date>(stripTime(minDateTime()))
@@ -564,7 +564,7 @@ function initializeDraftFromModel() {
 </script>
 
 <style scoped>
-.data-picker {
+.date-picker {
     position: relative;
     width: 100%;
 }
