@@ -3544,6 +3544,10 @@ const refreshAllData = async () => {
         await authStore.getLoginUsers()
         // 重新构建用户模板
         await userConfigStore.ensureUserTemplatesReady()
+        // 拉取最新的分区列表
+        if (loginUsers.value && loginUsers.value.length > 0) {
+            await utilsStore.initArchievePre(loginUsers.value[0].uid)
+        }
         // 重新加载用户配置
         await userConfigStore.loadConfig()
         // 重写
