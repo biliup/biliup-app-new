@@ -259,7 +259,7 @@
                                                         :type="
                                                             currentForm.tid ? 'primary' : 'default'
                                                         "
-                                                        :disabled="templateLoading"
+                                                        :disabled="templateLoading || Boolean(currentForm.aid)"
                                                     >
                                                         <span class="category-text">
                                                             <span v-if="selectedSubCategory">
@@ -353,6 +353,23 @@
                                                     </div>
                                                 </div>
                                             </el-popover>
+                                        </el-form-item>
+
+                                        <el-form-item label="新版分区">
+                                            <el-select
+                                                v-model="tidV2SelectValue"
+                                                placeholder="请选择新版分区"
+                                                clearable
+                                                filterable
+                                                :disabled="templateLoading || Boolean(currentForm.aid)"
+                                            >
+                                                <el-option
+                                                    v-for="item in typeListV2"
+                                                    :key="item.id"
+                                                    :label="item.name"
+                                                    :value="item.id"
+                                                />
+                                            </el-select>
                                         </el-form-item>
 
                                         <el-form-item label="版权声明">
@@ -964,6 +981,7 @@ const utilsStore = useUtilsStore()
 const loginUsers = computed(() => authStore.loginUsers)
 const userTemplates = computed(() => userConfigStore.userTemplates)
 const typeList = computed(() => utilsStore.typelist)
+const typeListV2 = computed(() => utilsStore.typeListV2)
 
 const currentVer = ref<string>('')
 
@@ -1687,6 +1705,21 @@ const dtimeDate = computed({
     }
 })
 
+const tidV2SelectValue = computed<number | undefined>({
+    get() {
+        const tidV2 = Number(currentForm.value?.tid_v2 || 0)
+        return tidV2 > 0 ? tidV2 : undefined
+    },
+    set(value) {
+        if (!currentForm.value) {
+            return
+        }
+
+        const tidV2 = Number(value || 0)
+        currentForm.value.tid_v2 = tidV2
+    }
+})
+
 // 视频数组的计算属性 - 确保始终返回数组
 const videos = computed({
     get() {
@@ -2088,6 +2121,7 @@ const hasUnsavedChanges = (
         'copyright',
         'source',
         'tid',
+        'tid_v2',
         'desc',
         'desc_v2',
         'dynamic',
@@ -2388,6 +2422,7 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
                 currentForm.value.title = ''
                 currentForm.value.cover = ''
                 currentForm.value.tid = 0
+                currentForm.value.tid_v2 = 0
                 currentForm.value.copyright = 1
                 currentForm.value.source = ''
                 // 同步清空分区选择状态

@@ -142,6 +142,10 @@ impl TemplateConfig {
                 map.insert("topic_detail".to_string(), json!(topic_detail));
             }
 
+            if self.tid_v2 > 0 {
+                map.insert("human_type2".to_string(), json!(self.tid_v2));
+            }
+
             if self.aid.is_none() && self.season_id.is_some() && self.no_disturbance == 1 {
                 map.insert("no_disturbance".to_string(), json!(1));
             }

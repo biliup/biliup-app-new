@@ -82,6 +82,8 @@ pub struct TemplateConfig {
     #[serde(default)]
     pub tid: u32, // 分区ID
     #[serde(default)]
+    pub tid_v2: u32,
+    #[serde(default)]
     pub cover: String, // 封面URL
     #[serde(default)]
     pub title: String,
@@ -486,6 +488,7 @@ impl ConfigRoot {
             compare_field!(copyright, old, new);
             compare_field!(source, old, new);
             compare_field!(tid, old, new);
+            compare_field!(tid_v2, old, new);
             compare_field!(cover, old, new);
             compare_field!(title, old, new);
             compare_field!(desc, old, new);
@@ -543,6 +546,7 @@ impl Default for TemplateConfig {
             copyright: 1, // 默认自制
             source: String::new(),
             tid: 0,
+            tid_v2: 0,
             cover: String::new(),
             title: String::new(),
             desc: String::new(),

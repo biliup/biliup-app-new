@@ -24,6 +24,7 @@ export interface TemplateConfig {
     copyright: number // 1: 自制, 2: 转载
     source: string
     tid: number // 分区ID
+    tid_v2: number
     cover: string // 封面URL
     title: string
     desc: string
@@ -252,6 +253,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         copyright: 1,
         source: '',
         tid: 0,
+        tid_v2: 0,
         cover: '',
         title: '',
         desc: '',

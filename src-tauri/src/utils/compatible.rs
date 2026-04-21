@@ -129,6 +129,7 @@ impl CompatibilityConverter {
                 copyright: streamer_config.copyright,
                 source: streamer_config.source,
                 tid: streamer_config.tid,
+                tid_v2: 0,
                 cover: streamer_config.cover,
                 title: streamer_config.title,
                 desc: streamer_config.desc,

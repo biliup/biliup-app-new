@@ -269,6 +269,7 @@ export const useUtilsStore = defineStore('template', () => {
     return {
         archieve_pre: computed(() => archieve_pre.value),
         typelist: computed<any[]>(() => (archieve_pre.value?.typelist || []) as any[]),
+        typeListV2: computed<any[]>(() => (archieve_pre.value?.type_list_v2 || []) as any[]),
         common_staff_conf,
         topiclist: computed(() => topiclist.value),
         seasonlist: computed(() => seasonlist.value),

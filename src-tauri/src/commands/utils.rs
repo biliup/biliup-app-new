@@ -182,25 +182,48 @@ pub async fn download_cover(
 
 #[tauri::command]
 pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, String> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let bilibili = {
+        let app_lock = app.state::<Mutex<AppData>>();
+        let app_data = app_lock.lock().await;
+        let clients = app_data.clients.lock().await;
+        clients
+            .get(&uid)
+            .ok_or("用户未登录或不存在")?
+            .bilibili
+            .clone()
+    };
 
-    match app_data
-        .clients
-        .lock()
-        .await
-        .get(&uid)
-        .ok_or("用户未登录或不存在")?
-        .bilibili
-        .archive_pre()
-        .await
-    {
-        Ok(res) => {
-            // debug!("获取archieve pre成功: {}", res);
-            Ok(res["data"].clone())
+    let archive_pre_res = bilibili.archive_pre().await.map_err(|e| e.to_string())?;
+    let mut archive_pre_data = archive_pre_res["data"].clone();
+
+    let type2_url = format!(
+        "https://member.bilibili.com/x/vupre/web/archive/human/type2/list?t={}",
+        chrono::Utc::now().timestamp(),
+    );
+
+    let type2_res = bilibili.client.get(type2_url).send().await;
+    match type2_res {
+        Ok(response) => {
+            match response.json::<Value>().await {
+                Ok(payload) => {
+                    let code = payload["code"].as_i64().unwrap_or(-1);
+                    if code == 0 {
+                        archive_pre_data["type_list_v2"] = payload["data"]["type_list"].clone();
+                    } else {
+                        warn!("获取新版分区列表返回异常 code={} payload={}", code, payload);
+                    }
+                }
+                Err(e) => {
+                    warn!("解析新版分区列表响应失败: {}", e);
+                }
+            }
         }
-        Err(e) => Err(e.to_string()),
+        Err(e) => {
+            warn!("获取新版分区列表失败: {}", e);
+        }
     }
+
+    Ok(archive_pre_data)
 }
 
 #[tauri::command]
@@ -513,6 +536,11 @@ pub async fn get_video_detail(
 
                     if let Some(desc) = archive_data["desc"].as_str().filter(|s| !s.is_empty()) {
                         template_config.desc = desc.to_string();
+                    }
+                    if let Some(human_type2) = archive_data.get("human_type2") {
+                        if let Some(id) = human_type2.get("id").and_then(|v| v.as_u64()) {
+                            template_config.tid_v2 = id as u32;
+                        }
                     }
                     template_config.state = archive_data["state"].as_i64();
                     template_config.state_desc = archive_data["state_desc"]
