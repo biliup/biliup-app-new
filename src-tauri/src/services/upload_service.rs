@@ -103,18 +103,16 @@ impl UploadService {
         let mut tasks = Vec::new();
         // trace!("获取上传队列");
         for task_mutex in self.upload_queue.lock().await.values() {
-            tasks.push(task_mutex.lock().await.clone());
+            let task = task_mutex.lock().await;
+            let cloned = task.clone();
+            let should_cleanup = task.is_completed() || task.is_failed();
+            let task_id = task.id.clone();
+            let title = task.title();
+            drop(task);
 
-            if task_mutex.lock().await.is_completed() || task_mutex.lock().await.is_failed() {
-                let title = task_title!(task_mutex);
-                // pull out from the handles
-                if self
-                    .upload_handle
-                    .lock()
-                    .await
-                    .remove(&task_mutex.lock().await.id)
-                    .is_some()
-                {
+            tasks.push(cloned);
+            if should_cleanup {
+                if self.upload_handle.lock().await.remove(&task_id).is_some() {
                     info!("清理后台任务: {}", title)
                 }
             }
@@ -126,15 +124,13 @@ impl UploadService {
     pub async fn start_upload(&mut self, task_id: &str) -> Result<bool> {
         info!("尝试开始任务: {}", task_id);
         if let Some(task_mutex) = self.upload_queue.lock().await.get(task_id) {
-            if task_mutex.lock().await.is_running() || task_mutex.lock().await.is_completed() {
+            let mut task = task_mutex.lock().await;
+            if task.is_running() || task.is_completed() {
                 return Ok(false);
             }
-            if task_mutex.lock().await.is_paused()
-                || task_mutex.lock().await.is_failed()
-                || task_mutex.lock().await.is_waiting()
-            {
-                info!("任务切换至等待状态: {}", task_title!(task_mutex));
-                task_mutex.lock().await.pending();
+            if task.is_paused() || task.is_failed() || task.is_waiting() {
+                info!("任务切换至等待状态: {}", task.title());
+                task.pending();
                 return Ok(true);
             }
             Ok(false)
@@ -247,8 +243,11 @@ async fn upload_background_interval(
         // );
         // drop(task_guard); // 显式释放锁
 
-        if task_mutex.lock().await.is_pending() && remain > 0 {
-            let task_id = task_mutex.lock().await.id.to_string();
+        let (is_pending, task_id) = {
+            let task = task_mutex.lock().await;
+            (task.is_pending(), task.id.clone())
+        };
+        if is_pending && remain > 0 {
             if handle.lock().await.get(&task_id).is_some() {
                 continue;
             }
