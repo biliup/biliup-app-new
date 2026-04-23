@@ -84,8 +84,14 @@ export const useUploadStore = defineStore('upload', () => {
                 }
                 if (!uploadQueue.value.some(task => task.id === video.id)) {
                     try {
-                        await invoke('create_upload_task', { uid, template, video })
-                        count++
+                        const created = await invoke<boolean>('create_upload_task', {
+                            uid,
+                            template,
+                            video
+                        })
+                        if (created) {
+                            count++
+                        }
                     } catch (error) {
                         console.error('创建上传任务失败:', error)
                         throw error

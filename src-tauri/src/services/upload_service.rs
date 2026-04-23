@@ -432,17 +432,24 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
                 // 处理上传进度
                 task_mutex.lock().await.update_progress(process_so_far as f64/total_size as f64 * 100.0);
             }
-            Ok(return_video) = &mut video_fut => {
-                // 处理视频上传完成
-                debug!("视频上传完成: {:?}", return_video);
-                // rewrite the stored id & name
-                task_mutex.lock().await.video.filename = return_video.filename.clone();
-                task_mutex.lock().await.video.path.clear();
-                task_mutex.lock().await.video.cid = return_video.cid as u64;
-                info!("上传任务完成: {} -> {}", task_title!(task_mutex), return_video.filename);
-                task_mutex.lock().await.complete();
+            result = &mut video_fut => {
+                match result {
+                    Ok(return_video) => {
+                        // 处理视频上传完成
+                        debug!("视频上传完成: {:?}", return_video);
+                        // rewrite the stored id & name
+                        task_mutex.lock().await.video.filename = return_video.filename.clone();
+                        task_mutex.lock().await.video.path.clear();
+                        task_mutex.lock().await.video.cid = return_video.cid as u64;
+                        info!("上传任务完成: {} -> {}", task_title!(task_mutex), return_video.filename);
+                        task_mutex.lock().await.complete();
 
-                return Ok(())
+                        return Ok(())
+                    }
+                    Err(e) => {
+                        return Err(anyhow::anyhow!("上传任务失败: {}", e));
+                    }
+                }
             }
         }
     }

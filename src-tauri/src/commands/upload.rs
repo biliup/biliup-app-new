@@ -17,19 +17,19 @@ pub async fn create_upload_task(
     uid: u64,
     template: String,
     video: VideoInfo,
-) -> Result<(), AppError> {
+) -> Result<bool, AppError> {
     let app_data = app.state::<AppData>();
     let user = app_data.get_client(uid).await?.user;
     let config_copy = Arc::clone(&app_data.config);
     let clients_copy = Arc::clone(&app_data.clients);
     let upload_service = &app_data.upload_service;
 
-    upload_service
+    let created = upload_service
         .create_task(&user, &template, &video, config_copy, clients_copy)
         .await
         .map_err(AppError::Internal)?;
 
-    Ok(())
+    Ok(created)
 }
 
 /// 开始上传
