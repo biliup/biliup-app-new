@@ -225,7 +225,7 @@ async fn upload_background_interval(
     max_running: Arc<Mutex<u32>>,
 ) {
     let current_running = handle.lock().await.len() as u32;
-    let mut remain = *max_running.lock().await - current_running;
+    let mut remain = max_running.lock().await.saturating_sub(current_running);
     if remain > 0 {
         // debug!(
         //     "当前运行任务数: {}, 最大并行数: {}",
