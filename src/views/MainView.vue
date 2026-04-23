@@ -259,7 +259,10 @@
                                                         :type="
                                                             currentForm.tid ? 'primary' : 'default'
                                                         "
-                                                        :disabled="templateLoading || Boolean(currentForm.aid)"
+                                                        :disabled="
+                                                            templateLoading ||
+                                                            Boolean(currentForm.aid)
+                                                        "
                                                     >
                                                         <span class="category-text">
                                                             <span v-if="selectedSubCategory">
@@ -361,7 +364,9 @@
                                                 placeholder="请选择新版分区"
                                                 clearable
                                                 filterable
-                                                :disabled="templateLoading || Boolean(currentForm.aid)"
+                                                :disabled="
+                                                    templateLoading || Boolean(currentForm.aid)
+                                                "
                                             >
                                                 <el-option
                                                     v-for="item in typeListV2"

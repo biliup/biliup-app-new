@@ -90,7 +90,8 @@ fn normalize_desc_v2_tokens(tokens: Vec<Credit>) -> Vec<Credit> {
 
 #[tauri::command]
 pub async fn get_avatar_cache_dir() -> Result<String, AppError> {
-    Ok(get_avatar_cache_path().map_err(AppError::Internal)?
+    Ok(get_avatar_cache_path()
+        .map_err(AppError::Internal)?
         .to_string_lossy()
         .to_string())
 }
@@ -115,20 +116,26 @@ pub async fn read_dir_recursive(
     max_depth: Option<u32>,
 ) -> Result<Vec<FileEntry>, AppError> {
     let path = Path::new(&dir_path);
-    Ok(file_utils::read_dir_recursive(path, include_subdirs, max_depth).map_err(AppError::Internal)?)
+    Ok(
+        file_utils::read_dir_recursive(path, include_subdirs, max_depth)
+            .map_err(AppError::Internal)?,
+    )
 }
 
 /// 上传封面并进行返回url
 #[tauri::command]
-pub async fn upload_cover(app: tauri::AppHandle, uid: u64, file: String) -> Result<String, AppError> {
+pub async fn upload_cover(
+    app: tauri::AppHandle,
+    uid: u64,
+    file: String,
+) -> Result<String, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
     let mut cover_file = File::open(file)?;
     let mut cover_buf = vec![];
 
-    cover_file
-        .read_to_end(&mut cover_buf)?;
+    cover_file.read_to_end(&mut cover_buf)?;
 
     match app_data
         .clients
@@ -186,7 +193,10 @@ pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, A
             .clone()
     };
 
-    let archive_pre_res = bilibili.archive_pre().await.map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    let archive_pre_res = bilibili
+        .archive_pre()
+        .await
+        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
     let mut archive_pre_data = archive_pre_res["data"].clone();
 
     let type2_url = format!(
@@ -196,21 +206,19 @@ pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, A
 
     let type2_res = bilibili.client.get(type2_url).send().await;
     match type2_res {
-        Ok(response) => {
-            match response.json::<Value>().await {
-                Ok(payload) => {
-                    let code = payload["code"].as_i64().unwrap_or(-1);
-                    if code == 0 {
-                        archive_pre_data["type_list_v2"] = payload["data"]["type_list"].clone();
-                    } else {
-                        warn!("获取新版分区列表返回异常 code={} payload={}", code, payload);
-                    }
-                }
-                Err(e) => {
-                    warn!("解析新版分区列表响应失败: {}", e);
+        Ok(response) => match response.json::<Value>().await {
+            Ok(payload) => {
+                let code = payload["code"].as_i64().unwrap_or(-1);
+                if code == 0 {
+                    archive_pre_data["type_list_v2"] = payload["data"]["type_list"].clone();
+                } else {
+                    warn!("获取新版分区列表返回异常 code={} payload={}", code, payload);
                 }
             }
-        }
+            Err(e) => {
+                warn!("解析新版分区列表响应失败: {}", e);
+            }
+        },
         Err(e) => {
             warn!("获取新版分区列表失败: {}", e);
         }
@@ -303,17 +311,15 @@ pub async fn search_mention(
         request = request.query(&[("keyword", keyword)]);
     }
 
-    let res = request
-        .send()
-        .await?
-        .json::<Value>()
-        .await?;
+    let res = request.send().await?.json::<Value>().await?;
 
     if res["code"].as_i64().unwrap_or(-1) != 0 {
-        return Err(AppError::Biliup(res["message"]
-            .as_str()
-            .unwrap_or("搜索用户失败")
-            .to_string()));
+        return Err(AppError::Biliup(
+            res["message"]
+                .as_str()
+                .unwrap_or("搜索用户失败")
+                .to_string(),
+        ));
     }
 
     let groups = res["data"]["groups"]
@@ -505,7 +511,8 @@ pub async fn get_video_detail(
         .video_data(&vid, proxy.as_deref())
         .await
         .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
-    let mut template_config = TemplateConfig::from_bilibili_res(res).map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    let mut template_config = TemplateConfig::from_bilibili_res(res)
+        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
 
     match bilibili
         .client
@@ -821,9 +828,7 @@ pub async fn check_update() -> Result<Option<String>, AppError> {
         .send()
         .await?;
 
-    let release_info: Value = response
-        .json()
-        .await?;
+    let release_info: Value = response.json().await?;
 
     let latest_tag = release_info["tag_name"]
         .as_str()
@@ -831,7 +836,9 @@ pub async fn check_update() -> Result<Option<String>, AppError> {
 
     info!("最新版本：{latest_tag}");
     // 解析版本号 (格式: app-va.b.c)
-    let latest_version = latest_tag.strip_prefix("app-v").ok_or_else(|| AppError::Custom("版本标签格式错误".to_string()))?;
+    let latest_version = latest_tag
+        .strip_prefix("app-v")
+        .ok_or_else(|| AppError::Custom("版本标签格式错误".to_string()))?;
 
     let current_version = env!("CARGO_PKG_VERSION");
 

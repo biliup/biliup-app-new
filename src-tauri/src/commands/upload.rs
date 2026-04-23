@@ -112,7 +112,9 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
     if form.aid.is_none() {
         // 将前端表单转换为B站API需要的格式
         let bilibili_form = form.into_bilibili_form();
-        let studio = bilibili_form.try_into_studio().map_err(AppError::Internal)?;
+        let studio = bilibili_form
+            .try_into_studio()
+            .map_err(AppError::Internal)?;
 
         #[cfg(debug_assertions)]
         {
@@ -142,13 +144,17 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
         {
             Ok(resp) => {
                 info!("添加稿件成功：{resp}");
-                Ok(resp.data.ok_or_else(|| AppError::Biliup("返回值错误".to_string()))?)
+                Ok(resp
+                    .data
+                    .ok_or_else(|| AppError::Biliup("返回值错误".to_string()))?)
             }
             Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
         }
     } else {
         let bilibili_form = form.into_bilibili_form();
-        let studio = bilibili_form.try_into_studio().map_err(AppError::Internal)?;
+        let studio = bilibili_form
+            .try_into_studio()
+            .map_err(AppError::Internal)?;
         match app_data
             .clients
             .lock()
