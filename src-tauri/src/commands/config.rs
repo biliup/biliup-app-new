@@ -1,4 +1,3 @@
-use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri::Manager;
 
@@ -6,34 +5,6 @@ use tracing::info;
 
 use crate::{AppData, error::AppError, models::ConfigRoot};
 use crate::{models::TemplateConfig, utils::get_config_json_path};
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TemplateCommandResponse {
-    pub success: bool,
-    pub message: String,
-    pub template: Option<TemplateConfig>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TemplateOrderCommandResponse {
-    pub success: bool,
-    pub message: String,
-    pub template_order: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct RenameTemplateCommandResponse {
-    pub success: bool,
-    pub message: String,
-    pub template_order: Vec<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct UserOrderCommandResponse {
-    pub success: bool,
-    pub message: String,
-    pub user_order: Vec<u64>,
-}
 
 /// 加载配置文件
 #[tauri::command]
@@ -106,7 +77,7 @@ pub async fn delete_user_template(
     app: AppHandle,
     uid: u64,
     template_name: String,
-) -> Result<TemplateCommandResponse, AppError> {
+) -> Result<bool, AppError> {
     let app_data = app.state::<AppData>();
 
     app_data
@@ -116,11 +87,7 @@ pub async fn delete_user_template(
         .delete_user_template(uid, &template_name);
     info!("删除模板: {}", template_name);
 
-    Ok(TemplateCommandResponse {
-        success: true,
-        message: "模板删除成功".to_string(),
-        template: None,
-    })
+    Ok(true)
 }
 
 #[tauri::command]
@@ -129,7 +96,7 @@ pub async fn update_user_template(
     uid: u64,
     template_name: String,
     template: TemplateConfig,
-) -> Result<TemplateCommandResponse, AppError> {
+) -> Result<TemplateConfig, AppError> {
     let app_data = app.state::<AppData>();
 
     let updated = app_data
@@ -139,11 +106,7 @@ pub async fn update_user_template(
         .add_user_template(uid, &template_name, template);
     info!("更新模板: {}", template_name);
 
-    Ok(TemplateCommandResponse {
-        success: true,
-        message: "模板更新成功".to_string(),
-        template: Some(updated),
-    })
+    Ok(updated)
 }
 
 #[tauri::command]
@@ -152,7 +115,7 @@ pub async fn add_user_template(
     uid: u64,
     template_name: String,
     template: TemplateConfig,
-) -> Result<TemplateCommandResponse, AppError> {
+) -> Result<TemplateConfig, AppError> {
     let app_data = app.state::<AppData>();
 
     let added = app_data
@@ -162,11 +125,7 @@ pub async fn add_user_template(
         .add_user_template(uid, &template_name, template);
     info!("添加模板: {}", template_name);
 
-    Ok(TemplateCommandResponse {
-        success: true,
-        message: "模板添加成功".to_string(),
-        template: Some(added),
-    })
+    Ok(added)
 }
 
 #[tauri::command]
@@ -175,7 +134,7 @@ pub async fn rename_user_template(
     uid: u64,
     old_name: String,
     new_name: String,
-) -> Result<RenameTemplateCommandResponse, AppError> {
+) -> Result<Vec<String>, AppError> {
     let app_data = app.state::<AppData>();
 
     let mut config = app_data.config.lock().await;
@@ -183,19 +142,9 @@ pub async fn rename_user_template(
         .rename_user_template(uid, &old_name, &new_name)
         .map_err(|e| AppError::Config(format!("重命名模板失败: {e}")))?;
 
-    let saved_order = config
-        .config
-        .get(&uid)
-        .map(|user_config| user_config.template_order.clone())
-        .unwrap_or_default();
+    info!("重命名模板: {} -> {}", old_name, new_name);
 
-    info!("重命名模板: uid={}, {} -> {}", uid, old_name, new_name);
-
-    Ok(RenameTemplateCommandResponse {
-        success: true,
-        message: "模板重命名成功".to_string(),
-        template_order: saved_order,
-    })
+    Ok(config.get_user_template_order(uid).to_owned())
 }
 
 #[tauri::command]
@@ -203,7 +152,7 @@ pub async fn save_template_order(
     app: AppHandle,
     uid: u64,
     template_order: Vec<String>,
-) -> Result<TemplateOrderCommandResponse, AppError> {
+) -> Result<Vec<String>, AppError> {
     let app_data = app.state::<AppData>();
 
     let mut config = app_data.config.lock().await;
@@ -211,11 +160,7 @@ pub async fn save_template_order(
         .save_template_order(uid, template_order)
         .map_err(|e| AppError::Config(format!("保存模板顺序失败: {e}")))?;
 
-    let saved_order = config
-        .config
-        .get(&uid)
-        .map(|user_config| user_config.template_order.clone())
-        .unwrap_or_default();
+    let saved_order = config.get_user_template_order(uid).to_owned();
 
     config
         .save_to_file(&get_config_json_path().map_err(AppError::Internal)?)
@@ -223,36 +168,21 @@ pub async fn save_template_order(
 
     info!("保存模板顺序: uid={}", uid);
 
-    Ok(TemplateOrderCommandResponse {
-        success: true,
-        message: "模板顺序保存成功".to_string(),
-        template_order: saved_order,
-    })
+    Ok(saved_order)
 }
 
 #[tauri::command]
-pub async fn save_user_order(
-    app: AppHandle,
-    user_order: Vec<u64>,
-) -> Result<UserOrderCommandResponse, AppError> {
+pub async fn save_user_order(app: AppHandle, user_order: Vec<u64>) -> Result<Vec<u64>, AppError> {
     let app_data = app.state::<AppData>();
 
     let mut config = app_data.config.lock().await;
-    config
-        .save_user_order(user_order)
-        .map_err(|e| AppError::Config(format!("保存用户顺序失败: {e}")))?;
+    config.user_order = user_order.clone();
 
-    let saved_order = config.user_order.clone();
+    info!("用户排序已保存");
 
     config
         .save_to_file(&get_config_json_path().map_err(AppError::Internal)?)
         .map_err(|e| AppError::Config(format!("保存用户顺序到配置文件失败: {e}")))?;
 
-    info!("保存用户顺序");
-
-    Ok(UserOrderCommandResponse {
-        success: true,
-        message: "用户顺序保存成功".to_string(),
-        user_order: saved_order,
-    })
+    Ok(user_order)
 }

@@ -87,24 +87,6 @@ interface UserWithTemplates {
     expanded: boolean // 是否展开
 }
 
-interface TemplateCommandResponse {
-    success: boolean
-    message: string
-    template?: TemplateConfig
-}
-
-interface TemplateOrderCommandResponse {
-    success: boolean
-    message: string
-    template_order: string[]
-}
-
-interface RenameTemplateCommandResponse {
-    success: boolean
-    message: string
-    template_order: string[]
-}
-
 export const useUserConfigStore = defineStore('userConfig', () => {
     const templateNameCollator = new Intl.Collator(
         ['zh-Hans-u-co-pinyin', 'zh-CN-u-co-pinyin', 'zh-CN', 'en'],
@@ -197,18 +179,18 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             throw new Error('用户配置不存在')
         }
 
-        const response: TemplateOrderCommandResponse = await invoke('save_template_order', {
-            uid: userUid,
-            templateOrder: userConfig.template_order
-        })
+        try {
+            const response: string[] = await invoke('save_template_order', {
+                uid: userUid,
+                templateOrder: userConfig.template_order
+            })
 
-        if (!response?.success) {
-            throw new Error(response?.message || '保存模板顺序失败')
+            userConfig.template_order = response
+            ensureUserConfigTemplateMetadata(userConfig)
+            return true
+        } catch (err: any) {
+            throw new Error(err || '保存模板顺序失败')
         }
-
-        userConfig.template_order = response.template_order
-        ensureUserConfigTemplateMetadata(userConfig)
-        return true
     }
 
     const userTemplates = computed(() => {
@@ -411,26 +393,26 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         const to_add = templateConfig || createDefaultTemplate()
         to_add.watermark = userConfig.watermark // 使用用户配置中的水印设置
-        const server_response: TemplateCommandResponse = await invoke('add_user_template', {
-            uid: userUid,
-            templateName,
-            template: to_add
-        })
+        try {
+            const server_response: TemplateConfig = await invoke('add_user_template', {
+                uid: userUid,
+                templateName,
+                template: to_add
+            })
 
-        if (!server_response || !server_response.success || !server_response.template) {
-            throw new Error('添加模板失败: ' + server_response.message)
+            // 添加模板
+            userConfig.templates[templateName] = server_response
+            userConfig.template_order.push(templateName)
+            userConfig.template_updated_at[templateName] = getCurrentTimestamp()
+            ensureUserConfigTemplateMetadata(userConfig)
+
+            // 保存配置
+            await saveConfig()
+
+            return true
+        } catch (err: any) {
+            throw new Error('添加模板失败: ' + err)
         }
-
-        // 添加模板
-        userConfig.templates[templateName] = server_response.template
-        userConfig.template_order.push(templateName)
-        userConfig.template_updated_at[templateName] = getCurrentTimestamp()
-        ensureUserConfigTemplateMetadata(userConfig)
-
-        // 保存配置
-        await saveConfig()
-
-        return true
     }
 
     // 删除指定用户的模板
@@ -456,19 +438,19 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         delete userConfig.template_updated_at[templateName]
         ensureUserConfigTemplateMetadata(userConfig)
 
-        const server_response: TemplateCommandResponse = await invoke('delete_user_template', {
-            uid: userUid,
-            templateName
-        })
+        try {
+            await invoke('delete_user_template', {
+                uid: userUid,
+                templateName
+            })
 
-        if (!server_response || !server_response.success) {
-            throw new Error('删除模板失败: ' + server_response.message)
+            // 保存配置
+            await saveConfig()
+
+            return true
+        } catch (err: any) {
+            throw new Error('删除模板失败: ' + err)
         }
-
-        // 保存配置
-        await saveConfig()
-
-        return true
     }
 
     // 更新指定用户的模板
@@ -492,25 +474,25 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         }
         ensureUserConfigTemplateMetadata(userConfig)
 
-        const server_response: TemplateCommandResponse = await invoke('update_user_template', {
-            uid: userUid,
-            templateName,
-            template: templateConfig
-        })
+        try {
+            const server_response: TemplateConfig = await invoke('update_user_template', {
+                uid: userUid,
+                templateName,
+                template: templateConfig
+            })
 
-        if (!server_response || !server_response.success || !server_response.template) {
-            throw new Error('更新模板失败: ' + server_response.message)
+            // 更新模板
+            userConfig.templates[templateName] = server_response
+            userConfig.template_updated_at[templateName] = getCurrentTimestamp()
+            ensureUserConfigTemplateMetadata(userConfig)
+
+            // 保存配置
+            await saveConfig()
+
+            return true
+        } catch (err: any) {
+            throw new Error('更新模板失败: ' + err)
         }
-
-        // 更新模板
-        userConfig.templates[templateName] = server_response.template
-        userConfig.template_updated_at[templateName] = getCurrentTimestamp()
-        ensureUserConfigTemplateMetadata(userConfig)
-
-        // 保存配置
-        await saveConfig()
-
-        return true
     }
 
     // 复制模板
@@ -547,30 +529,30 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         const originalTemplate = userConfig.templates[oldName]
 
-        const response: RenameTemplateCommandResponse = await invoke('rename_user_template', {
-            uid: userUid,
-            oldName,
-            newName
-        })
+        try {
+            const response: string[] = await invoke('rename_user_template', {
+                uid: userUid,
+                oldName,
+                newName
+            })
 
-        if (!response?.success) {
-            throw new Error(response?.message || '模板重命名失败')
+            delete userConfig.templates[oldName]
+            userConfig.templates[newName] = originalTemplate
+
+            const oldUpdatedAt = userConfig.template_updated_at[oldName]
+            delete userConfig.template_updated_at[oldName]
+            userConfig.template_updated_at[newName] =
+                typeof oldUpdatedAt === 'number' ? oldUpdatedAt : getCurrentTimestamp()
+
+            userConfig.template_order = response
+            ensureUserConfigTemplateMetadata(userConfig)
+
+            await saveConfig()
+
+            return true
+        } catch (err: any) {
+            throw new Error(err || '模板重命名失败')
         }
-
-        delete userConfig.templates[oldName]
-        userConfig.templates[newName] = originalTemplate
-
-        const oldUpdatedAt = userConfig.template_updated_at[oldName]
-        delete userConfig.template_updated_at[oldName]
-        userConfig.template_updated_at[newName] =
-            typeof oldUpdatedAt === 'number' ? oldUpdatedAt : getCurrentTimestamp()
-
-        userConfig.template_order = response.template_order
-        ensureUserConfigTemplateMetadata(userConfig)
-
-        await saveConfig()
-
-        return true
     }
 
     const reorderUserTemplates = async (userUid: number, templateOrder: string[]) => {

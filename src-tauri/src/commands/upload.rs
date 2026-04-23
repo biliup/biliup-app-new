@@ -19,14 +19,7 @@ pub async fn create_upload_task(
     video: VideoInfo,
 ) -> Result<(), AppError> {
     let app_data = app.state::<AppData>();
-    let user = app_data
-        .clients
-        .lock()
-        .await
-        .get(&uid)
-        .ok_or_else(|| AppError::UserNotFound(uid))?
-        .user
-        .clone();
+    let user = app_data.get_client(uid).await?.user;
     let config_copy = Arc::clone(&app_data.config);
     let clients_copy = Arc::clone(&app_data.clients);
     let upload_service = &app_data.upload_service;
@@ -125,44 +118,28 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
             .get(&uid)
             .and_then(|c| c.proxy.clone());
 
-        match app_data
-            .clients
-            .lock()
-            .await
-            .get(&uid)
-            .ok_or_else(|| AppError::UserNotFound(uid))?
-            .bilibili
-            .submit_by_web(&studio, proxy.as_deref())
-            .await
-        {
+        let bilibili = app_data.get_bilibili(uid).await?;
+        match bilibili.submit_by_web(&studio, proxy.as_deref()).await {
             Ok(resp) => {
                 info!("添加稿件成功：{resp}");
                 Ok(resp
                     .data
                     .ok_or_else(|| AppError::Biliup("返回值错误".to_string()))?)
             }
-            Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
+            Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
         }
     } else {
         let bilibili_form = form.into_bilibili_form();
         let studio = bilibili_form
             .try_into_studio()
             .map_err(AppError::Internal)?;
-        match app_data
-            .clients
-            .lock()
-            .await
-            .get(&uid)
-            .ok_or_else(|| AppError::UserNotFound(uid))?
-            .bilibili
-            .edit_by_web(&studio)
-            .await
-        {
+        let bilibili = app_data.get_bilibili(uid).await?;
+        match bilibili.edit_by_web(&studio).await {
             Ok(resp) => {
                 info!("编辑稿件成功：{resp}");
                 Ok(resp["data"].clone())
             }
-            Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
+            Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
         }
     }
 }

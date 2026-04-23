@@ -1,4 +1,3 @@
-use biliup::bilibili::BiliBili;
 use serde_json::{Value, json};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
@@ -150,7 +149,7 @@ pub async fn upload_cover(
             info!("封面上传成功: {}", url);
             Ok(url)
         }
-        Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
+        Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
     }
 }
 
@@ -180,20 +179,13 @@ pub async fn download_cover(
 
 #[tauri::command]
 pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, AppError> {
-    let bilibili = {
-        let app_data = app.state::<AppData>();
-        let clients = app_data.clients.lock().await;
-        clients
-            .get(&uid)
-            .ok_or_else(|| AppError::UserNotFound(uid))?
-            .bilibili
-            .clone()
-    };
+    let app_data = app.state::<AppData>();
+    let bilibili = app_data.get_bilibili(uid).await?;
 
     let archive_pre_res = bilibili
         .archive_pre()
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("{}", e)))?;
     let mut archive_pre_data = archive_pre_res["data"].clone();
 
     let type2_url = format!(
@@ -228,13 +220,9 @@ pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, A
 pub async fn get_topic_list(app: tauri::AppHandle, uid: u64) -> Result<Value, AppError> {
     let app_data = app.state::<AppData>();
 
-    match app_data
-        .clients
-        .lock()
-        .await
-        .get(&uid)
-        .ok_or_else(|| AppError::UserNotFound(uid))?
-        .bilibili
+    let bilibili = app_data.get_bilibili(uid).await?;
+
+    match bilibili
         .client
         .get("https://member.bilibili.com/x/vupre/web/topic/type?pn=0&ps=999")
         .send()
@@ -246,7 +234,7 @@ pub async fn get_topic_list(app: tauri::AppHandle, uid: u64) -> Result<Value, Ap
             // debug!("获取话题列表成功: {}", res);
             Ok(res["data"]["topics"].clone())
         }
-        Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
+        Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
     }
 }
 
@@ -258,21 +246,28 @@ pub async fn search_topics(
 ) -> Result<Value, AppError> {
     let app_data = app.state::<AppData>();
 
-    match app_data.clients.lock().await.get(&uid).ok_or_else(|| AppError::UserNotFound(uid))?
-            .bilibili
-            .client
-            .get(format!("https://member.bilibili.com/x/vupre/web/topic/search?keywords={query}&page_size=50&offset=0&t={}", chrono::Utc::now().timestamp()))
-            .send()
-            .await?
-            .json::<Value>()
-            .await
-        {
-            Ok(res) => {
-                debug!("搜索话题成功: {}", res);
-                Ok(res["data"]["result"]["topics"].clone())
-            },
-            Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
+    let bilibili = app_data.get_bilibili(uid).await?;
+
+    match bilibili
+        .client
+        .get("https://member.bilibili.com/x/vupre/web/topic/search")
+        .query(&[
+            ("keywords", &query),
+            ("page_size", &"50".to_string()),
+            ("offset", &"0".to_string()),
+            ("t", &chrono::Utc::now().timestamp().to_string()),
+        ])
+        .send()
+        .await?
+        .json::<Value>()
+        .await
+    {
+        Ok(res) => {
+            debug!("搜索话题成功: {}", res);
+            Ok(res["data"]["result"]["topics"].clone())
         }
+        Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
+    }
 }
 
 #[tauri::command]
@@ -281,18 +276,8 @@ pub async fn search_mention(
     uid: u64,
     keyword: Option<String>,
 ) -> Result<Vec<MentionUserGroup>, AppError> {
-    let client = {
-        let app_data = app.state::<AppData>();
-        app_data
-            .clients
-            .lock()
-            .await
-            .get(&uid)
-            .ok_or_else(|| AppError::UserNotFound(uid))?
-            .bilibili
-            .client
-            .clone()
-    };
+    let app_data = app.state::<AppData>();
+    let client = app_data.get_bilibili(uid).await?.client.clone();
 
     let mut request = client
         .get("https://api.bilibili.com/x/polymer/web-dynamic/v1/mention/search")
@@ -360,10 +345,11 @@ pub async fn search_mention(
 
     let download_client = client.clone();
     tokio::spawn(async move {
+        debug!("开始后台头像下载任务");
         let cache_dir = match get_avatar_cache_path() {
             Ok(path) => path,
             Err(e) => {
-                warn!("创建头像缓存目录失败: {}", e);
+                error!("创建头像缓存目录失败: {}", e);
                 return;
             }
         };
@@ -404,6 +390,7 @@ pub async fn search_mention(
                 Err(e) => warn!("下载头像失败: {} ({})", face_url, e),
             }
         }
+        debug!("后台头像下载任务完成");
     });
 
     Ok(parsed_groups)
@@ -413,8 +400,9 @@ pub async fn search_mention(
 pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, AppError> {
     let app_data = app.state::<AppData>();
 
-    match app_data.clients.lock().await.get(&uid).ok_or_else(|| AppError::UserNotFound(uid))?
-            .bilibili
+    let bilibili = app_data.get_bilibili(uid).await?;
+
+    match bilibili
             .client
             .get(format!("https://member.bilibili.com/x2/creative/web/seasons?pn=1&ps=50&order=desc&sort=mtime&filter=1&t={}", chrono::Utc::now().timestamp()))
             .send()
@@ -465,7 +453,7 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, A
                     "seasons": season_vec,
                 }))
             },
-            Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
+            Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
         }
 }
 
@@ -480,7 +468,6 @@ pub async fn get_video_detail(
 
     let app_data = app.state::<AppData>();
 
-    // 取出所需数据，AppData 不再需要锁，但其内部字段仍需加锁
     let (bilibili, proxy) = {
         let proxy = app_data
             .config
@@ -489,12 +476,7 @@ pub async fn get_video_detail(
             .config
             .get(&uid)
             .and_then(|c| c.proxy.clone());
-        let clients = app_data.clients.lock().await;
-        let bilibili = clients
-            .get(&uid)
-            .ok_or_else(|| AppError::UserNotFound(uid))?
-            .bilibili
-            .clone();
+        let bilibili = app_data.get_bilibili(uid).await?;
         (bilibili, proxy)
     };
 
@@ -502,9 +484,9 @@ pub async fn get_video_detail(
     let res = bilibili
         .video_data(&vid, proxy.as_deref())
         .await
-        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("{}", e)))?;
     let mut template_config = TemplateConfig::from_bilibili_res(res)
-        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!("{}", e)))?;
 
     match bilibili
         .client
@@ -626,13 +608,9 @@ pub async fn get_video_detail(
 pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Result<u64, AppError> {
     let app_data = app.state::<AppData>();
 
-    match app_data
-        .clients
-        .lock()
-        .await
-        .get(&uid)
-        .ok_or_else(|| AppError::UserNotFound(uid))?
-        .bilibili
+    let bilibili = app_data.get_bilibili(uid).await?;
+
+    match bilibili
         .client
         .get(format!(
             "https://member.bilibili.com/x2/creative/web/season/aid?id={}&t={}",
@@ -648,7 +626,7 @@ pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Resu
             // debug!("获取稿件合集信息成功: {}", res);
             Ok(res["data"]["id"].as_u64().unwrap_or(0))
         }
-        Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
+        Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
     }
 }
 
@@ -664,41 +642,11 @@ pub async fn switch_season(
     add: bool,
 ) -> Result<bool, AppError> {
     let app_data = app.state::<AppData>();
-
-    fn get_csrf(bilibili: &BiliBili) -> Result<String, AppError> {
-        let csrf = bilibili
-            .login_info
-            .cookie_info
-            .get("cookies")
-            .and_then(|c| c.as_array())
-            .ok_or_else(|| AppError::Custom("登录状态数据错误".to_string()))?
-            .iter()
-            .filter_map(|c| c.as_object())
-            .find(|c| c["name"] == "bili_jct")
-            .ok_or_else(|| AppError::Custom("JCT错误".to_string()))?
-            .get("value")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::Custom("CSRF错误".to_string()))?;
-        Ok(csrf.to_string())
-    }
-
-    let csrf = get_csrf(
-        &app_data
-            .clients
-            .lock()
-            .await
-            .get(&uid)
-            .ok_or_else(|| AppError::UserNotFound(uid))?
-            .bilibili,
-    )?;
+    let my_client = app_data.get_client(uid).await?;
+    let csrf = my_client.get_csrf()?;
 
     if add {
-        let res = app_data
-            .clients
-            .lock()
-            .await
-            .get(&uid)
-            .ok_or_else(|| AppError::UserNotFound(uid))?
+        let res = my_client
             .bilibili
             .client
             .post(format!(
@@ -730,12 +678,7 @@ pub async fn switch_season(
         }
         Ok(true)
     } else {
-        let res = app_data
-            .clients
-            .lock()
-            .await
-            .get(&uid)
-            .ok_or_else(|| AppError::UserNotFound(uid))?
+        let res = my_client
             .bilibili
             .client
             .post(format!(

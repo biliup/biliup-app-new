@@ -16,22 +16,63 @@ use tracing::{error, info};
 use utils::CompatibilityConverter;
 
 use crate::{
+    error::AppError,
     models::{ConfigRoot, User},
     services::{AuthService, upload_service::UploadService},
     utils::{crypto::encode_base64, get_config_json_path, get_log_path},
 };
 
+#[derive(Clone)]
 pub struct MyClient {
-    bilibili: BiliBili,
-    user: User,
+    pub bilibili: BiliBili,
+    pub user: User,
+}
+
+impl MyClient {
+    pub fn get_csrf(&self) -> Result<String, AppError> {
+        let csrf = self
+            .bilibili
+            .login_info
+            .cookie_info
+            .get("cookies")
+            .and_then(|c| c.as_array())
+            .ok_or_else(|| AppError::Custom("登录状态数据错误".to_string()))?
+            .iter()
+            .filter_map(|c| c.as_object())
+            .find(|c| c["name"] == "bili_jct")
+            .ok_or_else(|| AppError::Custom("JCT错误".to_string()))?
+            .get("value")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| AppError::Custom("CSRF错误".to_string()))?;
+        Ok(csrf.to_string())
+    }
 }
 
 pub struct AppData {
-    config: Arc<Mutex<ConfigRoot>>,
-    auth_service: Arc<Mutex<AuthService>>,
-    upload_service: UploadService,
-    clients: Arc<Mutex<HashMap<u64, MyClient>>>,
-    // client: StatelessClient,
+    pub config: Arc<Mutex<ConfigRoot>>,
+    pub auth_service: Arc<Mutex<AuthService>>,
+    pub upload_service: UploadService,
+    pub clients: Arc<Mutex<HashMap<u64, MyClient>>>,
+}
+
+impl AppData {
+    pub async fn get_client(&self, uid: u64) -> Result<MyClient, AppError> {
+        self.clients
+            .lock()
+            .await
+            .get(&uid)
+            .cloned()
+            .ok_or_else(|| AppError::UserNotFound(uid))
+    }
+
+    pub async fn get_bilibili(&self, uid: u64) -> Result<BiliBili, AppError> {
+        self.clients
+            .lock()
+            .await
+            .get(&uid)
+            .map(|c| c.bilibili.clone())
+            .ok_or_else(|| AppError::UserNotFound(uid))
+    }
 }
 
 async fn startup() -> Result<AppData> {
@@ -48,9 +89,10 @@ async fn startup() -> Result<AppData> {
         let fallback_name = user_config.user.name.clone();
 
         let myinfo = bilibili.my_info().await?;
+        let code = myinfo["code"].as_i64().unwrap_or(-1);
         let uid = myinfo["data"]["mid"].as_u64().unwrap_or(0);
 
-        if uid > 0 {
+        if code == 0 && uid > 0 {
             let username = myinfo["data"]["name"].as_str().unwrap_or("").to_owned();
             let avatar_url = myinfo["data"]["face"].as_str().unwrap_or("").to_string();
             let avatar = bilibili
@@ -71,7 +113,11 @@ async fn startup() -> Result<AppData> {
                 },
             );
         } else {
-            info!("用户 {} 的登录状态无效，跳过自动登录", fallback_name);
+            let msg = myinfo["message"].as_str().unwrap_or("未知原因");
+            info!(
+                "用户 {} 的登录状态无效 ({}: {}), 跳过自动登录",
+                fallback_name, code, msg
+            );
             clients.insert(
                 fallback_uid,
                 MyClient {

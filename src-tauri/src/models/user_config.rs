@@ -387,6 +387,13 @@ impl ConfigRoot {
         }
     }
 
+    pub fn get_user_template_order(&self, uid: u64) -> &[String] {
+        self.config
+            .get(&uid)
+            .map(|user_config| user_config.template_order.as_slice())
+            .unwrap_or(&[])
+    }
+
     pub fn save_template_order(&mut self, uid: u64, template_order: Vec<String>) -> Result<&Self> {
         if let Some(user_config) = self.config.get_mut(&uid) {
             user_config.template_order = template_order;
@@ -437,8 +444,10 @@ impl ConfigRoot {
             Err(anyhow::anyhow!("用户配置不存在"))
         }
     }
+}
 
-    pub fn default() -> Self {
+impl Default for ConfigRoot {
+    fn default() -> Self {
         Self {
             max_curr: 1,
             auto_start: true,
@@ -448,7 +457,9 @@ impl ConfigRoot {
             config: HashMap::new(),
         }
     }
+}
 
+impl ConfigRoot {
     #[cfg(debug_assertions)]
     fn compare_templates_debug(old: &TemplateConfig, new: &TemplateConfig) {
         macro_rules! compare_field {

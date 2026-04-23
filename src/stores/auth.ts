@@ -22,12 +22,6 @@ interface SMSCodeResponse {
     recaptchaUrl?: string
 }
 
-interface UserOrderCommandResponse {
-    success: boolean
-    message: string
-    user_order: number[]
-}
-
 export const useAuthStore = defineStore('auth', () => {
     const loginUsers = ref<User[]>([])
     const isLoggedIn = computed(() => loginUsers.value.length > 0)
@@ -169,18 +163,14 @@ export const useAuthStore = defineStore('auth', () => {
         loginUsers.value = nextUsers
 
         try {
-            const response: UserOrderCommandResponse = await invoke('save_user_order', {
+            const response: number[] = await invoke('save_user_order', {
                 userOrder: nextOrder
             })
 
-            if (!response?.success) {
-                throw new Error(response?.message || '保存用户顺序失败')
-            }
-
-            loginUsers.value = buildOrderedUsers(nextUsers, response.user_order)
+            loginUsers.value = buildOrderedUsers(nextUsers, response)
 
             return true
-        } catch (error) {
+        } catch (error: any) {
             loginUsers.value = previousUsers
             throw error
         }
