@@ -4,7 +4,7 @@ use tauri::Manager;
 use tokio::sync::Mutex;
 use tracing::info;
 
-use crate::{AppData, models::ConfigRoot};
+use crate::{AppData, error::AppError, models::ConfigRoot};
 use crate::{models::TemplateConfig, utils::get_config_json_path};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -37,7 +37,7 @@ pub struct UserOrderCommandResponse {
 
 /// 加载配置文件
 #[tauri::command]
-pub async fn load_config(app: AppHandle) -> Result<ConfigRoot, String> {
+pub async fn load_config(app: AppHandle) -> Result<ConfigRoot, AppError> {
     let data = app.state::<Mutex<AppData>>();
 
     Ok(data.lock().await.config.lock().await.clone())
@@ -45,7 +45,7 @@ pub async fn load_config(app: AppHandle) -> Result<ConfigRoot, String> {
 
 /// 保存配置文件
 #[tauri::command]
-pub async fn save_config(app: AppHandle) -> Result<bool, String> {
+pub async fn save_config(app: AppHandle) -> Result<bool, AppError> {
     let data = app.state::<Mutex<AppData>>();
 
     data.lock()
@@ -53,8 +53,8 @@ pub async fn save_config(app: AppHandle) -> Result<bool, String> {
         .config
         .lock()
         .await
-        .save_to_file(&get_config_json_path().map_err(|e| format!("获取配置路径失败: {e}"))?)
-        .map_err(|e| format!("保存配置失败: {e}"))?;
+        .save_to_file(&get_config_json_path().map_err(AppError::Internal)?)
+        .map_err(|e| AppError::Config(format!("保存配置失败: {e}")))?;
     Ok(true)
 }
 
@@ -67,7 +67,7 @@ pub async fn save_user_config(
     limit: u32,
     watermark: u8,
     auto_edit: u8,
-) -> Result<bool, String> {
+) -> Result<bool, AppError> {
     let data = app.state::<Mutex<AppData>>();
     info!("用户({uid})配置已保存");
 
@@ -77,7 +77,7 @@ pub async fn save_user_config(
         .lock()
         .await
         .save_user_config(uid, line, proxy, limit, watermark, auto_edit)
-        .map_err(|e| format!("保存用户配置失败: {e}"))?;
+        .map_err(|e| AppError::Config(format!("保存用户配置失败: {e}")))?;
     Ok(true)
 }
 
@@ -88,7 +88,7 @@ pub async fn save_global_config(
     auto_start: bool,
     auto_upload: bool,
     log_level: String,
-) -> Result<bool, String> {
+) -> Result<bool, AppError> {
     let data = app.state::<Mutex<AppData>>();
     let app_data = data.lock().await;
 
@@ -109,7 +109,7 @@ pub async fn delete_user_template(
     app: AppHandle,
     uid: u64,
     template_name: String,
-) -> Result<TemplateCommandResponse, String> {
+) -> Result<TemplateCommandResponse, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
@@ -133,7 +133,7 @@ pub async fn update_user_template(
     uid: u64,
     template_name: String,
     template: TemplateConfig,
-) -> Result<TemplateCommandResponse, String> {
+) -> Result<TemplateCommandResponse, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
@@ -157,7 +157,7 @@ pub async fn add_user_template(
     uid: u64,
     template_name: String,
     template: TemplateConfig,
-) -> Result<TemplateCommandResponse, String> {
+) -> Result<TemplateCommandResponse, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
@@ -181,14 +181,14 @@ pub async fn rename_user_template(
     uid: u64,
     old_name: String,
     new_name: String,
-) -> Result<RenameTemplateCommandResponse, String> {
+) -> Result<RenameTemplateCommandResponse, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
     let mut config = app_data.config.lock().await;
     config
         .rename_user_template(uid, &old_name, &new_name)
-        .map_err(|e| format!("重命名模板失败: {e}"))?;
+        .map_err(|e| AppError::Config(format!("重命名模板失败: {e}")))?;
 
     let saved_order = config
         .config
@@ -210,14 +210,14 @@ pub async fn save_template_order(
     app: AppHandle,
     uid: u64,
     template_order: Vec<String>,
-) -> Result<TemplateOrderCommandResponse, String> {
+) -> Result<TemplateOrderCommandResponse, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
     let mut config = app_data.config.lock().await;
     config
         .save_template_order(uid, template_order)
-        .map_err(|e| format!("保存模板顺序失败: {e}"))?;
+        .map_err(|e| AppError::Config(format!("保存模板顺序失败: {e}")))?;
 
     let saved_order = config
         .config
@@ -226,8 +226,8 @@ pub async fn save_template_order(
         .unwrap_or_default();
 
     config
-        .save_to_file(&get_config_json_path().map_err(|e| format!("获取配置路径失败: {e}"))?)
-        .map_err(|e| format!("保存模板顺序到配置文件失败: {e}"))?;
+        .save_to_file(&get_config_json_path().map_err(AppError::Internal)?)
+        .map_err(|e| AppError::Config(format!("保存模板顺序到配置文件失败: {e}")))?;
 
     info!("保存模板顺序: uid={}", uid);
 
@@ -242,20 +242,20 @@ pub async fn save_template_order(
 pub async fn save_user_order(
     app: AppHandle,
     user_order: Vec<u64>,
-) -> Result<UserOrderCommandResponse, String> {
+) -> Result<UserOrderCommandResponse, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
     let mut config = app_data.config.lock().await;
     config
         .save_user_order(user_order)
-        .map_err(|e| format!("保存用户顺序失败: {e}"))?;
+        .map_err(|e| AppError::Config(format!("保存用户顺序失败: {e}")))?;
 
     let saved_order = config.user_order.clone();
 
     config
-        .save_to_file(&get_config_json_path().map_err(|e| format!("获取配置路径失败: {e}"))?)
-        .map_err(|e| format!("保存用户顺序到配置文件失败: {e}"))?;
+        .save_to_file(&get_config_json_path().map_err(AppError::Internal)?)
+        .map_err(|e| AppError::Config(format!("保存用户顺序到配置文件失败: {e}")))?;
 
     info!("保存用户顺序");
 

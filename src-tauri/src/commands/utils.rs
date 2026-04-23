@@ -7,7 +7,7 @@ use tauri::Manager;
 use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
-use crate::{AppData, models::TemplateConfig};
+use crate::{AppData, error::AppError, models::TemplateConfig};
 use crate::{models::user_config::Credit, utils::crypto::encode_base64};
 use crate::{
     models::user_config::Staff,
@@ -89,22 +89,22 @@ fn normalize_desc_v2_tokens(tokens: Vec<Credit>) -> Vec<Credit> {
 }
 
 #[tauri::command]
-pub async fn get_avatar_cache_dir() -> Result<String, String> {
-    get_avatar_cache_path()
-        .map(|path| path.to_string_lossy().to_string())
-        .map_err(|e| format!("获取头像缓存路径失败: {e}"))
+pub async fn get_avatar_cache_dir() -> Result<String, AppError> {
+    Ok(get_avatar_cache_path().map_err(AppError::Internal)?
+        .to_string_lossy()
+        .to_string())
 }
 
 #[tauri::command]
-pub async fn get_current_version() -> Result<String, String> {
+pub async fn get_current_version() -> Result<String, AppError> {
     Ok(env!("CARGO_PKG_VERSION").to_string())
 }
 
 /// 获取文件大小
 #[tauri::command]
-pub async fn get_file_size(file_path: String) -> Result<u64, String> {
+pub async fn get_file_size(file_path: String) -> Result<u64, AppError> {
     let path = Path::new(&file_path);
-    file_utils::get_file_size(path).map_err(|e| format!("获取文件大小失败: {e}"))
+    Ok(file_utils::get_file_size(path).map_err(AppError::Internal)?)
 }
 
 /// 递归读取目录
@@ -113,31 +113,29 @@ pub async fn read_dir_recursive(
     dir_path: String,
     include_subdirs: bool,
     max_depth: Option<u32>,
-) -> Result<Vec<FileEntry>, String> {
+) -> Result<Vec<FileEntry>, AppError> {
     let path = Path::new(&dir_path);
-    file_utils::read_dir_recursive(path, include_subdirs, max_depth)
-        .map_err(|e| format!("读取目录失败: {e}"))
+    Ok(file_utils::read_dir_recursive(path, include_subdirs, max_depth).map_err(AppError::Internal)?)
 }
 
 /// 上传封面并进行返回url
 #[tauri::command]
-pub async fn upload_cover(app: tauri::AppHandle, uid: u64, file: String) -> Result<String, String> {
+pub async fn upload_cover(app: tauri::AppHandle, uid: u64, file: String) -> Result<String, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
-    let mut cover_file = File::open(file).map_err(|e| format!("打开文件失败: {e}"))?;
+    let mut cover_file = File::open(file)?;
     let mut cover_buf = vec![];
 
     cover_file
-        .read_to_end(&mut cover_buf)
-        .map_err(|e| format!("读取文件失败: {e}"))?;
+        .read_to_end(&mut cover_buf)?;
 
     match app_data
         .clients
         .lock()
         .await
         .get(&uid)
-        .ok_or("用户未登录或不存在")?
+        .ok_or_else(|| AppError::UserNotFound(uid))?
         .bilibili
         .cover_up(&cover_buf)
         .await
@@ -146,7 +144,7 @@ pub async fn upload_cover(app: tauri::AppHandle, uid: u64, file: String) -> Resu
             info!("封面上传成功: {}", url);
             Ok(url)
         }
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
     }
 }
 
@@ -156,44 +154,39 @@ pub async fn download_cover(
     app: tauri::AppHandle,
     uid: u64,
     url: String,
-) -> Result<String, String> {
+) -> Result<String, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
-    match app_data
+    let res = app_data
         .clients
         .lock()
         .await
         .get(&uid)
-        .ok_or("用户未登录或不存在")?
+        .ok_or_else(|| AppError::UserNotFound(uid))?
         .bilibili
         .client
         .get(&url)
         .send()
-        .await
-    {
-        Ok(res) => {
-            let bytes = res.bytes().await.map_err(|e| e.to_string())?;
-            Ok(encode_base64(&bytes))
-        }
-        Err(e) => Err(e.to_string()),
-    }
+        .await?;
+    let bytes = res.bytes().await?;
+    Ok(encode_base64(&bytes))
 }
 
 #[tauri::command]
-pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, String> {
+pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, AppError> {
     let bilibili = {
         let app_lock = app.state::<Mutex<AppData>>();
         let app_data = app_lock.lock().await;
         let clients = app_data.clients.lock().await;
         clients
             .get(&uid)
-            .ok_or("用户未登录或不存在")?
+            .ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
             .clone()
     };
 
-    let archive_pre_res = bilibili.archive_pre().await.map_err(|e| e.to_string())?;
+    let archive_pre_res = bilibili.archive_pre().await.map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
     let mut archive_pre_data = archive_pre_res["data"].clone();
 
     let type2_url = format!(
@@ -227,7 +220,7 @@ pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, S
 }
 
 #[tauri::command]
-pub async fn get_topic_list(app: tauri::AppHandle, uid: u64) -> Result<Value, String> {
+pub async fn get_topic_list(app: tauri::AppHandle, uid: u64) -> Result<Value, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
@@ -236,13 +229,12 @@ pub async fn get_topic_list(app: tauri::AppHandle, uid: u64) -> Result<Value, St
         .lock()
         .await
         .get(&uid)
-        .ok_or("用户未登录或不存在")?
+        .ok_or_else(|| AppError::UserNotFound(uid))?
         .bilibili
         .client
         .get("https://member.bilibili.com/x/vupre/web/topic/type?pn=0&ps=999")
         .send()
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
         .json::<Value>()
         .await
     {
@@ -250,7 +242,7 @@ pub async fn get_topic_list(app: tauri::AppHandle, uid: u64) -> Result<Value, St
             // debug!("获取话题列表成功: {}", res);
             Ok(res["data"]["topics"].clone())
         }
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
     }
 }
 
@@ -259,17 +251,16 @@ pub async fn search_topics(
     app: tauri::AppHandle,
     uid: u64,
     query: String,
-) -> Result<Value, String> {
+) -> Result<Value, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
-    match app_data.clients.lock().await.get(&uid).ok_or("用户未登录或不存在")?
+    match app_data.clients.lock().await.get(&uid).ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
             .client
             .get(format!("https://member.bilibili.com/x/vupre/web/topic/search?keywords={query}&page_size=50&offset=0&t={}", chrono::Utc::now().timestamp()))
             .send()
-            .await
-            .map_err(|e| e.to_string())?
+            .await?
             .json::<Value>()
             .await
         {
@@ -277,7 +268,7 @@ pub async fn search_topics(
                 debug!("搜索话题成功: {}", res);
                 Ok(res["data"]["result"]["topics"].clone())
             },
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
         }
 }
 
@@ -286,7 +277,7 @@ pub async fn search_mention(
     app: tauri::AppHandle,
     uid: u64,
     keyword: Option<String>,
-) -> Result<Vec<MentionUserGroup>, String> {
+) -> Result<Vec<MentionUserGroup>, AppError> {
     let client = {
         let app_lock = app.state::<Mutex<AppData>>();
         let app_data = app_lock.lock().await;
@@ -295,7 +286,7 @@ pub async fn search_mention(
             .lock()
             .await
             .get(&uid)
-            .ok_or("用户未登录或不存在")?
+            .ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
             .client
             .clone()
@@ -314,17 +305,15 @@ pub async fn search_mention(
 
     let res = request
         .send()
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
         .json::<Value>()
-        .await
-        .map_err(|e| e.to_string())?;
+        .await?;
 
     if res["code"].as_i64().unwrap_or(-1) != 0 {
-        return Err(res["message"]
+        return Err(AppError::Biliup(res["message"]
             .as_str()
             .unwrap_or("搜索用户失败")
-            .to_string());
+            .to_string()));
     }
 
     let groups = res["data"]["groups"]
@@ -421,17 +410,16 @@ pub async fn search_mention(
 }
 
 #[tauri::command]
-pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, String> {
+pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
-    match app_data.clients.lock().await.get(&uid).ok_or("用户未登录或不存在")?
+    match app_data.clients.lock().await.get(&uid).ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
             .client
             .get(format!("https://member.bilibili.com/x2/creative/web/seasons?pn=1&ps=50&order=desc&sort=mtime&filter=1&t={}", chrono::Utc::now().timestamp()))
             .send()
-            .await
-            .map_err(|e| e.to_string())?
+            .await?
             .json::<Value>()
             .await
         {
@@ -440,7 +428,7 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, S
                 let mut season_vec = Vec::new();
 
                 let seasons = res["data"]["seasons"].as_array()
-                    .ok_or("用户没有创建合集").unwrap_or(&season_vec).to_owned();
+                    .unwrap_or(&season_vec).to_owned();
                 for season in &seasons {
                     let season_id = season["season"]["id"].as_u64().unwrap_or(0);
                     let season_title = season["season"]["title"].as_str().unwrap_or("").to_string();
@@ -478,7 +466,7 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, S
                     "seasons": season_vec,
                 }))
             },
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
         }
 }
 
@@ -487,9 +475,9 @@ pub async fn get_video_detail(
     app: tauri::AppHandle,
     uid: u64,
     video_id: String,
-) -> Result<TemplateConfig, String> {
+) -> Result<TemplateConfig, AppError> {
     let vid = biliup::uploader::bilibili::Vid::from_str(&video_id)
-        .map_err(|e| format!("解析视频 ID 失败: {e}"))?;
+        .map_err(|e| AppError::Custom(format!("解析视频 ID 失败: {e}")))?;
 
     let app_lock = app.state::<Mutex<AppData>>();
 
@@ -506,7 +494,7 @@ pub async fn get_video_detail(
         let clients = app_data.clients.lock().await;
         let bilibili = clients
             .get(&uid)
-            .ok_or("用户未登录或不存在")?
+            .ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
             .clone();
         (bilibili, proxy)
@@ -516,8 +504,8 @@ pub async fn get_video_detail(
     let res = bilibili
         .video_data(&vid, proxy.as_deref())
         .await
-        .map_err(|e| e.to_string())?;
-    let mut template_config = TemplateConfig::from_bilibili_res(res).map_err(|e| e.to_string())?;
+        .map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
+    let mut template_config = TemplateConfig::from_bilibili_res(res).map_err(|e| AppError::Internal(anyhow::anyhow!(e)))?;
 
     match bilibili
         .client
@@ -636,7 +624,7 @@ pub async fn get_video_detail(
 }
 
 #[tauri::command]
-pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Result<u64, String> {
+pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Result<u64, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
@@ -645,7 +633,7 @@ pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Resu
         .lock()
         .await
         .get(&uid)
-        .ok_or("用户未登录或不存在")?
+        .ok_or_else(|| AppError::UserNotFound(uid))?
         .bilibili
         .client
         .get(format!(
@@ -654,8 +642,7 @@ pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Resu
             chrono::Utc::now().timestamp()
         ))
         .send()
-        .await
-        .map_err(|e| e.to_string())?
+        .await?
         .json::<Value>()
         .await
     {
@@ -663,7 +650,7 @@ pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Resu
             // debug!("获取稿件合集信息成功: {}", res);
             Ok(res["data"]["id"].as_u64().unwrap_or(0))
         }
-        Err(e) => Err(e.to_string()),
+        Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
     }
 }
 
@@ -677,24 +664,24 @@ pub async fn switch_season(
     section_id: u64,
     title: String,
     add: bool,
-) -> Result<bool, String> {
+) -> Result<bool, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
-    fn get_csrf(bilibili: &BiliBili) -> Result<String, String> {
+    fn get_csrf(bilibili: &BiliBili) -> Result<String, AppError> {
         let csrf = bilibili
             .login_info
             .cookie_info
             .get("cookies")
             .and_then(|c| c.as_array())
-            .ok_or("登录状态数据错误")?
+            .ok_or_else(|| AppError::Custom("登录状态数据错误".to_string()))?
             .iter()
             .filter_map(|c| c.as_object())
             .find(|c| c["name"] == "bili_jct")
-            .ok_or("JCT错误")?
+            .ok_or_else(|| AppError::Custom("JCT错误".to_string()))?
             .get("value")
             .and_then(|v| v.as_str())
-            .ok_or("CSRF错误")?;
+            .ok_or_else(|| AppError::Custom("CSRF错误".to_string()))?;
         Ok(csrf.to_string())
     }
 
@@ -704,55 +691,54 @@ pub async fn switch_season(
             .lock()
             .await
             .get(&uid)
-            .ok_or("用户未登录或不存在")?
+            .ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili,
-    )
-    .map_err(|e| e.to_string())?;
+    )?;
 
     if add {
-        match app_data
-        .clients
-        .lock()
-        .await
-        .get(&uid)
-        .ok_or("用户未登录或不存在")?
-        .bilibili
-        .client
-        .post(format!(
-            "https://member.bilibili.com/x2/creative/web/season/section/episodes/add?t={}&csrf={}",
-            chrono::Utc::now().timestamp(),
-            csrf
-        ))
-        .json(&json!({
-            "episodes": [
-                {
-                    "title": title,
-                    "aid": aid,
-                    "cid": cid
-                }
-            ],
-            "sectionId": section_id,
-            "csrf": csrf
-        }))
-        .send()
-        .await
-        .map_err(|e| e.to_string())?
-        .json::<Value>()
-        .await
-        {
-            Ok(res) => {
-                debug!("设置合集成功：{res}");
-                Ok(true)
-            },
-            Err(e) => Err(e.to_string()),
-        }
-    } else {
-        match app_data
+        let res = app_data
             .clients
             .lock()
             .await
             .get(&uid)
-            .ok_or("用户未登录或不存在")?
+            .ok_or_else(|| AppError::UserNotFound(uid))?
+            .bilibili
+            .client
+            .post(format!(
+                "https://member.bilibili.com/x2/creative/web/season/section/episodes/add?t={}&csrf={}",
+                chrono::Utc::now().timestamp(),
+                csrf
+            ))
+            .json(&json!({
+                "episodes": [
+                    {
+                        "title": title,
+                        "aid": aid,
+                        "cid": cid
+                    }
+                ],
+                "sectionId": section_id,
+                "csrf": csrf
+            }))
+            .send()
+            .await?
+            .json::<Value>()
+            .await?;
+
+        debug!("设置合集成功：{res}");
+        if res["code"].as_i64() != Some(0) {
+            return Err(AppError::Biliup(
+                serde_json::to_string(&res).unwrap_or_else(|_| "未知错误".to_string()),
+            ));
+        }
+        Ok(true)
+    } else {
+        let res = app_data
+            .clients
+            .lock()
+            .await
+            .get(&uid)
+            .ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
             .client
             .post(format!(
@@ -769,37 +755,34 @@ pub async fn switch_season(
                 "csrf": csrf
             }))
             .send()
-            .await
-            .map_err(|e| e.to_string())?
+            .await?
             .json::<Value>()
-            .await
-        {
-            Ok(res) => {
-                debug!("修改合集成功：{res}");
-                if res["code"].as_i64() != Some(0) {
-                    return Err(serde_json::to_string(&res).unwrap_or("未知错误".to_string()));
-                }
-                Ok(true)
-            }
-            Err(e) => Err(e.to_string()),
+            .await?;
+
+        debug!("修改合集成功：{res}");
+        if res["code"].as_i64() != Some(0) {
+            return Err(AppError::Biliup(
+                serde_json::to_string(&res).unwrap_or_else(|_| "未知错误".to_string()),
+            ));
         }
+        Ok(true)
     }
 }
 
 /// 导出日志
 #[tauri::command]
-pub async fn export_logs() -> Result<String, String> {
+pub async fn export_logs() -> Result<String, AppError> {
     use std::fs;
     use std::io::Write;
     use zip::ZipWriter;
 
-    let log_dir = crate::utils::get_log_path().map_err(|e| format!("获取日志目录失败: {e}"))?;
+    let log_dir = crate::utils::get_log_path().map_err(AppError::Internal)?;
 
     // 创建临时zip文件
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S");
     let zip_path = log_dir.join(format!("logs_export_{timestamp}.zip"));
 
-    let zip_file = fs::File::create(&zip_path).map_err(|e| format!("创建ZIP文件失败: {e}"))?;
+    let zip_file = fs::File::create(&zip_path)?;
     let mut zip = ZipWriter::new(zip_file);
     let options: zip::write::FileOptions<'_, ()> = zip::write::FileOptions::default()
         .compression_method(zip::CompressionMethod::Deflated)
@@ -812,24 +795,22 @@ pub async fn export_logs() -> Result<String, String> {
                 if extension == "log" {
                     let file_name = entry.file_name().to_string_lossy().to_string();
                     if let Ok(content) = fs::read(entry.path()) {
-                        zip.start_file(&file_name, options)
-                            .map_err(|e| format!("创建ZIP条目失败: {e}"))?;
-                        zip.write_all(&content)
-                            .map_err(|e| format!("写入ZIP文件失败: {e}"))?;
+                        zip.start_file(&file_name, options)?;
+                        zip.write_all(&content)?;
                     }
                 }
             }
         }
     }
 
-    zip.finish().map_err(|e| format!("完成ZIP文件失败: {e}"))?;
+    zip.finish()?;
 
     Ok(zip_path.to_string_lossy().to_string())
 }
 
 /// 检查更新
 #[tauri::command]
-pub async fn check_update() -> Result<Option<String>, String> {
+pub async fn check_update() -> Result<Option<String>, AppError> {
     use reqwest;
     use serde_json::Value;
 
@@ -838,25 +819,23 @@ pub async fn check_update() -> Result<Option<String>, String> {
         .get("https://api.github.com/repos/biliup/biliup-app-new/releases/latest")
         .header("User-Agent", "biliup-app")
         .send()
-        .await
-        .map_err(|e| format!("网络请求失败: {e}"))?;
+        .await?;
 
     let release_info: Value = response
         .json()
-        .await
-        .map_err(|e| format!("解析响应失败: {e}"))?;
+        .await?;
 
     let latest_tag = release_info["tag_name"]
         .as_str()
-        .ok_or("无法获取最新版本标签")?;
+        .ok_or_else(|| AppError::Custom("无法获取最新版本标签".to_string()))?;
 
     info!("最新版本：{latest_tag}");
     // 解析版本号 (格式: app-va.b.c)
-    let latest_version = latest_tag.strip_prefix("app-v").ok_or("版本标签格式错误")?;
+    let latest_version = latest_tag.strip_prefix("app-v").ok_or_else(|| AppError::Custom("版本标签格式错误".to_string()))?;
 
     let current_version = env!("CARGO_PKG_VERSION");
 
-    if is_newer_version(latest_version, current_version)? {
+    if is_newer_version(latest_version, current_version).map_err(AppError::Internal)? {
         Ok(Some(latest_tag.to_string()))
     } else {
         Ok(None)
@@ -864,12 +843,12 @@ pub async fn check_update() -> Result<Option<String>, String> {
 }
 
 /// 比较版本号
-fn is_newer_version(latest: &str, current: &str) -> Result<bool, String> {
-    let parse_version = |v: &str| -> Result<Vec<u32>, String> {
+fn is_newer_version(latest: &str, current: &str) -> anyhow::Result<bool> {
+    let parse_version = |v: &str| -> anyhow::Result<Vec<u32>> {
         v.split('.')
             .map(|part| {
                 part.parse::<u32>()
-                    .map_err(|_| "版本号格式错误".to_string())
+                    .map_err(|_| anyhow::anyhow!("版本号格式错误"))
             })
             .collect()
     };
@@ -889,13 +868,13 @@ fn is_newer_version(latest: &str, current: &str) -> Result<bool, String> {
     Ok(latest_parts.len() > current_parts.len())
 }
 
-/// 检查更新
+/// 前端日志转发
 #[tauri::command]
 pub async fn console_log(
     _app: tauri::AppHandle,
     level: String,
     messages: Vec<String>,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let message = messages.join(" ");
     match level.as_str() {
         "log" => info!("Webconsole: {}", message),

@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::{
     AppData,
+    error::AppError,
     models::{TemplateConfig, UploadTask, VideoInfo},
 };
 use serde_json::Value;
@@ -16,7 +17,7 @@ pub async fn create_upload_task(
     uid: u64,
     template: String,
     video: VideoInfo,
-) -> Result<(), String> {
+) -> Result<(), AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let mut app_data = app_lock.lock().await;
     let user = app_data
@@ -24,7 +25,7 @@ pub async fn create_upload_task(
         .lock()
         .await
         .get(&uid)
-        .ok_or("用户未登录或不存在")?
+        .ok_or_else(|| AppError::UserNotFound(uid))?
         .user
         .clone();
     let config_copy = Arc::clone(&app_data.config);
@@ -34,84 +35,84 @@ pub async fn create_upload_task(
     upload_service
         .create_task(&user, &template, &video, config_copy, clients_copy)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(AppError::Internal)?;
 
     Ok(())
 }
 
 /// 开始上传
 #[tauri::command]
-pub async fn start_upload(app: AppHandle, task_id: String) -> Result<bool, String> {
+pub async fn start_upload(app: AppHandle, task_id: String) -> Result<bool, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let mut app_data = app_lock.lock().await;
     let upload_service = &mut app_data.upload_service;
 
-    upload_service
+    Ok(upload_service
         .start_upload(&task_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Internal)?)
 }
 
 /// 暂停上传
 #[tauri::command]
-pub async fn pause_upload(app: AppHandle, task_id: String) -> Result<bool, String> {
+pub async fn pause_upload(app: AppHandle, task_id: String) -> Result<bool, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let mut app_data = app_lock.lock().await;
     let upload_service = &mut app_data.upload_service;
 
-    upload_service
+    Ok(upload_service
         .pause_upload(&task_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Internal)?)
 }
 
 /// 取消上传
 #[tauri::command]
-pub async fn cancel_upload(app: AppHandle, task_id: String) -> Result<bool, String> {
+pub async fn cancel_upload(app: AppHandle, task_id: String) -> Result<bool, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let mut app_data = app_lock.lock().await;
     let upload_service = &mut app_data.upload_service;
 
-    upload_service
+    Ok(upload_service
         .cancel_upload(&task_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Internal)?)
 }
 
 /// 获取上传队列
 #[tauri::command]
-pub async fn get_upload_queue(app: AppHandle) -> Result<Vec<UploadTask>, String> {
+pub async fn get_upload_queue(app: AppHandle) -> Result<Vec<UploadTask>, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let mut app_data = app_lock.lock().await;
     let upload_service = &mut app_data.upload_service;
-    upload_service
+    Ok(upload_service
         .get_upload_queue()
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Internal)?)
 }
 
 /// 重新上传失败的任务
 #[tauri::command]
-pub async fn retry_upload(app: AppHandle, task_id: String) -> Result<bool, String> {
+pub async fn retry_upload(app: AppHandle, task_id: String) -> Result<bool, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let mut app_data = app_lock.lock().await;
     let upload_service = &mut app_data.upload_service;
 
-    upload_service
+    Ok(upload_service
         .retry_upload(&task_id)
         .await
-        .map_err(|e| e.to_string())
+        .map_err(AppError::Internal)?)
 }
 
 #[tauri::command]
-pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Value, String> {
+pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Value, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let app_data = app_lock.lock().await;
 
     if form.aid.is_none() {
         // 将前端表单转换为B站API需要的格式
         let bilibili_form = form.into_bilibili_form();
-        let studio = bilibili_form.try_into_studio().map_err(|e| e.to_string())?;
+        let studio = bilibili_form.try_into_studio().map_err(AppError::Internal)?;
 
         #[cfg(debug_assertions)]
         {
@@ -134,26 +135,26 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
             .lock()
             .await
             .get(&uid)
-            .ok_or("用户未登录或不存在")?
+            .ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
             .submit_by_web(&studio, proxy.as_deref())
             .await
         {
             Ok(resp) => {
                 info!("添加稿件成功：{resp}");
-                Ok(resp.data.ok_or("返回值错误").map_err(|e| e.to_string())?)
+                Ok(resp.data.ok_or_else(|| AppError::Biliup("返回值错误".to_string()))?)
             }
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
         }
     } else {
         let bilibili_form = form.into_bilibili_form();
-        let studio = bilibili_form.try_into_studio().map_err(|e| e.to_string())?;
+        let studio = bilibili_form.try_into_studio().map_err(AppError::Internal)?;
         match app_data
             .clients
             .lock()
             .await
             .get(&uid)
-            .ok_or("用户未登录或不存在")?
+            .ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
             .edit_by_web(&studio)
             .await
@@ -162,7 +163,7 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
                 info!("编辑稿件成功：{resp}");
                 Ok(resp["data"].clone())
             }
-            Err(e) => Err(e.to_string()),
+            Err(e) => Err(AppError::Internal(anyhow::anyhow!(e))),
         }
     }
 }

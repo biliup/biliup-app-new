@@ -1,4 +1,5 @@
 mod commands;
+pub(crate) mod error;
 mod models;
 mod services;
 mod utils;

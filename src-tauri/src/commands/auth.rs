@@ -1,6 +1,6 @@
-use crate::AppData;
 use crate::models::{ConfigRoot, User};
 use crate::services::{AuthService, QrLoginCheckResult, SmsSendState};
+use crate::{AppData, error::AppError};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::{
@@ -53,7 +53,10 @@ async fn persist_login_success(
 
 /// 获取登录二维码
 #[tauri::command]
-pub async fn get_login_qr(app: tauri::AppHandle, proxy: Option<String>) -> Result<String, String> {
+pub async fn get_login_qr(
+    app: tauri::AppHandle,
+    proxy: Option<String>,
+) -> Result<String, AppError> {
     let app_data = app.state::<Mutex<AppData>>();
     let auth_service = {
         let app_data = app_data.lock().await;
@@ -65,14 +68,14 @@ pub async fn get_login_qr(app: tauri::AppHandle, proxy: Option<String>) -> Resul
     let qrcode = auth_service
         .get_qr_code()
         .await
-        .map_err(|e| format!("获取二维码失败: {e}"))?;
+        .map_err(|e| AppError::Custom(format!("获取二维码失败: {e}")))?;
     // info!("{}", qrcode);
     Ok(qrcode)
 }
 
 /// 检查二维码登录状态
 #[tauri::command]
-pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, String> {
+pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let auth_service = {
         let app_data = app_lock.lock().await;
@@ -84,7 +87,7 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, Stri
         let check_result = auth_service
             .check_qr_login()
             .await
-            .map_err(|e| format!("二维码登录状态失败: {e}"))?;
+            .map_err(|e| AppError::Custom(format!("二维码登录状态失败: {e}")))?;
         let proxy = auth_service.get_proxy();
         (check_result, proxy)
     };
@@ -94,7 +97,7 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, Stri
             let (bilibili, user) =
                 AuthService::login_done_with_proxy(&login_info, proxy.as_deref())
                     .await
-                    .map_err(|e| format!("二维码登录状态失败: {e}"))?;
+                    .map_err(|e| AppError::Custom(format!("二维码登录状态失败: {e}")))?;
 
             let (config, clients) = {
                 let app_data = app_lock.lock().await;
@@ -136,7 +139,7 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, Stri
 
 /// 退出登录
 #[tauri::command]
-pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, String> {
+pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, AppError> {
     let app_data = app.state::<Mutex<AppData>>();
     let app_data = app_data.lock().await;
 
@@ -146,11 +149,11 @@ pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, String
             .lock()
             .await
             .remove_user_config(uid)
-            .map_err(|e| format!("清除用户配置失败: {e}"))?;
+            .map_err(|e| AppError::Config(format!("清除用户配置失败: {e}")))?;
         info!("用户 {} 登出成功", uid);
         Ok(true)
     } else {
-        Err("用户未登录".into())
+        Err(AppError::UserNotFound(uid))
     }
 }
 
@@ -161,7 +164,7 @@ pub async fn send_sms_code(
     phone: String,
     country_code: String,
     proxy: Option<String>,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let auth_service = {
         let app_data = app_lock.lock().await;
@@ -171,18 +174,18 @@ pub async fn send_sms_code(
     let phone_number = phone
         .trim()
         .parse::<u64>()
-        .map_err(|_| "手机号格式错误".to_string())?;
+        .map_err(|_| AppError::Custom("手机号格式错误".to_string()))?;
     let country_code_number = country_code
         .trim()
         .parse::<u32>()
-        .map_err(|_| "国家代码格式错误".to_string())?;
+        .map_err(|_| AppError::Custom("国家代码格式错误".to_string()))?;
 
     let mut auth_service = auth_service.lock().await;
     auth_service.init(proxy.as_deref());
     let result = auth_service
         .send_sms_code(phone_number, country_code_number)
         .await
-        .map_err(|e| format!("发送验证码失败: {e}"))?;
+        .map_err(|e| AppError::Custom(format!("发送验证码失败: {e}")))?;
 
     let full_phone = format!("+{country_code}{phone}");
     info!("请求发送验证码到: {}", full_phone);
@@ -207,7 +210,7 @@ pub async fn submit_sms_recaptcha(
     app: tauri::AppHandle,
     challenge: String,
     validate: String,
-) -> Result<serde_json::Value, String> {
+) -> Result<serde_json::Value, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let auth_service = {
         let app_data = app_lock.lock().await;
@@ -218,7 +221,7 @@ pub async fn submit_sms_recaptcha(
     auth_service
         .submit_sms_recaptcha(challenge.trim(), validate.trim())
         .await
-        .map_err(|e| format!("滑块验证提交失败: {e}"))?;
+        .map_err(|e| AppError::Custom(format!("滑块验证提交失败: {e}")))?;
 
     Ok(json!({
         "success": true,
@@ -234,7 +237,7 @@ pub async fn login_with_sms(
     country_code: String,
     code: String,
     proxy: Option<String>,
-) -> Result<LoginResponse, String> {
+) -> Result<LoginResponse, AppError> {
     let app_lock = app.state::<Mutex<AppData>>();
     let auth_service = {
         let app_data = app_lock.lock().await;
@@ -252,20 +255,20 @@ pub async fn login_with_sms(
         let phone_number = phone
             .trim()
             .parse::<u64>()
-            .map_err(|_| "手机号格式错误".to_string())?;
+            .map_err(|_| AppError::Custom("手机号格式错误".to_string()))?;
         let country_code_number = country_code
             .trim()
             .parse::<u32>()
-            .map_err(|_| "国家代码格式错误".to_string())?;
+            .map_err(|_| AppError::Custom("国家代码格式错误".to_string()))?;
         let sms_code = code
             .trim()
             .parse::<u32>()
-            .map_err(|_| "验证码格式错误".to_string())?;
+            .map_err(|_| AppError::Custom("验证码格式错误".to_string()))?;
 
         auth_service
             .login_with_sms_code_and_phone(sms_code, Some(phone_number), Some(country_code_number))
             .await
-            .map_err(|e| format!("短信登录失败: {e}"))?
+            .map_err(|e| AppError::Custom(format!("短信登录失败: {e}")))?
     };
 
     // 第2步：网络请求（获取用户信息）在锁外执行
@@ -276,7 +279,7 @@ pub async fn login_with_sms(
 
     let (bilibili, user) = AuthService::login_done_with_proxy(&login_info, proxy_opt.as_deref())
         .await
-        .map_err(|e| format!("短信登录失败: {e}"))?;
+        .map_err(|e| AppError::Custom(format!("短信登录失败: {e}")))?;
 
     // 第3步：持久化结果
     let (config, clients) = {
@@ -301,7 +304,7 @@ pub async fn login_with_sms(
 
 /// 获取所有已保存的用户
 #[tauri::command]
-pub async fn get_login_users(app: tauri::AppHandle) -> Result<Vec<User>, String> {
+pub async fn get_login_users(app: tauri::AppHandle) -> Result<Vec<User>, AppError> {
     let app_data = app.state::<Mutex<AppData>>();
     let app_data = app_data.lock().await;
     let user_order = app_data.config.lock().await.user_order.clone();

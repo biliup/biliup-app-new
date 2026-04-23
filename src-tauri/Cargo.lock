@@ -489,6 +489,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tauri-plugin-shell",
  "tauri-plugin-window-state",
+ "thiserror 2.0.16",
  "tokio",
  "tracing",
  "tracing-appender",
