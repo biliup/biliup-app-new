@@ -90,21 +90,17 @@ pub async fn save_global_config(
     log_level: String,
 ) -> Result<bool, String> {
     let data = app.state::<Mutex<AppData>>();
+    let app_data = data.lock().await;
 
     info!("全局配置已保存");
 
-    data.lock().await.config.lock().await.save_global_config(
-        max_curr,
-        auto_start,
-        auto_upload,
-        log_level,
-    );
-
-    data.lock()
+    app_data
+        .config
+        .lock()
         .await
-        .upload_service
-        .set_max_concurrent(max_curr)
-        .await;
+        .save_global_config(max_curr, auto_start, auto_upload, log_level);
+
+    app_data.upload_service.set_max_concurrent(max_curr).await;
     Ok(true)
 }
 
