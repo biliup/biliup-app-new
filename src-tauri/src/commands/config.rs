@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tauri::AppHandle;
 use tauri::Manager;
-use tokio::sync::Mutex;
+
 use tracing::info;
 
 use crate::{AppData, error::AppError, models::ConfigRoot};
@@ -38,18 +38,17 @@ pub struct UserOrderCommandResponse {
 /// 加载配置文件
 #[tauri::command]
 pub async fn load_config(app: AppHandle) -> Result<ConfigRoot, AppError> {
-    let data = app.state::<Mutex<AppData>>();
+    let app_data = app.state::<AppData>();
 
-    Ok(data.lock().await.config.lock().await.clone())
+    Ok(app_data.config.lock().await.clone())
 }
 
 /// 保存配置文件
 #[tauri::command]
 pub async fn save_config(app: AppHandle) -> Result<bool, AppError> {
-    let data = app.state::<Mutex<AppData>>();
+    let app_data = app.state::<AppData>();
 
-    data.lock()
-        .await
+    app_data
         .config
         .lock()
         .await
@@ -68,11 +67,10 @@ pub async fn save_user_config(
     watermark: u8,
     auto_edit: u8,
 ) -> Result<bool, AppError> {
-    let data = app.state::<Mutex<AppData>>();
+    let app_data = app.state::<AppData>();
     info!("用户({uid})配置已保存");
 
-    data.lock()
-        .await
+    app_data
         .config
         .lock()
         .await
@@ -89,8 +87,7 @@ pub async fn save_global_config(
     auto_upload: bool,
     log_level: String,
 ) -> Result<bool, AppError> {
-    let data = app.state::<Mutex<AppData>>();
-    let app_data = data.lock().await;
+    let app_data = app.state::<AppData>();
 
     info!("全局配置已保存");
 
@@ -110,8 +107,7 @@ pub async fn delete_user_template(
     uid: u64,
     template_name: String,
 ) -> Result<TemplateCommandResponse, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     app_data
         .config
@@ -134,8 +130,7 @@ pub async fn update_user_template(
     template_name: String,
     template: TemplateConfig,
 ) -> Result<TemplateCommandResponse, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     let updated = app_data
         .config
@@ -158,8 +153,7 @@ pub async fn add_user_template(
     template_name: String,
     template: TemplateConfig,
 ) -> Result<TemplateCommandResponse, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     let added = app_data
         .config
@@ -182,8 +176,7 @@ pub async fn rename_user_template(
     old_name: String,
     new_name: String,
 ) -> Result<RenameTemplateCommandResponse, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     let mut config = app_data.config.lock().await;
     config
@@ -211,8 +204,7 @@ pub async fn save_template_order(
     uid: u64,
     template_order: Vec<String>,
 ) -> Result<TemplateOrderCommandResponse, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     let mut config = app_data.config.lock().await;
     config
@@ -243,8 +235,7 @@ pub async fn save_user_order(
     app: AppHandle,
     user_order: Vec<u64>,
 ) -> Result<UserOrderCommandResponse, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     let mut config = app_data.config.lock().await;
     config

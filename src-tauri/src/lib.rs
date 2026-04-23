@@ -186,7 +186,7 @@ pub async fn run() {
             }
 
             // 管理应用数据状态
-            app.manage(Mutex::new(appdata));
+            app.manage(appdata);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -7,7 +7,7 @@ use crate::{
 };
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
-use tokio::sync::Mutex;
+
 use tracing::info;
 
 /// 创建上传任务
@@ -18,8 +18,7 @@ pub async fn create_upload_task(
     template: String,
     video: VideoInfo,
 ) -> Result<(), AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let mut app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
     let user = app_data
         .clients
         .lock()
@@ -30,7 +29,7 @@ pub async fn create_upload_task(
         .clone();
     let config_copy = Arc::clone(&app_data.config);
     let clients_copy = Arc::clone(&app_data.clients);
-    let upload_service = &mut app_data.upload_service;
+    let upload_service = &app_data.upload_service;
 
     upload_service
         .create_task(&user, &template, &video, config_copy, clients_copy)
@@ -43,9 +42,8 @@ pub async fn create_upload_task(
 /// 开始上传
 #[tauri::command]
 pub async fn start_upload(app: AppHandle, task_id: String) -> Result<bool, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let mut app_data = app_lock.lock().await;
-    let upload_service = &mut app_data.upload_service;
+    let app_data = app.state::<AppData>();
+    let upload_service = &app_data.upload_service;
 
     Ok(upload_service
         .start_upload(&task_id)
@@ -56,9 +54,8 @@ pub async fn start_upload(app: AppHandle, task_id: String) -> Result<bool, AppEr
 /// 暂停上传
 #[tauri::command]
 pub async fn pause_upload(app: AppHandle, task_id: String) -> Result<bool, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let mut app_data = app_lock.lock().await;
-    let upload_service = &mut app_data.upload_service;
+    let app_data = app.state::<AppData>();
+    let upload_service = &app_data.upload_service;
 
     Ok(upload_service
         .pause_upload(&task_id)
@@ -69,9 +66,8 @@ pub async fn pause_upload(app: AppHandle, task_id: String) -> Result<bool, AppEr
 /// 取消上传
 #[tauri::command]
 pub async fn cancel_upload(app: AppHandle, task_id: String) -> Result<bool, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let mut app_data = app_lock.lock().await;
-    let upload_service = &mut app_data.upload_service;
+    let app_data = app.state::<AppData>();
+    let upload_service = &app_data.upload_service;
 
     Ok(upload_service
         .cancel_upload(&task_id)
@@ -82,9 +78,8 @@ pub async fn cancel_upload(app: AppHandle, task_id: String) -> Result<bool, AppE
 /// 获取上传队列
 #[tauri::command]
 pub async fn get_upload_queue(app: AppHandle) -> Result<Vec<UploadTask>, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let mut app_data = app_lock.lock().await;
-    let upload_service = &mut app_data.upload_service;
+    let app_data = app.state::<AppData>();
+    let upload_service = &app_data.upload_service;
     Ok(upload_service
         .get_upload_queue()
         .await
@@ -94,9 +89,8 @@ pub async fn get_upload_queue(app: AppHandle) -> Result<Vec<UploadTask>, AppErro
 /// 重新上传失败的任务
 #[tauri::command]
 pub async fn retry_upload(app: AppHandle, task_id: String) -> Result<bool, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let mut app_data = app_lock.lock().await;
-    let upload_service = &mut app_data.upload_service;
+    let app_data = app.state::<AppData>();
+    let upload_service = &app_data.upload_service;
 
     Ok(upload_service
         .retry_upload(&task_id)
@@ -106,8 +100,7 @@ pub async fn retry_upload(app: AppHandle, task_id: String) -> Result<bool, AppEr
 
 #[tauri::command]
 pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Value, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     if form.aid.is_none() {
         // 将前端表单转换为B站API需要的格式

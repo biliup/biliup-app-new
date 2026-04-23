@@ -4,7 +4,7 @@ use std::str::FromStr;
 use std::time::{Duration, SystemTime};
 use std::{fs::File, io::Read, path::Path};
 use tauri::Manager;
-use tokio::sync::Mutex;
+
 use tracing::{debug, error, info, warn};
 
 use crate::{AppData, error::AppError, models::TemplateConfig};
@@ -129,8 +129,7 @@ pub async fn upload_cover(
     uid: u64,
     file: String,
 ) -> Result<String, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     let mut cover_file = File::open(file)?;
     let mut cover_buf = vec![];
@@ -162,8 +161,7 @@ pub async fn download_cover(
     uid: u64,
     url: String,
 ) -> Result<String, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     let res = app_data
         .clients
@@ -183,8 +181,7 @@ pub async fn download_cover(
 #[tauri::command]
 pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, AppError> {
     let bilibili = {
-        let app_lock = app.state::<Mutex<AppData>>();
-        let app_data = app_lock.lock().await;
+        let app_data = app.state::<AppData>();
         let clients = app_data.clients.lock().await;
         clients
             .get(&uid)
@@ -229,8 +226,7 @@ pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, A
 
 #[tauri::command]
 pub async fn get_topic_list(app: tauri::AppHandle, uid: u64) -> Result<Value, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     match app_data
         .clients
@@ -260,8 +256,7 @@ pub async fn search_topics(
     uid: u64,
     query: String,
 ) -> Result<Value, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     match app_data.clients.lock().await.get(&uid).ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
@@ -287,8 +282,7 @@ pub async fn search_mention(
     keyword: Option<String>,
 ) -> Result<Vec<MentionUserGroup>, AppError> {
     let client = {
-        let app_lock = app.state::<Mutex<AppData>>();
-        let app_data = app_lock.lock().await;
+        let app_data = app.state::<AppData>();
         app_data
             .clients
             .lock()
@@ -417,8 +411,7 @@ pub async fn search_mention(
 
 #[tauri::command]
 pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     match app_data.clients.lock().await.get(&uid).ok_or_else(|| AppError::UserNotFound(uid))?
             .bilibili
@@ -485,11 +478,10 @@ pub async fn get_video_detail(
     let vid = biliup::uploader::bilibili::Vid::from_str(&video_id)
         .map_err(|e| AppError::Custom(format!("解析视频 ID 失败: {e}")))?;
 
-    let app_lock = app.state::<Mutex<AppData>>();
+    let app_data = app.state::<AppData>();
 
-    // 取出所需数据后立即释放锁，避免在网络 I/O 期间持有互斥锁
+    // 取出所需数据，AppData 不再需要锁，但其内部字段仍需加锁
     let (bilibili, proxy) = {
-        let app_data = app_lock.lock().await;
         let proxy = app_data
             .config
             .lock()
@@ -632,8 +624,7 @@ pub async fn get_video_detail(
 
 #[tauri::command]
 pub async fn get_video_season(app: tauri::AppHandle, uid: u64, aid: u64) -> Result<u64, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     match app_data
         .clients
@@ -672,8 +663,7 @@ pub async fn switch_season(
     title: String,
     add: bool,
 ) -> Result<bool, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let app_data = app_lock.lock().await;
+    let app_data = app.state::<AppData>();
 
     fn get_csrf(bilibili: &BiliBili) -> Result<String, AppError> {
         let csrf = bilibili

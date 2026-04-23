@@ -57,11 +57,8 @@ pub async fn get_login_qr(
     app: tauri::AppHandle,
     proxy: Option<String>,
 ) -> Result<String, AppError> {
-    let app_data = app.state::<Mutex<AppData>>();
-    let auth_service = {
-        let app_data = app_data.lock().await;
-        app_data.auth_service.clone()
-    };
+    let app_data = app.state::<AppData>();
+    let auth_service = app_data.auth_service.clone();
     let mut auth_service = auth_service.lock().await;
     auth_service.init(proxy.as_deref());
 
@@ -76,11 +73,8 @@ pub async fn get_login_qr(
 /// 检查二维码登录状态
 #[tauri::command]
 pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let auth_service = {
-        let app_data = app_lock.lock().await;
-        app_data.auth_service.clone()
-    };
+    let app_data = app.state::<AppData>();
+    let auth_service = app_data.auth_service.clone();
 
     let (check_result, proxy) = {
         let auth_service = auth_service.lock().await;
@@ -99,10 +93,8 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, AppE
                     .await
                     .map_err(|e| AppError::Custom(format!("二维码登录状态失败: {e}")))?;
 
-            let (config, clients) = {
-                let app_data = app_lock.lock().await;
-                (app_data.config.clone(), app_data.clients.clone())
-            };
+            let config = app_data.config.clone();
+            let clients = app_data.clients.clone();
             persist_login_success(config, clients, bilibili, user.clone(), proxy).await;
             auth_service.lock().await.destroy();
 
@@ -140,8 +132,7 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, AppE
 /// 退出登录
 #[tauri::command]
 pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, AppError> {
-    let app_data = app.state::<Mutex<AppData>>();
-    let app_data = app_data.lock().await;
+    let app_data = app.state::<AppData>();
 
     if app_data.clients.lock().await.remove(&uid).is_some() {
         let _ = app_data
@@ -165,11 +156,8 @@ pub async fn send_sms_code(
     country_code: String,
     proxy: Option<String>,
 ) -> Result<serde_json::Value, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let auth_service = {
-        let app_data = app_lock.lock().await;
-        app_data.auth_service.clone()
-    };
+    let app_data = app.state::<AppData>();
+    let auth_service = app_data.auth_service.clone();
 
     let phone_number = phone
         .trim()
@@ -211,11 +199,8 @@ pub async fn submit_sms_recaptcha(
     challenge: String,
     validate: String,
 ) -> Result<serde_json::Value, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let auth_service = {
-        let app_data = app_lock.lock().await;
-        app_data.auth_service.clone()
-    };
+    let app_data = app.state::<AppData>();
+    let auth_service = app_data.auth_service.clone();
     let mut auth_service = auth_service.lock().await;
 
     auth_service
@@ -238,11 +223,8 @@ pub async fn login_with_sms(
     code: String,
     proxy: Option<String>,
 ) -> Result<LoginResponse, AppError> {
-    let app_lock = app.state::<Mutex<AppData>>();
-    let auth_service = {
-        let app_data = app_lock.lock().await;
-        app_data.auth_service.clone()
-    };
+    let app_data = app.state::<AppData>();
+    let auth_service = app_data.auth_service.clone();
 
     // 第1步：校验输入并获取 LoginInfo
     let login_info = {
@@ -282,10 +264,8 @@ pub async fn login_with_sms(
         .map_err(|e| AppError::Custom(format!("短信登录失败: {e}")))?;
 
     // 第3步：持久化结果
-    let (config, clients) = {
-        let app_data = app_lock.lock().await;
-        (app_data.config.clone(), app_data.clients.clone())
-    };
+    let config = app_data.config.clone();
+    let clients = app_data.clients.clone();
     persist_login_success(config, clients, bilibili, user.clone(), proxy_opt).await;
     auth_service.lock().await.destroy();
 
@@ -305,8 +285,7 @@ pub async fn login_with_sms(
 /// 获取所有已保存的用户
 #[tauri::command]
 pub async fn get_login_users(app: tauri::AppHandle) -> Result<Vec<User>, AppError> {
-    let app_data = app.state::<Mutex<AppData>>();
-    let app_data = app_data.lock().await;
+    let app_data = app.state::<AppData>();
     let user_order = app_data.config.lock().await.user_order.clone();
     let clients = app_data.clients.lock().await;
 

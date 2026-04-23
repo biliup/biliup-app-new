@@ -77,7 +77,7 @@ impl UploadService {
 
     /// 创建上传任务
     pub async fn create_task(
-        &mut self,
+        &self,
         user: &User,
         template: &str,
         video: &VideoInfo,
@@ -99,7 +99,7 @@ impl UploadService {
         Ok(true)
     }
 
-    pub async fn get_upload_queue(&mut self) -> Result<Vec<UploadTask>> {
+    pub async fn get_upload_queue(&self) -> Result<Vec<UploadTask>> {
         let mut tasks = Vec::new();
         // trace!("获取上传队列");
         for task_mutex in self.upload_queue.lock().await.values() {
@@ -121,7 +121,7 @@ impl UploadService {
     }
 
     /// 上传视频
-    pub async fn start_upload(&mut self, task_id: &str) -> Result<bool> {
+    pub async fn start_upload(&self, task_id: &str) -> Result<bool> {
         info!("尝试开始任务: {}", task_id);
         if let Some(task_mutex) = self.upload_queue.lock().await.get(task_id) {
             let mut task = task_mutex.lock().await;
@@ -140,7 +140,7 @@ impl UploadService {
     }
 
     /// 暂停上传
-    pub async fn pause_upload(&mut self, task_id: &str) -> Result<bool> {
+    pub async fn pause_upload(&self, task_id: &str) -> Result<bool> {
         if let Some(task_mutex) = self.upload_queue.lock().await.get(task_id) {
             info!("任务已暂停: {}", task_title!(task_mutex));
             task_mutex.lock().await.pause();
