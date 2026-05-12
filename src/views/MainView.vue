@@ -3373,7 +3373,12 @@ const handleAddVideosToForm = async (newVideos: any[]) => {
 }
 
 // 处理文件夹监控提交稿件事件
-const handleSubmitTemplate = async () => {
+const handleSubmitTemplate = async (mode: 'single' | 'multi' = 'single') => {
+    if (mode === 'multi') {
+        await submitTemplateAsSeparatePosts()
+        return
+    }
+
     await submitTemplate()
 }
 

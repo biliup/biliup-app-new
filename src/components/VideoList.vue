@@ -235,7 +235,7 @@ const emit = defineEmits<{
     removeFile: [id: string]
     createUpload: []
     addVideosToForm: [videos: any[]]
-    submitTemplate: []
+    submitTemplate: [mode?: 'single' | 'multi']
 }>()
 
 // 文件编辑状态
@@ -516,9 +516,9 @@ const handleAddVideos = (newVideos: any[]) => {
 }
 
 // 处理文件夹监控提交稿件
-const handleSubmitVideos = () => {
+const handleSubmitVideos = (mode: 'single' | 'multi') => {
     // 发出提交稿件事件到MainView，让它调用submitTemplate
-    emit('submitTemplate')
+    emit('submitTemplate', mode)
 }
 </script>
 

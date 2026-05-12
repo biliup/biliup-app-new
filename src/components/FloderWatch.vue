@@ -194,6 +194,20 @@
                         </span>
                     </el-form-item>
 
+                    <el-form-item v-if="settings.autoSubmit" label="提交模式">
+                        <el-radio-group v-model="settings.autoSubmitMode" size="small">
+                            <el-radio-button label="single" value="single"
+                                >单稿件模式</el-radio-button
+                            >
+                            <el-radio-button label="multi" value="multi"
+                                >多稿件模式</el-radio-button
+                            >
+                        </el-radio-group>
+                        <span class="setting-description">
+                            单稿件：按当前模板一次提交；多稿件：每个视频单独投稿一条稿件
+                        </span>
+                    </el-form-item>
+
                     <el-form-item label="定时开始">
                         <el-checkbox v-model="settings.delayedStart"> 启用定时开始 </el-checkbox>
                         <span class="setting-description"> 启用后，将在指定时间开始监控 </span>
@@ -257,7 +271,9 @@
                             <strong>自动提交：</strong>连续
                             {{ settings.maxEmptyChecks }} 次检测，无变化后将自动提交到"{{
                                 templateTitle || '当前模板'
-                            }}"
+                            }}" （{{
+                                settings.autoSubmitMode === 'multi' ? '多稿件模式' : '单稿件模式'
+                            }}）
                         </p>
 
                         <!-- 等待定时开始时显示倒计时 -->
@@ -346,7 +362,7 @@ interface Props {
 interface Emits {
     (e: 'update:modelValue', value: boolean): void
     (e: 'add-videos', files: any[]): void
-    (e: 'submit-videos'): void
+    (e: 'submit-videos', mode: 'single' | 'multi'): void
 }
 
 const props = defineProps<Props>()
@@ -374,7 +390,8 @@ const settings = ref({
     startTime: null as string | null, // 开始时间
     stableCheckCount: 3, // 文件大小稳定检测次数，默认3次
     enableFilenameFilter: false, // 是否启用文件名正则过滤
-    filenameRegex: '' // 文件名过滤正则表达式
+    filenameRegex: '', // 文件名过滤正则表达式
+    autoSubmitMode: 'single' as 'single' | 'multi' // 自动提交模式
 })
 
 // 监控状态
@@ -731,7 +748,7 @@ const performMonitoringCycle = async () => {
                     `连续 ${settings.value.maxEmptyChecks} 次检测，自动提交稿件到"${templateTitle.value || '当前模板'}"`,
                     'success'
                 )
-                emit('submit-videos')
+                emit('submit-videos', settings.value.autoSubmitMode)
             } else {
                 utilsStore.showMessage(
                     `连续 ${settings.value.maxEmptyChecks} 次检测，文件夹监控结束}"`,
