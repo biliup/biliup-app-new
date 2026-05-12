@@ -1239,6 +1239,13 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
         return
     }
 
+    const isNewSubmission = !template?.aid
+    const configuredSeasonId = Number(template?.season_id || 0)
+    // 新增稿件未设置合集时，不触发合集提交
+    if (isNewSubmission && configuredSeasonId <= 0) {
+        return
+    }
+
     try {
         const old_season_id = await utilsStore.getVideoSeason(uid, resp.aid)
         let add = old_season_id && old_season_id !== 0 ? false : true
