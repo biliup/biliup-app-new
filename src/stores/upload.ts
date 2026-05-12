@@ -24,16 +24,53 @@ export const useUploadStore = defineStore('upload', () => {
     const uploadQueue = ref<UploadTask[]>([])
     const utilsStore = useUtilsStore()
     const submitInvokeIntervalMs = 5000
+    const submitCancelCode = 'SUBMIT_CANCELLED'
     const submitRequestQueue: Array<{
         uid: number
         upload: any
+        cancelKey?: string
+        cancelled: boolean
         resolve: (value: any) => void
         reject: (reason?: any) => void
     }> = []
     let isSubmitQueueProcessing = false
     let lastSubmitInvokeAt = 0
+    let activeSubmitRequest:
+        | {
+              uid: number
+              upload: any
+              cancelKey?: string
+              cancelled: boolean
+              resolve: (value: any) => void
+              reject: (reason?: any) => void
+          }
+        | null = null
 
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+    const createSubmitCancelledError = () => {
+        const error = new Error('提交已取消') as Error & { code?: string }
+        error.code = submitCancelCode
+        return error
+    }
+
+    const waitForSubmitWindow = async (
+        request: {
+            cancelled: boolean
+        },
+        waitMs: number
+    ) => {
+        let elapsed = 0
+        while (elapsed < waitMs) {
+            if (request.cancelled) {
+                return false
+            }
+            const chunk = Math.min(100, waitMs - elapsed)
+            await sleep(chunk)
+            elapsed += chunk
+        }
+        return !request.cancelled
+    }
 
     const processSubmitQueue = async () => {
         if (isSubmitQueueProcessing) {
@@ -43,18 +80,36 @@ export const useUploadStore = defineStore('upload', () => {
         isSubmitQueueProcessing = true
         try {
             while (submitRequestQueue.length > 0) {
-                const now = Date.now()
-                const waitMs = Math.max(0, submitInvokeIntervalMs - (now - lastSubmitInvokeAt))
-                if (waitMs > 0) {
-                    await sleep(waitMs)
-                }
-
                 const request = submitRequestQueue.shift()
                 if (!request) {
                     continue
                 }
 
+                activeSubmitRequest = request
+                if (request.cancelled) {
+                    request.reject(createSubmitCancelledError())
+                    activeSubmitRequest = null
+                    continue
+                }
+
+                const now = Date.now()
+                const waitMs = Math.max(0, submitInvokeIntervalMs - (now - lastSubmitInvokeAt))
+                if (waitMs > 0) {
+                    const canContinue = await waitForSubmitWindow(request, waitMs)
+                    if (!canContinue) {
+                        request.reject(createSubmitCancelledError())
+                        activeSubmitRequest = null
+                        continue
+                    }
+                }
+
                 const { uid, upload, resolve, reject } = request
+
+                if (request.cancelled) {
+                    reject(createSubmitCancelledError())
+                    activeSubmitRequest = null
+                    continue
+                }
 
                 try {
                     const result = await invoke('submit', { uid, form: upload })
@@ -64,11 +119,45 @@ export const useUploadStore = defineStore('upload', () => {
                     reject(error)
                 } finally {
                     lastSubmitInvokeAt = Date.now()
+                    activeSubmitRequest = null
                 }
             }
         } finally {
+            activeSubmitRequest = null
             isSubmitQueueProcessing = false
         }
+    }
+
+    const cancelPendingSubmitByKey = (cancelKey: string) => {
+        let cancelledCount = 0
+
+        for (let i = submitRequestQueue.length - 1; i >= 0; i -= 1) {
+            const request = submitRequestQueue[i]
+            if (request.cancelKey !== cancelKey) {
+                continue
+            }
+
+            submitRequestQueue.splice(i, 1)
+            request.cancelled = true
+            request.reject(createSubmitCancelledError())
+            cancelledCount += 1
+        }
+
+        if (activeSubmitRequest && activeSubmitRequest.cancelKey === cancelKey) {
+            activeSubmitRequest.cancelled = true
+            cancelledCount += 1
+        }
+
+        return cancelledCount
+    }
+
+    const isSubmitCancelledError = (error: unknown) => {
+        return (
+            typeof error === 'object' &&
+            error !== null &&
+            'code' in error &&
+            (error as { code?: string }).code === submitCancelCode
+        )
     }
 
     // 创建上传任务
@@ -204,9 +293,16 @@ export const useUploadStore = defineStore('upload', () => {
     }
 
     // 提交视频
-    const submitTemplate = async (uid: number, upload: any) => {
+    const submitTemplate = async (uid: number, upload: any, options?: { cancelKey?: string }) => {
         return new Promise<any>((resolve, reject) => {
-            submitRequestQueue.push({ uid, upload, resolve, reject })
+            submitRequestQueue.push({
+                uid,
+                upload,
+                cancelKey: options?.cancelKey,
+                cancelled: false,
+                resolve,
+                reject
+            })
             void processSubmitQueue()
         })
     }
@@ -229,6 +325,8 @@ export const useUploadStore = defineStore('upload', () => {
         getUploadQueue,
         retryUpload,
         submitTemplate,
-        getUploadTask
+        getUploadTask,
+        cancelPendingSubmitByKey,
+        isSubmitCancelledError
     }
 })

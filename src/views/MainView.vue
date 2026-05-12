@@ -850,7 +850,6 @@
                                     <el-button
                                         type="warning"
                                         size="large"
-                                        :loading="separateSubmitting && separateSubmitProcessing"
                                         :disabled="
                                             !separateSubmitting &&
                                             (submitting ||
@@ -1182,6 +1181,10 @@ const getSubmitUserLabel = (uid: number) => {
     return user.username
 }
 
+const getSeparateSubmitCancelKey = (uid: number, templateName: string) => {
+    return `separate:${uid}:${templateName}`
+}
+
 // 检查是否有任何模板在自动提交
 const hasAnyAutoSubmitting = computed(() => {
     return Object.keys(autoSubmittingRecord.value).length > 0
@@ -1392,6 +1395,15 @@ const stopSeparateSubmit = () => {
         return
     }
 
+    const submitContext = separateSubmitContext.value
+    if (submitContext) {
+        const cancelKey = getSeparateSubmitCancelKey(
+            submitContext.uid,
+            submitContext.templateName
+        )
+        uploadStore.cancelPendingSubmitByKey(cancelKey)
+    }
+
     separateSubmitCancelled.value = true
     separateSubmitting.value = false
     utilsStore.showMessage('已停止多稿件提交，当前进行中的提交结束后将退出', 'info')
@@ -1503,9 +1515,12 @@ const processSeparateSubmitQueue = async () => {
             singleTemplate.aid = undefined
             singleTemplate.videos = [singleVideo]
             singleTemplate.title = (singleVideo.title || '').trim() || fallbackTitle
+            const cancelKey = getSeparateSubmitCancelKey(uid, templateName)
 
             try {
-                const resp = (await uploadStore.submitTemplate(uid, singleTemplate)) as any
+                const resp = (await uploadStore.submitTemplate(uid, singleTemplate, {
+                    cancelKey
+                })) as any
                 separateSubmitSuccessCount.value++
                 if (resp?.bvid) {
                     separateSubmitSuccessBvids.value.push(resp.bvid)
@@ -1531,6 +1546,10 @@ const processSeparateSubmitQueue = async () => {
                     utilsStore.showMessage(`提交后处理失败: ${postError}`, 'error')
                 }
             } catch (error) {
+                if (uploadStore.isSubmitCancelledError(error) || separateSubmitCancelled.value) {
+                    break
+                }
+
                 separateSubmitFailCount.value++
                 const videoTitle = (readyVideo.title || '').trim() || readyVideo.id
                 separateSubmitFailedVideoNames.value.push(videoTitle)
