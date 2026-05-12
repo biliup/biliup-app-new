@@ -185,6 +185,31 @@
                     </div>
                 </div>
             </div>
+
+            <div class="batch-rename-tools">
+                <div class="batch-rename-item">
+                    <el-checkbox v-model="useUnifiedPrefix">添加前缀</el-checkbox>
+                    <el-input
+                        v-if="useUnifiedPrefix"
+                        v-model="unifiedPrefixValue"
+                        size="small"
+                        class="batch-rename-input"
+                        placeholder="输入前缀"
+                        maxlength="80"
+                    />
+                </div>
+                <div class="batch-rename-item">
+                    <el-checkbox v-model="useUnifiedSuffix">添加后缀</el-checkbox>
+                    <el-input
+                        v-if="useUnifiedSuffix"
+                        v-model="unifiedSuffixValue"
+                        size="small"
+                        class="batch-rename-input"
+                        placeholder="输入后缀"
+                        maxlength="80"
+                    />
+                </div>
+            </div>
         </div>
 
         <!-- 文件夹监控对话框 -->
@@ -199,7 +224,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, nextTick, computed, onMounted, onUnmounted } from 'vue'
+import { ref, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
     CircleCheck,
     Loading,
@@ -246,6 +271,12 @@ const uploadStore = useUploadStore()
 
 // 文件夹监控对话框状态
 const showFolderWatchDialog = ref(false)
+const useUnifiedPrefix = ref(false)
+const useUnifiedSuffix = ref(false)
+const unifiedPrefixValue = ref('')
+const unifiedSuffixValue = ref('')
+const lastAppliedPrefix = ref('')
+const lastAppliedSuffix = ref('')
 
 // 模板标题
 const templateTitle = computed(() => props.templateTitle)
@@ -372,6 +403,162 @@ const saveVideoTitle = (id: string) => {
     emit('update:videos', newVideos)
     cancelEditVideoTitle()
 }
+
+const applyUnifiedNameAffixes = () => {
+    if (!props.videos || props.videos.length === 0) {
+        return
+    }
+
+    const nextPrefix = useUnifiedPrefix.value ? unifiedPrefixValue.value : ''
+    const nextSuffix = useUnifiedSuffix.value ? unifiedSuffixValue.value : ''
+    const previousPrefix = lastAppliedPrefix.value
+    const previousSuffix = lastAppliedSuffix.value
+
+    let hasChanged = false
+    const updated = props.videos.map(video => {
+        const currentName = String(video.title || video.videoname || '')
+        let baseName = currentName
+
+        if (previousPrefix && baseName.startsWith(previousPrefix)) {
+            baseName = baseName.slice(previousPrefix.length)
+        }
+
+        if (previousSuffix && baseName.endsWith(previousSuffix)) {
+            baseName = baseName.slice(0, baseName.length - previousSuffix.length)
+        }
+
+        const nextName = `${nextPrefix}${baseName}${nextSuffix}`.slice(0, 80)
+        if (nextName !== video.title) {
+            hasChanged = true
+            return {
+                ...video,
+                title: nextName
+            }
+        }
+
+        return video
+    })
+
+    lastAppliedPrefix.value = nextPrefix
+    lastAppliedSuffix.value = nextSuffix
+
+    if (hasChanged) {
+        emit('update:videos', updated)
+    }
+}
+
+const detectUnifiedAffixesFromVideos = () => {
+    if (!props.videos || props.videos.length === 0) {
+        return { prefix: '', suffix: '' }
+    }
+
+    const displayNames = props.videos.map(video => String(video.title || video.videoname || ''))
+    if (displayNames.some(name => !name)) {
+        return { prefix: '', suffix: '' }
+    }
+
+    const getLongestCommonPrefix = (names: string[]) => {
+        if (names.length === 0) return ''
+        let prefix = names[0]
+        for (let i = 1; i < names.length; i++) {
+            while (!names[i].startsWith(prefix) && prefix) {
+                prefix = prefix.slice(0, -1)
+            }
+            if (!prefix) break
+        }
+        return prefix
+    }
+
+    const getLongestCommonSuffix = (names: string[]) => {
+        if (names.length === 0) return ''
+        let suffix = names[0]
+        for (let i = 1; i < names.length; i++) {
+            while (!names[i].endsWith(suffix) && suffix) {
+                suffix = suffix.slice(1)
+            }
+            if (!suffix) break
+        }
+        return suffix
+    }
+
+    // 仅有一个视频时，宽松识别缺乏参照，不自动回填
+    if (displayNames.length === 1) {
+        return { prefix: '', suffix: '' }
+    }
+
+    // 宽松识别：基于当前标题集合的最长公共前缀/后缀
+    let loosePrefix = getLongestCommonPrefix(displayNames)
+    let looseSuffix = getLongestCommonSuffix(displayNames)
+
+    const minLen = Math.min(...displayNames.map(name => name.length))
+    if (loosePrefix.length + looseSuffix.length >= minLen) {
+        // 出现重叠时优先裁掉后缀与前缀重复的部分，避免把有效后缀整体清空
+        let overlap = loosePrefix.length + looseSuffix.length - minLen
+        if (overlap > 0) {
+            const suffixTrim = Math.min(overlap, looseSuffix.length)
+            looseSuffix = looseSuffix.slice(suffixTrim)
+            overlap -= suffixTrim
+        }
+
+        if (overlap > 0) {
+            const prefixTrim = Math.min(overlap, loosePrefix.length)
+            loosePrefix = loosePrefix.slice(0, loosePrefix.length - prefixTrim)
+        }
+    }
+
+    return {
+        prefix: loosePrefix,
+        suffix: looseSuffix
+    }
+}
+
+watch(
+    [unifiedPrefixValue, unifiedSuffixValue],
+    () => {
+        if (useUnifiedPrefix.value || useUnifiedSuffix.value) {
+            applyUnifiedNameAffixes()
+        }
+    }
+)
+
+watch(useUnifiedPrefix, enabled => {
+    if (enabled) {
+        const { prefix } = detectUnifiedAffixesFromVideos()
+        unifiedPrefixValue.value = prefix
+        // 预置上次已应用值，避免勾选时把已存在前缀再次叠加
+        lastAppliedPrefix.value = prefix
+
+        applyUnifiedNameAffixes()
+        return
+    }
+
+    // 取消勾选时仅隐藏输入，不改动已写入的视频标题
+    lastAppliedPrefix.value = ''
+})
+
+watch(useUnifiedSuffix, enabled => {
+    if (enabled) {
+        const { suffix } = detectUnifiedAffixesFromVideos()
+        unifiedSuffixValue.value = suffix
+        // 预置上次已应用值，避免勾选时把已存在后缀再次叠加
+        lastAppliedSuffix.value = suffix
+
+        applyUnifiedNameAffixes()
+        return
+    }
+
+    // 取消勾选时仅隐藏输入，不改动已写入的视频标题
+    lastAppliedSuffix.value = ''
+})
+
+watch(
+    () => props.videos.map(video => `${video.id}:${video.title || video.videoname || ''}`).join('|'),
+    () => {
+        if (useUnifiedPrefix.value || useUnifiedSuffix.value) {
+            applyUnifiedNameAffixes()
+        }
+    }
+)
 
 // 取消编辑视频标题
 const cancelEditVideoTitle = () => {
@@ -532,6 +719,24 @@ const handleSubmitVideos = (mode: 'single' | 'multi', options?: { auto?: boolean
     padding-top: 10px;
     padding-bottom: 20px;
     border-bottom: 1px solid #f0f2f5;
+}
+
+.batch-rename-tools {
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 0 4px;
+}
+
+.batch-rename-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.batch-rename-input {
+    width: 120px;
 }
 
 .uploaded-videos-section h4 {
