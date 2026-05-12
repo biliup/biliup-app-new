@@ -628,11 +628,6 @@ const performCheck = async (): Promise<{
                         : false
                     : false
 
-                if (shouldIgnoreByRegex) {
-                    console.log(`文件 ${entry.name} 被正则表达式忽略，跳过`)
-                    continue
-                }
-
                 if (isVideoFile) {
                     // 检查文件大小是否符合最小要求
                     if (fileSizeMB < settings.value.minFileSize) {
@@ -656,10 +651,17 @@ const performCheck = async (): Promise<{
                             const isStable = isFileSizeStable(entry.name, fileSize)
 
                             if (isStable) {
-                                // 文件大小稳定，可以添加
-                                newFiles.push(filePath)
-                                stableFiles.push(entry.name)
-                                console.log(`添加文件: ${entry.name} (${fileSizeMB.toFixed(2)}MB)`)
+                                if (shouldIgnoreByRegex) {
+                                    // 过滤项仍参与监控，但不加入待添加列表
+                                    console.log(`文件 ${entry.name} 命中过滤规则，仅监控不添加`)
+                                } else {
+                                    // 文件大小稳定，可以添加
+                                    newFiles.push(filePath)
+                                    stableFiles.push(entry.name)
+                                    console.log(
+                                        `添加文件: ${entry.name} (${fileSizeMB.toFixed(2)}MB)`
+                                    )
+                                }
                             } else {
                                 resetCounter = true
                             }
