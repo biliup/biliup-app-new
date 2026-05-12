@@ -1030,17 +1030,7 @@ const submitStatsDialogVisible = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
-const separateSubmitting = ref(false)
-const separateSubmitProcessing = ref(false)
-const separateSubmitCancelled = ref(false)
-const separateSubmitContext = ref<{ uid: number; templateName: string } | null>(null)
 const templateLoading = ref(false) // 模板加载状态锁
-const separateSubmitAttemptedVideoIds = ref<Set<string>>(new Set())
-const separateSubmitSuccessCount = ref(0)
-const separateSubmitFailCount = ref(0)
-const separateSubmitTotalCount = ref(0)
-const separateSubmitSuccessBvids = ref<string[]>([])
-const separateSubmitFailedVideoNames = ref<string[]>([])
 
 // 视频状态对话框
 const showVideoStatusDialog = ref(false)
@@ -1055,6 +1045,23 @@ const seasonViewRef = ref<InstanceType<typeof SeasonView> | null>(null)
 // 自动提交状态记录 - 记录每个模板的自动提交状态
 const autoSubmittingRecord = ref<Record<string, boolean>>({})
 const autoSubmitProcessingKeys = ref<Set<string>>(new Set())
+const separateSubmittingRecord = ref<Record<string, boolean>>({})
+const separateSubmitProcessingKeys = ref<Set<string>>(new Set())
+const separateSubmitCancelledKeys = ref<Set<string>>(new Set())
+
+interface SeparateSubmitState {
+    uid: number
+    templateName: string
+    attemptedVideoIds: Set<string>
+    successCount: number
+    failCount: number
+    totalCount: number
+    successBvids: string[]
+    failedVideoNames: string[]
+}
+
+const separateSubmitStateRecord = ref<Record<string, SeparateSubmitState>>({})
+const submitDispatchRoundRobinCursor = ref(0)
 
 const submitStats = ref<{
     startedAt: string
@@ -1108,12 +1115,71 @@ const clearSubmitStats = () => {
     utilsStore.showMessage('提交统计内存已清空', 'success')
 }
 
+const currentSeparateTemplateKey = computed(() => {
+    if (!selectedUser.value || !currentTemplateName.value) {
+        return ''
+    }
+
+    return getTemplateKey(selectedUser.value.uid, currentTemplateName.value)
+})
+
+const separateSubmitting = computed(() => {
+    const templateKey = currentSeparateTemplateKey.value
+    if (!templateKey) {
+        return false
+    }
+
+    return Boolean(separateSubmittingRecord.value[templateKey])
+})
+
+const getOrCreateSeparateSubmitState = (uid: number, templateName: string): SeparateSubmitState => {
+    const templateKey = getTemplateKey(uid, templateName)
+    const existing = separateSubmitStateRecord.value[templateKey]
+    if (existing) {
+        return existing
+    }
+
+    const created: SeparateSubmitState = {
+        uid,
+        templateName,
+        attemptedVideoIds: new Set<string>(),
+        successCount: 0,
+        failCount: 0,
+        totalCount: 0,
+        successBvids: [],
+        failedVideoNames: []
+    }
+
+    separateSubmitStateRecord.value[templateKey] = created
+    return created
+}
+
+const clearSeparateSubmitStateByKey = (templateKey: string) => {
+    delete separateSubmittingRecord.value[templateKey]
+    separateSubmitProcessingKeys.value.delete(templateKey)
+    separateSubmitCancelledKeys.value.delete(templateKey)
+    delete separateSubmitStateRecord.value[templateKey]
+}
+
+const clearAllSeparateSubmitStates = () => {
+    separateSubmittingRecord.value = {}
+    separateSubmitProcessingKeys.value.clear()
+    separateSubmitCancelledKeys.value.clear()
+    separateSubmitStateRecord.value = {}
+}
+
 const separateSubmitUploadedCount = computed(() => {
-    if (!separateSubmitting.value || !separateSubmitContext.value) {
+    const templateKey = currentSeparateTemplateKey.value
+    if (!templateKey || !separateSubmittingRecord.value[templateKey]) {
         return 0
     }
 
-    const { uid, templateName } = separateSubmitContext.value
+    const submitState = separateSubmitStateRecord.value[templateKey]
+    if (!submitState) {
+        return 0
+    }
+
+    const { uid, templateName } = submitState
     const targetTemplate = userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
     const videos = targetTemplate?.videos || []
     let readyUploadedCount = 0
@@ -1122,18 +1188,42 @@ const separateSubmitUploadedCount = computed(() => {
         if (
             video.complete &&
             video.path === '' &&
-            !separateSubmitAttemptedVideoIds.value.has(video.id)
+            !submitState.attemptedVideoIds.has(video.id)
         ) {
             readyUploadedCount++
         }
     }
 
-    const attemptedCount = separateSubmitAttemptedVideoIds.value.size
-    return Math.min(separateSubmitTotalCount.value, attemptedCount + readyUploadedCount)
+    const attemptedCount = submitState.attemptedVideoIds.size
+    return Math.min(submitState.totalCount, attemptedCount + readyUploadedCount)
 })
 
 const separateSubmitCompletedCount = computed(() => {
-    return separateSubmitSuccessCount.value + separateSubmitFailCount.value
+    const templateKey = currentSeparateTemplateKey.value
+    if (!templateKey) {
+        return 0
+    }
+
+    const submitState = separateSubmitStateRecord.value[templateKey]
+    if (!submitState) {
+        return 0
+    }
+
+    return submitState.successCount + submitState.failCount
+})
+
+const separateSubmitTotalCount = computed(() => {
+    const templateKey = currentSeparateTemplateKey.value
+    if (!templateKey) {
+        return 0
+    }
+
+    const submitState = separateSubmitStateRecord.value[templateKey]
+    if (!submitState) {
+        return 0
+    }
+
+    return submitState.totalCount
 })
 
 // 生成模板键名
@@ -1190,11 +1280,40 @@ const hasAnyAutoSubmitting = computed(() => {
     return Object.keys(autoSubmittingRecord.value).length > 0
 })
 
+const hasAnySeparateSubmitting = computed(() => {
+    return Object.keys(separateSubmittingRecord.value).length > 0
+})
+
+const getOrderedDispatchTemplateKeys = (templateKeys: string[]) => {
+    if (templateKeys.length <= 1) {
+        return templateKeys
+    }
+
+    const sortedKeys = [...templateKeys].sort()
+    const startIndex = submitDispatchRoundRobinCursor.value % sortedKeys.length
+    const head = sortedKeys.slice(startIndex)
+    const tail = sortedKeys.slice(0, startIndex)
+    return [...head, ...tail]
+}
+
 // 全局自动提交检查函数
 const checkAutoSubmitAll = async () => {
-    const templateKeys = Object.keys(autoSubmittingRecord.value)
+    const templateKeys = Array.from(
+        new Set([
+            ...Object.keys(autoSubmittingRecord.value),
+            ...Object.keys(separateSubmittingRecord.value)
+        ])
+    )
 
-    for (const templateKey of templateKeys) {
+    if (templateKeys.length === 0) {
+        return
+    }
+
+    const orderedTemplateKeys = getOrderedDispatchTemplateKeys(templateKeys)
+    submitDispatchRoundRobinCursor.value =
+        (submitDispatchRoundRobinCursor.value + 1) % orderedTemplateKeys.length
+
+    for (const templateKey of orderedTemplateKeys) {
         const parsed = parseTemplateKey(templateKey)
         if (!parsed) continue
 
@@ -1205,7 +1324,12 @@ const checkAutoSubmitAll = async () => {
         if (!user || !userConfigStore.configRoot?.config[uid]?.templates[templateName]) {
             // 如果用户或模板不存在，清除自动提交状态
             setAutoSubmitting(uid, templateName, false)
+            clearSeparateSubmitStateByKey(templateKey)
             continue
+        }
+
+        if (separateSubmittingRecord.value[templateKey]) {
+            await processSeparateSubmitQueue(templateKey)
         }
 
         if (autoSubmitProcessingKeys.value.has(templateKey)) {
@@ -1350,10 +1474,6 @@ const performTemplateSubmit = async (
             await handleAutoEditAfterSubmit(uid, templateName, template, resp)
         } catch (error) {
             utilsStore.showMessage(`${error}`, 'error')
-        } finally {
-            if (showLoading) {
-                submitting.value = false
-            }
         }
     } catch (error) {
         const failedVideoNames = collectFailedVideoNames(template)
@@ -1370,92 +1490,99 @@ const performTemplateSubmit = async (
 
         console.error('模板提交失败:', error)
         utilsStore.showMessage(`模板提交失败: ${error}`, 'error')
-
+    } finally {
         if (showLoading) {
             submitting.value = false
         }
     }
 }
 
-const resetSeparateSubmitState = () => {
-    separateSubmitting.value = false
-    separateSubmitProcessing.value = false
-    separateSubmitCancelled.value = false
-    separateSubmitContext.value = null
-    separateSubmitAttemptedVideoIds.value.clear()
-    separateSubmitSuccessCount.value = 0
-    separateSubmitFailCount.value = 0
-    separateSubmitTotalCount.value = 0
-    separateSubmitSuccessBvids.value = []
-    separateSubmitFailedVideoNames.value = []
-}
-
-const stopSeparateSubmit = () => {
-    if (!separateSubmitting.value) {
+const stopSeparateSubmit = (templateKey?: string) => {
+    const targetKey = templateKey || currentSeparateTemplateKey.value
+    if (!targetKey || !separateSubmittingRecord.value[targetKey]) {
         return
     }
 
-    const submitContext = separateSubmitContext.value
-    if (submitContext) {
-        const cancelKey = getSeparateSubmitCancelKey(
-            submitContext.uid,
-            submitContext.templateName
-        )
-        uploadStore.cancelPendingSubmitByKey(cancelKey)
+    const submitState = separateSubmitStateRecord.value[targetKey]
+    if (!submitState) {
+        clearSeparateSubmitStateByKey(targetKey)
+        return
     }
 
-    separateSubmitCancelled.value = true
-    separateSubmitting.value = false
+    const cancelKey = getSeparateSubmitCancelKey(submitState.uid, submitState.templateName)
+    uploadStore.cancelPendingSubmitByKey(cancelKey)
+
+    separateSubmitCancelledKeys.value.add(targetKey)
+    delete separateSubmittingRecord.value[targetKey]
     utilsStore.showMessage('已停止多稿件提交，当前进行中的提交结束后将退出', 'info')
 
-    if (!separateSubmitProcessing.value) {
-        void finalizeSeparateSubmitMode()
+    if (!separateSubmitProcessingKeys.value.has(targetKey)) {
+        void finalizeSeparateSubmitMode(targetKey)
     }
 }
 
-const finalizeSeparateSubmitMode = async () => {
-    const submitContext = separateSubmitContext.value
-    if (!submitContext) {
-        resetSeparateSubmitState()
+const finalizeSeparateSubmitMode = async (templateKey: string) => {
+    const submitState = separateSubmitStateRecord.value[templateKey]
+    if (!submitState) {
+        clearSeparateSubmitStateByKey(templateKey)
         return
     }
 
-    const wasCancelled = separateSubmitCancelled.value
+    const wasCancelled = separateSubmitCancelledKeys.value.has(templateKey)
     if (wasCancelled) {
-        const successCount = separateSubmitSuccessCount.value
-        const failCount = separateSubmitFailCount.value
+        const successCount = submitState.successCount
+        const failCount = submitState.failCount
         if (successCount > 0 || failCount > 0) {
             utilsStore.showMessage(
                 `多稿件提交已停止，已成功 ${successCount} 个，失败 ${failCount} 个`,
                 'warning'
             )
         }
-        resetSeparateSubmitState()
+        clearSeparateSubmitStateByKey(templateKey)
         return
     }
 
     const targetTemplate =
-        userConfigStore.configRoot?.config?.[submitContext.uid]?.templates?.[
-            submitContext.templateName
-        ]
+        userConfigStore.configRoot?.config?.[submitState.uid]?.templates?.[submitState.templateName]
     const remainingVideos = targetTemplate?.videos || []
     const hasUploadingVideos = remainingVideos.some(video => !(video.complete && video.path === ''))
     const hasPendingReadyVideos = remainingVideos.some(
         video =>
-            video.complete &&
-            video.path === '' &&
-            !separateSubmitAttemptedVideoIds.value.has(video.id)
+            video.complete && video.path === '' && !submitState.attemptedVideoIds.has(video.id)
     )
+
+    // 模板被删光视频后应及时释放状态，避免按钮一直显示“停止多稿件提交”
+    if (submitState.totalCount > 0 && remainingVideos.length === 0) {
+        const successCount = submitState.successCount
+        const failCount = submitState.failCount
+
+        if (failCount === 0) {
+            utilsStore.showMessage(`多稿件提交完成，共成功 ${successCount} 个`, 'success')
+        } else {
+            utilsStore.showMessage(
+                `多稿件提交完成，成功 ${successCount} 个，失败 ${failCount} 个`,
+                'warning'
+            )
+        }
+
+        clearSeparateSubmitStateByKey(templateKey)
+        return
+    }
 
     if (hasUploadingVideos || hasPendingReadyVideos) {
         return
     }
 
-    const successCount = separateSubmitSuccessCount.value
-    const failCount = separateSubmitFailCount.value
+    const successCount = submitState.successCount
+    const failCount = submitState.failCount
 
     if (successCount > 0 || failCount > 0) {
-        lastSubmit.value = new Date().toLocaleString()
+        if (
+            selectedUser.value?.uid === submitState.uid &&
+            currentTemplateName.value === submitState.templateName
+        ) {
+            lastSubmit.value = new Date().toLocaleString()
+        }
     }
 
     if (failCount === 0) {
@@ -1467,126 +1594,136 @@ const finalizeSeparateSubmitMode = async () => {
         )
     }
 
-    resetSeparateSubmitState()
+    clearSeparateSubmitStateByKey(templateKey)
 }
 
-const processSeparateSubmitQueue = async () => {
-    if (!separateSubmitting.value || separateSubmitProcessing.value) {
+const processSeparateSubmitQueue = async (templateKey: string) => {
+    if (!separateSubmittingRecord.value[templateKey] || separateSubmitProcessingKeys.value.has(templateKey)) {
         return
     }
 
-    separateSubmitProcessing.value = true
+    const submitState = separateSubmitStateRecord.value[templateKey]
+    if (!submitState) {
+        clearSeparateSubmitStateByKey(templateKey)
+        return
+    }
+
+    separateSubmitProcessingKeys.value.add(templateKey)
     try {
-        const submitContext = separateSubmitContext.value
-        if (!submitContext) {
-            resetSeparateSubmitState()
+        if (
+            !separateSubmittingRecord.value[templateKey] ||
+            separateSubmitCancelledKeys.value.has(templateKey)
+        ) {
             return
         }
 
-        const { uid, templateName } = submitContext
+        const { uid, templateName } = submitState
         const targetTemplate = userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
         if (!targetTemplate) {
-            resetSeparateSubmitState()
+            clearSeparateSubmitStateByKey(templateKey)
             utilsStore.showMessage('多稿件提交目标模板不存在，已停止提交', 'warning')
             return
         }
 
-        while (true) {
-            if (!separateSubmitting.value || separateSubmitCancelled.value) {
-                break
+        const readyVideo = (targetTemplate.videos || []).find(
+            video =>
+                video.complete && video.path === '' && !submitState.attemptedVideoIds.has(video.id)
+        )
+
+        if (!readyVideo) {
+            return
+        }
+
+        submitState.attemptedVideoIds.add(readyVideo.id)
+        const singleVideo = JSON.parse(JSON.stringify(readyVideo))
+        const singleTemplate = JSON.parse(JSON.stringify(targetTemplate))
+        const fallbackTitle = singleTemplate.title
+
+        singleTemplate.aid = undefined
+        singleTemplate.videos = [singleVideo]
+        singleTemplate.title = (singleVideo.title || '').trim() || fallbackTitle
+        const cancelKey = getSeparateSubmitCancelKey(uid, templateName)
+
+        try {
+            const resp = (await uploadStore.submitTemplate(uid, singleTemplate, {
+                cancelKey
+            })) as any
+            submitState.successCount++
+            if (resp?.bvid) {
+                submitState.successBvids.push(resp.bvid)
             }
+            recordSubmitStats({
+                user: getSubmitUserLabel(uid),
+                mode: '多稿件',
+                templateName,
+                status: 'success',
+                bvid: resp?.bvid ? String(resp.bvid) : '-'
+            })
 
-            const readyVideo = (targetTemplate.videos || []).find(
-                video =>
-                    video.complete &&
-                    video.path === '' &&
-                    !separateSubmitAttemptedVideoIds.value.has(video.id)
-            )
-
-            if (!readyVideo) {
-                break
+            const removeIndex = targetTemplate.videos.findIndex(v => v.id === readyVideo.id)
+            if (removeIndex > -1) {
+                targetTemplate.videos.splice(removeIndex, 1)
             }
-
-            separateSubmitAttemptedVideoIds.value.add(readyVideo.id)
-            const singleVideo = JSON.parse(JSON.stringify(readyVideo))
-            const singleTemplate = JSON.parse(JSON.stringify(targetTemplate))
-            const fallbackTitle = singleTemplate.title
-
-            singleTemplate.aid = undefined
-            singleTemplate.videos = [singleVideo]
-            singleTemplate.title = (singleVideo.title || '').trim() || fallbackTitle
-            const cancelKey = getSeparateSubmitCancelKey(uid, templateName)
 
             try {
-                const resp = (await uploadStore.submitTemplate(uid, singleTemplate, {
-                    cancelKey
-                })) as any
-                separateSubmitSuccessCount.value++
-                if (resp?.bvid) {
-                    separateSubmitSuccessBvids.value.push(resp.bvid)
-                }
-                recordSubmitStats({
-                    user: getSubmitUserLabel(uid),
-                    mode: '多稿件',
-                    templateName,
-                    status: 'success',
-                    bvid: resp?.bvid ? String(resp.bvid) : '-'
-                })
-
-                const removeIndex = targetTemplate.videos.findIndex(v => v.id === readyVideo.id)
-                if (removeIndex > -1) {
-                    targetTemplate.videos.splice(removeIndex, 1)
-                }
-
-                try {
-                    await syncSeasonAfterSubmit(uid, resp, singleTemplate)
-                    await handleAutoEditAfterSubmit(uid, templateName, singleTemplate, resp)
-                } catch (postError) {
-                    console.error('提交后处理失败:', postError)
-                    utilsStore.showMessage(`提交后处理失败: ${postError}`, 'error')
-                }
-            } catch (error) {
-                if (uploadStore.isSubmitCancelledError(error) || separateSubmitCancelled.value) {
-                    break
-                }
-
-                separateSubmitFailCount.value++
-                const videoTitle = (readyVideo.title || '').trim() || readyVideo.id
-                separateSubmitFailedVideoNames.value.push(videoTitle)
-                recordSubmitStats({
-                    user: getSubmitUserLabel(uid),
-                    mode: '多稿件',
-                    templateName,
-                    status: 'failed',
-                    videoName: videoTitle,
-                    error
-                })
-                utilsStore.showMessage(`多稿件提交失败（${videoTitle}）: ${error}`, 'error')
-                console.error('多稿件模式提交失败: ', error)
+                await syncSeasonAfterSubmit(uid, resp, singleTemplate)
+                await handleAutoEditAfterSubmit(uid, templateName, singleTemplate, resp)
+            } catch (postError) {
+                console.error('提交后处理失败:', postError)
+                utilsStore.showMessage(`提交后处理失败: ${postError}`, 'error')
             }
+        } catch (error) {
+            if (
+                uploadStore.isSubmitCancelledError(error) ||
+                separateSubmitCancelledKeys.value.has(templateKey)
+            ) {
+                return
+            }
+
+            submitState.failCount++
+            const videoTitle = (readyVideo.title || '').trim() || readyVideo.id
+            submitState.failedVideoNames.push(videoTitle)
+            recordSubmitStats({
+                user: getSubmitUserLabel(uid),
+                mode: '多稿件',
+                templateName,
+                status: 'failed',
+                videoName: videoTitle,
+                error
+            })
+            utilsStore.showMessage(`多稿件提交失败（${videoTitle}）: ${error}`, 'error')
+            console.error('多稿件模式提交失败: ', error)
         }
     } finally {
-        separateSubmitProcessing.value = false
-        void finalizeSeparateSubmitMode()
+        separateSubmitProcessingKeys.value.delete(templateKey)
+        void finalizeSeparateSubmitMode(templateKey)
     }
 }
 
 const submitTemplateAsSeparatePosts = async (options?: {
     skipConfirm?: boolean
     autoTrigger?: boolean
+    uid?: number
+    templateName?: string
 }) => {
-    if (!selectedUser.value || !currentTemplateName.value || !currentForm.value) {
+    const submitUid = options?.uid ?? selectedUser.value?.uid
+    const submitTemplateName = options?.templateName ?? currentTemplateName.value
+
+    if (!submitUid || !submitTemplateName) {
         utilsStore.showMessage('请先选择模板', 'error')
         return
     }
 
-    const submitUid = selectedUser.value.uid
-    const submitTemplateName = currentTemplateName.value
-    const targetTemplate = currentForm.value
+    const targetTemplate = userConfigStore.configRoot?.config?.[submitUid]?.templates?.[submitTemplateName]
+    if (!targetTemplate) {
+        utilsStore.showMessage('目标模板不存在', 'error')
+        return
+    }
 
-    if (separateSubmitting.value) {
+    const templateKey = getTemplateKey(submitUid, submitTemplateName)
+    if (separateSubmittingRecord.value[templateKey]) {
         if (options?.autoTrigger) {
-            await processSeparateSubmitQueue()
+            await processSeparateSubmitQueue(templateKey)
         }
         return
     }
@@ -1618,15 +1755,16 @@ const submitTemplateAsSeparatePosts = async (options?: {
         }
     }
 
-    separateSubmitting.value = true
-    separateSubmitContext.value = { uid: submitUid, templateName: submitTemplateName }
-    separateSubmitCancelled.value = false
-    separateSubmitSuccessCount.value = 0
-    separateSubmitFailCount.value = 0
-    separateSubmitTotalCount.value = sourceVideos.length
-    separateSubmitSuccessBvids.value = []
-    separateSubmitFailedVideoNames.value = []
-    separateSubmitAttemptedVideoIds.value.clear()
+    const submitState = getOrCreateSeparateSubmitState(submitUid, submitTemplateName)
+    submitState.attemptedVideoIds.clear()
+    submitState.successCount = 0
+    submitState.failCount = 0
+    submitState.totalCount = sourceVideos.length
+    submitState.successBvids = []
+    submitState.failedVideoNames = []
+
+    separateSubmittingRecord.value[templateKey] = true
+    separateSubmitCancelledKeys.value.delete(templateKey)
 
     try {
         // 确保所有视频都在上传队列中（已存在任务会被自动跳过）
@@ -1643,13 +1781,11 @@ const submitTemplateAsSeparatePosts = async (options?: {
         }
 
         utilsStore.showMessage('已开启多稿件提交，视频上传完成后将自动逐条提交', 'info')
-        await processSeparateSubmitQueue()
+        await processSeparateSubmitQueue(templateKey)
     } catch (error) {
         console.error('开启多稿件提交失败:', error)
         utilsStore.showMessage(`开启多稿件提交失败: ${error}`, 'error')
-        resetSeparateSubmitState()
-    } finally {
-        // 提交过程改为异步持续模式，不在这里关闭 loading
+        clearSeparateSubmitStateByKey(templateKey)
     }
 }
 const lastSubmit = ref<string>('')
@@ -1927,31 +2063,10 @@ watch(
 
 watch(
     () => {
-        if (!separateSubmitting.value || !separateSubmitContext.value) {
-            return ''
-        }
+        const singleKeys = Object.keys(autoSubmittingRecord.value).sort()
+        const separateKeys = Object.keys(separateSubmittingRecord.value).sort()
 
-        const { uid, templateName } = separateSubmitContext.value
-        const targetTemplate = userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
-        if (!targetTemplate?.videos) {
-            return 'missing'
-        }
-
-        return targetTemplate.videos
-            .map(video => `${video.id}:${video.complete ? 1 : 0}:${video.path || ''}`)
-            .join('|')
-    },
-    () => {
-        if (separateSubmitting.value) {
-            void processSeparateSubmitQueue()
-        }
-    }
-)
-
-watch(
-    () => {
-        const keys = Object.keys(autoSubmittingRecord.value).sort()
-        return keys
+        const singleState = singleKeys
             .map(key => {
                 const parsed = parseTemplateKey(key)
                 if (!parsed) {
@@ -1970,9 +2085,32 @@ watch(
                 return `${key}:${state}`
             })
             .join('|')
+
+        const separateState = separateKeys
+            .map(key => {
+                const parsed = parseTemplateKey(key)
+                if (!parsed) {
+                    return `${key}:invalid`
+                }
+
+                const { uid, templateName } = parsed
+                const template =
+                    userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
+                if (!template?.videos) {
+                    return `${key}:missing`
+                }
+
+                const state = template.videos
+                    .map(video => `${video.id}:${video.complete ? 1 : 0}:${video.path || ''}`)
+                    .join(',')
+                return `${key}:${state}`
+            })
+            .join('|')
+
+        return `single:${singleState}||separate:${separateState}`
     },
     () => {
-        if (hasAnyAutoSubmitting.value) {
+        if (hasAnyAutoSubmitting.value || hasAnySeparateSubmitting.value) {
             void checkAutoSubmitAll()
         }
     },
@@ -2116,7 +2254,7 @@ onUnmounted(() => {
         generalUpdateTimer = null
     }
 
-    resetSeparateSubmitState()
+    clearAllSeparateSubmitStates()
     autoSubmitProcessingKeys.value.clear()
 
     // 清理所有自动提交状态
