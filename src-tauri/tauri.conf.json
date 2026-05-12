@@ -1,6 +1,6 @@
 {
   "productName": "biliup-app",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "identifier": "com.biliup.app",
   "build": {
     "beforeDevCommand": "npm run dev",
