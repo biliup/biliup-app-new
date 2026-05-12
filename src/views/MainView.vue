@@ -12,8 +12,6 @@
             </div>
         </div>
 
-        <div v-if="submitSummaryDialogVisible" class="summary-lock-overlay"></div>
-
         <!-- 顶部导航栏 -->
         <el-header class="header">
             <div class="header-content">
@@ -27,6 +25,14 @@
                     </el-button>
                     <el-button type="primary" size="small" @click="checkUpdate" title="检查更新">
                         检查更新
+                    </el-button>
+                    <el-button
+                        type="success"
+                        size="small"
+                        @click="submitStatsDialogVisible = true"
+                        title="提交统计"
+                    >
+                        提交统计
                     </el-button>
                 </div>
                 <div class="header-right">
@@ -932,6 +938,12 @@
             "
         />
 
+        <SubmitStatsPage
+            v-model="submitStatsDialogVisible"
+            :stats="submitStats"
+            @clear="clearSubmitStats"
+        />
+
         <!-- 全局配置对话框 -->
         <GlobalConfigView v-model="showGlobalConfigDialog" />
     </div>
@@ -976,6 +988,21 @@ import TagView from '../components/TagView.vue'
 import DatePicker from '../components/DatePicker.vue'
 import StaffView from '../components/StaffView.vue'
 import DescView from '../components/DescView.vue'
+import SubmitStatsPage from '../components/SubmitStatsPage.vue'
+
+type SubmitModeText = '单稿件' | '多稿件'
+
+interface SubmitStatsRecord {
+    time: string
+    user: string
+    mode: SubmitModeText
+    templateName: string
+    status: 'success' | 'failed'
+    statusText: '成功' | '失败'
+    bvid: string
+    videoName: string
+    error: string
+}
 
 const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
@@ -1000,7 +1027,7 @@ const currentTemplateName = ref<string>('')
 const showNewTemplateDialog = ref(false)
 const showLoginDialog = ref(false)
 const showGlobalConfigDialog = ref(false)
-const submitSummaryDialogVisible = ref(false)
+const submitStatsDialogVisible = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
@@ -1029,6 +1056,58 @@ const seasonViewRef = ref<InstanceType<typeof SeasonView> | null>(null)
 // 自动提交状态记录 - 记录每个模板的自动提交状态
 const autoSubmittingRecord = ref<Record<string, boolean>>({})
 const autoSubmitProcessingKeys = ref<Set<string>>(new Set())
+
+const submitStats = ref<{
+    startedAt: string
+    totalCount: number
+    successCount: number
+    failCount: number
+    records: SubmitStatsRecord[]
+}>({
+    startedAt: new Date().toLocaleString(),
+    totalCount: 0,
+    successCount: 0,
+    failCount: 0,
+    records: []
+})
+
+const recordSubmitStats = (record: {
+    user: string
+    mode: SubmitModeText
+    templateName: string
+    status: 'success' | 'failed'
+    bvid?: string
+    videoName?: string
+    error?: unknown
+}) => {
+    submitStats.value.totalCount += 1
+    if (record.status === 'success') {
+        submitStats.value.successCount += 1
+    } else {
+        submitStats.value.failCount += 1
+    }
+
+    submitStats.value.records.unshift({
+        time: new Date().toLocaleString(),
+        user: record.user,
+        mode: record.mode,
+        templateName: record.templateName,
+        status: record.status,
+        statusText: record.status === 'success' ? '成功' : '失败',
+        bvid: record.bvid || '-',
+        videoName: record.videoName || '-',
+        error: record.error ? String(record.error) : '-'
+    })
+}
+
+const clearSubmitStats = () => {
+    submitStats.value.startedAt = new Date().toLocaleString()
+    submitStats.value.totalCount = 0
+    submitStats.value.successCount = 0
+    submitStats.value.failCount = 0
+    submitStats.value.records = []
+    utilsStore.showMessage('提交统计内存已清空', 'success')
+}
 
 const separateSubmitUploadedCount = computed(() => {
     if (!separateSubmitting.value || !separateSubmitContext.value) {
@@ -1093,6 +1172,14 @@ const setAutoSubmitting = (uid: number, templateName: string, status: boolean) =
     } else {
         delete autoSubmittingRecord.value[key]
     }
+}
+
+const getSubmitUserLabel = (uid: number) => {
+    const user = loginUsers.value.find(item => item.uid === uid)
+    if (!user) {
+        return '未知用户: ' + uid
+    }
+    return user.username
 }
 
 // 检查是否有任何模板在自动提交
@@ -1181,50 +1268,6 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
     }
 }
 
-const isAutoEditEnabled = (uid: number) => {
-    return Boolean(userConfigStore.configRoot?.config?.[uid]?.auto_edit)
-}
-
-const escapeHtml = (value: string) => {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;')
-}
-
-const showSubmitSummaryDialog = async (
-    title: string,
-    successBvids: string[],
-    failedVideoNames: string[]
-) => {
-    const successText =
-        successBvids.length > 0
-            ? successBvids.map(item => `- ${escapeHtml(item)}`).join('<br/>')
-            : '- 无'
-    const failedText =
-        failedVideoNames.length > 0
-            ? failedVideoNames.map(item => `- ${escapeHtml(item)}`).join('<br/>')
-            : '- 无'
-
-    submitSummaryDialogVisible.value = true
-    try {
-        await ElMessageBox.alert(
-            `提交成功稿件BV号：<br/>${successText}<br/><br/>提交失败视频名字：<br/>${failedText}`,
-            title,
-            {
-                confirmButtonText: '知道了',
-                dangerouslyUseHTMLString: true
-            }
-        )
-    } catch {
-        // 用户通过 Esc 或关闭按钮取消对话框
-    } finally {
-        submitSummaryDialogVisible.value = false
-    }
-}
-
 const handleAutoEditAfterSubmit = async (
     uid: number,
     templateName: string,
@@ -1270,14 +1313,16 @@ const performTemplateSubmit = async (
         submitting.value = true
     }
 
-    const successBvids: string[] = []
-    let failedVideoNames: string[] = []
-
     try {
         const resp = (await uploadStore.submitTemplate(uid, template)) as any
-        if (resp?.bvid) {
-            successBvids.push(resp.bvid)
-        }
+        const bvid = resp?.bvid ? String(resp.bvid) : '-'
+        recordSubmitStats({
+            user: user.username,
+            mode: '单稿件',
+            templateName,
+            status: 'success',
+            bvid
+        })
 
         // 更新最后提交时间（只对当前模板）
         if (selectedUser.value?.uid === uid && currentTemplateName.value === templateName) {
@@ -1293,10 +1338,6 @@ const performTemplateSubmit = async (
 
         try {
             await handleAutoEditAfterSubmit(uid, templateName, template, resp)
-
-            if (!isAutoEditEnabled(uid)) {
-                await showSubmitSummaryDialog('单稿件提交结果', successBvids, failedVideoNames)
-            }
         } catch (error) {
             utilsStore.showMessage(`${error}`, 'error')
         } finally {
@@ -1305,13 +1346,20 @@ const performTemplateSubmit = async (
             }
         }
     } catch (error) {
-        failedVideoNames = collectFailedVideoNames(template)
+        const failedVideoNames = collectFailedVideoNames(template)
+        for (const videoName of failedVideoNames) {
+            recordSubmitStats({
+                user: user.username,
+                mode: '单稿件',
+                templateName,
+                status: 'failed',
+                videoName,
+                error
+            })
+        }
+
         console.error('模板提交失败:', error)
         utilsStore.showMessage(`模板提交失败: ${error}`, 'error')
-
-        if (!isAutoEditEnabled(uid)) {
-            await showSubmitSummaryDialog('单稿件提交结果', successBvids, failedVideoNames)
-        }
 
         if (showLoading) {
             submitting.value = false
@@ -1362,14 +1410,6 @@ const finalizeSeparateSubmitMode = async () => {
                 `多稿件提交已停止，已成功 ${successCount} 个，失败 ${failCount} 个`,
                 'warning'
             )
-
-            if (!isAutoEditEnabled(submitContext.uid)) {
-                await showSubmitSummaryDialog(
-                    '多稿件提交结果',
-                    separateSubmitSuccessBvids.value,
-                    separateSubmitFailedVideoNames.value
-                )
-            }
         }
         resetSeparateSubmitState()
         return
@@ -1405,14 +1445,6 @@ const finalizeSeparateSubmitMode = async () => {
         utilsStore.showMessage(
             `多稿件提交完成，成功 ${successCount} 个，失败 ${failCount} 个`,
             'warning'
-        )
-    }
-
-    if (!isAutoEditEnabled(submitContext.uid)) {
-        await showSubmitSummaryDialog(
-            '多稿件提交结果',
-            separateSubmitSuccessBvids.value,
-            separateSubmitFailedVideoNames.value
         )
     }
 
@@ -1471,6 +1503,13 @@ const processSeparateSubmitQueue = async () => {
                 if (resp?.bvid) {
                     separateSubmitSuccessBvids.value.push(resp.bvid)
                 }
+                recordSubmitStats({
+                    user: getSubmitUserLabel(uid),
+                    mode: '多稿件',
+                    templateName,
+                    status: 'success',
+                    bvid: resp?.bvid ? String(resp.bvid) : '-'
+                })
 
                 const removeIndex = targetTemplate.videos.findIndex(v => v.id === readyVideo.id)
                 if (removeIndex > -1) {
@@ -1488,6 +1527,14 @@ const processSeparateSubmitQueue = async () => {
                 separateSubmitFailCount.value++
                 const videoTitle = (readyVideo.title || '').trim() || readyVideo.id
                 separateSubmitFailedVideoNames.value.push(videoTitle)
+                recordSubmitStats({
+                    user: getSubmitUserLabel(uid),
+                    mode: '多稿件',
+                    templateName,
+                    status: 'failed',
+                    videoName: videoTitle,
+                    error
+                })
                 utilsStore.showMessage(`多稿件提交失败（${videoTitle}）: ${error}`, 'error')
                 console.error('多稿件模式提交失败: ', error)
             }
@@ -4406,13 +4453,6 @@ const checkUpdate = async () => {
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(4px);
-}
-
-.summary-lock-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 1500;
-    background: rgba(0, 0, 0, 0.01);
 }
 
 .drag-content {
