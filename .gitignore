@@ -25,3 +25,10 @@ dist-ssr
 
 AGENTS.md
 CLAUDE.md
+.github/skills
+.gemini
+
+# Local agent setup artifacts
+docs/
+
+member.bilibili.com.har
