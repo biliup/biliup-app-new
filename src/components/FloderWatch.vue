@@ -362,7 +362,7 @@ interface Props {
 interface Emits {
     (e: 'update:modelValue', value: boolean): void
     (e: 'add-videos', files: any[]): void
-    (e: 'submit-videos', mode: 'single' | 'multi'): void
+    (e: 'submit-videos', mode: 'single' | 'multi', options?: { auto?: boolean }): void
 }
 
 const props = defineProps<Props>()
@@ -733,6 +733,11 @@ const performMonitoringCycle = async () => {
         // 添加新文件
         if (result.newFiles.length > 0) {
             await addNewFiles(result.newFiles)
+
+            // 多稿件自动提交模式下，新增文件后立即尝试提交（无需等待监控结束）
+            if (settings.value.autoSubmit && settings.value.autoSubmitMode === 'multi') {
+                emit('submit-videos', 'multi', { auto: true })
+            }
         }
 
         if (result.resetCounter) {

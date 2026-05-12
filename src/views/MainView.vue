@@ -1498,7 +1498,10 @@ const processSeparateSubmitQueue = async () => {
     }
 }
 
-const submitTemplateAsSeparatePosts = async () => {
+const submitTemplateAsSeparatePosts = async (options?: {
+    skipConfirm?: boolean
+    autoTrigger?: boolean
+}) => {
     if (!selectedUser.value || !currentTemplateName.value || !currentForm.value) {
         utilsStore.showMessage('请先选择模板', 'error')
         return
@@ -1509,6 +1512,9 @@ const submitTemplateAsSeparatePosts = async () => {
     const targetTemplate = currentForm.value
 
     if (separateSubmitting.value) {
+        if (options?.autoTrigger) {
+            await processSeparateSubmitQueue()
+        }
         return
     }
 
@@ -1523,18 +1529,20 @@ const submitTemplateAsSeparatePosts = async () => {
         return
     }
 
-    try {
-        await ElMessageBox.confirm(
-            `即将按多稿件模式提交 ${sourceVideos.length} 个视频。每个视频将单独提交为一份稿件，确认继续吗？`,
-            '确认多稿件提交',
-            {
-                confirmButtonText: '确认提交',
-                cancelButtonText: '取消',
-                type: 'warning'
-            }
-        )
-    } catch {
-        return
+    if (!options?.skipConfirm) {
+        try {
+            await ElMessageBox.confirm(
+                `即将按多稿件模式提交 ${sourceVideos.length} 个视频。每个视频将单独提交为一份稿件，确认继续吗？`,
+                '确认多稿件提交',
+                {
+                    confirmButtonText: '确认提交',
+                    cancelButtonText: '取消',
+                    type: 'warning'
+                }
+            )
+        } catch {
+            return
+        }
     }
 
     separateSubmitting.value = true
@@ -3373,9 +3381,15 @@ const handleAddVideosToForm = async (newVideos: any[]) => {
 }
 
 // 处理文件夹监控提交稿件事件
-const handleSubmitTemplate = async (mode: 'single' | 'multi' = 'single') => {
+const handleSubmitTemplate = async (
+    mode: 'single' | 'multi' = 'single',
+    options?: { auto?: boolean }
+) => {
     if (mode === 'multi') {
-        await submitTemplateAsSeparatePosts()
+        await submitTemplateAsSeparatePosts({
+            skipConfirm: Boolean(options?.auto),
+            autoTrigger: Boolean(options?.auto)
+        })
         return
     }
 
