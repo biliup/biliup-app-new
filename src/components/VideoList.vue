@@ -512,14 +512,11 @@ const detectUnifiedAffixesFromVideos = () => {
     }
 }
 
-watch(
-    [unifiedPrefixValue, unifiedSuffixValue],
-    () => {
-        if (useUnifiedPrefix.value || useUnifiedSuffix.value) {
-            applyUnifiedNameAffixes()
-        }
+watch([unifiedPrefixValue, unifiedSuffixValue], () => {
+    if (useUnifiedPrefix.value || useUnifiedSuffix.value) {
+        applyUnifiedNameAffixes()
     }
-)
+})
 
 watch(useUnifiedPrefix, enabled => {
     if (enabled) {
@@ -552,7 +549,8 @@ watch(useUnifiedSuffix, enabled => {
 })
 
 watch(
-    () => props.videos.map(video => `${video.id}:${video.title || video.videoname || ''}`).join('|'),
+    () =>
+        props.videos.map(video => `${video.id}:${video.title || video.videoname || ''}`).join('|'),
     () => {
         if (useUnifiedPrefix.value || useUnifiedSuffix.value) {
             applyUnifiedNameAffixes()
