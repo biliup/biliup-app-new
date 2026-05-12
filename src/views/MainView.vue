@@ -1185,11 +1185,7 @@ const separateSubmitUploadedCount = computed(() => {
     let readyUploadedCount = 0
 
     for (const video of videos) {
-        if (
-            video.complete &&
-            video.path === '' &&
-            !submitState.attemptedVideoIds.has(video.id)
-        ) {
+        if (video.complete && video.path === '' && !submitState.attemptedVideoIds.has(video.id)) {
             readyUploadedCount++
         }
     }
@@ -1547,8 +1543,7 @@ const finalizeSeparateSubmitMode = async (templateKey: string) => {
     const remainingVideos = targetTemplate?.videos || []
     const hasUploadingVideos = remainingVideos.some(video => !(video.complete && video.path === ''))
     const hasPendingReadyVideos = remainingVideos.some(
-        video =>
-            video.complete && video.path === '' && !submitState.attemptedVideoIds.has(video.id)
+        video => video.complete && video.path === '' && !submitState.attemptedVideoIds.has(video.id)
     )
 
     // 模板被删光视频后应及时释放状态，避免按钮一直显示“停止多稿件提交”
@@ -1598,7 +1593,10 @@ const finalizeSeparateSubmitMode = async (templateKey: string) => {
 }
 
 const processSeparateSubmitQueue = async (templateKey: string) => {
-    if (!separateSubmittingRecord.value[templateKey] || separateSubmitProcessingKeys.value.has(templateKey)) {
+    if (
+        !separateSubmittingRecord.value[templateKey] ||
+        separateSubmitProcessingKeys.value.has(templateKey)
+    ) {
         return
     }
 
@@ -1714,7 +1712,8 @@ const submitTemplateAsSeparatePosts = async (options?: {
         return
     }
 
-    const targetTemplate = userConfigStore.configRoot?.config?.[submitUid]?.templates?.[submitTemplateName]
+    const targetTemplate =
+        userConfigStore.configRoot?.config?.[submitUid]?.templates?.[submitTemplateName]
     if (!targetTemplate) {
         utilsStore.showMessage('目标模板不存在', 'error')
         return

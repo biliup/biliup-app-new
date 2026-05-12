@@ -35,16 +35,14 @@ export const useUploadStore = defineStore('upload', () => {
     }> = []
     let isSubmitQueueProcessing = false
     let lastSubmitInvokeAt = 0
-    let activeSubmitRequest:
-        | {
-              uid: number
-              upload: any
-              cancelKey?: string
-              cancelled: boolean
-              resolve: (value: any) => void
-              reject: (reason?: any) => void
-          }
-        | null = null
+    let activeSubmitRequest: {
+        uid: number
+        upload: any
+        cancelKey?: string
+        cancelled: boolean
+        resolve: (value: any) => void
+        reject: (reason?: any) => void
+    } | null = null
 
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
