@@ -1564,7 +1564,12 @@ const finalizeSeparateSubmitMode = async (templateKey: string) => {
         return
     }
 
-    if (hasUploadingVideos || hasPendingReadyVideos) {
+    if (hasUploadingVideos) {
+        return
+    }
+
+    if (hasPendingReadyVideos) {
+        void processSeparateSubmitQueue(templateKey)
         return
     }
 
