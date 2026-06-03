@@ -508,7 +508,8 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         return await addUserTemplate(userUid, newTemplateName, {
             ...templateConfig,
-            aid: undefined // 复制时清除稿件ID
+            aid: undefined, // 复制时清除稿件ID
+            videos: [] // 复制时不带视频列表
         })
     }
 
