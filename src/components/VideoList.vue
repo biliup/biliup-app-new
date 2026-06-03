@@ -209,6 +209,22 @@
                         maxlength="80"
                     />
                 </div>
+                <div class="sort-tools">
+                    <el-button
+                        size="small"
+                        @click="sortVideosByTitle('asc')"
+                        :disabled="!videos || videos.length < 2"
+                    >
+                        标题正序
+                    </el-button>
+                    <el-button
+                        size="small"
+                        @click="sortVideosByTitle('desc')"
+                        :disabled="!videos || videos.length < 2"
+                    >
+                        标题倒序
+                    </el-button>
+                </div>
             </div>
         </div>
 
@@ -372,6 +388,26 @@ const handleReorderVideo = (currentIndex: number, newIndex: number) => {
     newVideos.splice(newIndex, 0, movedItem)
 
     emit('update:videos', newVideos)
+}
+
+const getVideoSortName = (video: any) => {
+    return String(video.title || video.videoname || '').toLocaleLowerCase()
+}
+
+const sortVideosByTitle = (direction: 'asc' | 'desc') => {
+    if (!props.videos || props.videos.length < 2) {
+        return
+    }
+
+    const sortedVideos = [...props.videos].sort((a, b) => {
+        const compareResult = getVideoSortName(a).localeCompare(getVideoSortName(b), 'zh-Hans-CN', {
+            sensitivity: 'base',
+            numeric: true
+        })
+        return direction === 'asc' ? compareResult : -compareResult
+    })
+
+    emit('update:videos', sortedVideos)
 }
 
 // 开始编辑视频标题
@@ -735,6 +771,13 @@ const handleSubmitVideos = (mode: 'single' | 'multi', options?: { auto?: boolean
 
 .batch-rename-input {
     width: 120px;
+}
+
+.sort-tools {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .uploaded-videos-section h4 {
