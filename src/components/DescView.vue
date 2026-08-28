@@ -1,6 +1,6 @@
 <template>
     <div class="desc-view">
-        <el-form-item label="説明">
+        <el-form-item label="說明">
             <div class="desc-editor-block">
                 <div class="tiptap-shell" :class="{ disabled: disabled }">
                     <EditorContent v-if="editor" :editor="editor" class="tiptap-editor" />
@@ -472,7 +472,7 @@ const editor = useEditor({
     extensions: [
         StarterKit,
         Placeholder.configure({
-            placeholder: '動畫説明を入力してください'
+            placeholder: '動畫說明を入力してください'
         }),
         Mention.configure({
             HTMLAttributes: {
