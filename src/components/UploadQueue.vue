@@ -346,12 +346,12 @@ const cancelUpload = async (taskId: string) => {
         )
 
         await uploadStore.cancelUpload(taskId)
-        utilsStore.showMessage('任务已取消', 'success')
+        utilsStore.showMessage('仕事を取り消しました', 'success')
     } catch (error) {
         // 如果用户取消了确认框，不显示错误消息
         if (error !== 'cancel') {
-            console.error('取消上传失败:', error)
-            utilsStore.showMessage(`取消上传失败: ${error}`, 'error')
+            console.error('アップロードの取り消しに失敗しました:', error)
+            utilsStore.showMessage(`アップロードの取り消しに失敗しました: ${error}`, 'error')
         }
     }
 }
@@ -359,10 +359,10 @@ const cancelUpload = async (taskId: string) => {
 const retryUpload = async (taskId: string) => {
     try {
         await uploadStore.retryUpload(taskId)
-        utilsStore.showMessage('任务已重试', 'success')
+        utilsStore.showMessage('アップロードを再試行しました', 'success')
     } catch (error) {
-        console.error('重试上传失败:', error)
-        utilsStore.showMessage(`重试上传失败: ${error}`, 'error')
+        console.error('アップロードの再試行に失敗しました:', error)
+        utilsStore.showMessage(`アップロードの再試行に失敗しました: ${error}`, 'error')
     }
 }
 
@@ -376,18 +376,18 @@ const getTaskStatusClass = (status: string) => {
 }
 
 const getTaskDisplayName = (task: any) => {
-    return task.video?.title || '未知任务'
+    return task.video?.title || '知らない仕事'
 }
 
 const getStatusText = (status: string) => {
     const statusMap = {
-        Waiting: '待开始',
-        Pending: '等待中',
-        Running: '上传中',
-        Completed: '已完成',
-        Cancelled: '已取消',
-        Paused: '已暂停',
-        Failed: '失败'
+        Waiting: '開始しない',
+        Pending: '待っている',
+        Running: 'アップロード中',
+        Completed: '完成した',
+        Cancelled: 'キャンセルした',
+        Paused: '一時停止した',
+        Failed: '失敗しました'
     }
     return statusMap[status as keyof typeof statusMap] || status
 }
@@ -435,7 +435,7 @@ const formatFinishedTime = (timestamp: number | string): string => {
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-        if (diffMins < 1) return '刚刚完成'
+        if (diffMins < 1) return '丁度完成'
         if (diffMins < 60) return `${diffMins}分前`
         if (diffHours < 24) return `${diffHours}時間前`
         if (diffDays < 7) return `${diffDays}日前`
@@ -504,12 +504,12 @@ const getTaskWarningTooltip = (task: any): string => {
             )
 
             if (diffHours >= 10) {
-                return '此任务完成超过10小时，服务器可能已删除相关文件'
+                return 'この仕事を10時間以上完成して，サーバーが關するファイルを削除できました'
             } else {
-                return `此任务完成已${diffHours}小时，服务器将在10小时后删除相关文件`
+                return `この仕事を{diffHours}時間完成して，サーバーが關するファイルを10時間後で削除します`
             }
         } catch {
-            return '任务完成时间较长，可能无法上传'
+            return '仕事の完成時間は長くて，アップロードできません'
         }
     }
     return ''
