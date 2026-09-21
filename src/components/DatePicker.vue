@@ -56,7 +56,7 @@
             </div>
 
             <div class="panel-time">
-                <div v-if="!hasAnyTime" class="time-empty">该日期无可选时间</div>
+                <div v-if="!hasAnyTime" class="time-empty">選べる時間がありません</div>
                 <div v-else class="time-columns">
                     <div class="time-col">
                         <div class="time-col-list">
@@ -107,10 +107,10 @@
 
             <div class="panel-footer">
                 <button type="button" class="footer-btn btn-clear" @click="handleClear">
-                    清空
+                    消去
                 </button>
                 <button type="button" class="footer-btn btn-cancel" @click="handleCancel">
-                    取消
+                    キャンセル
                 </button>
                 <button
                     type="button"
@@ -118,7 +118,7 @@
                     :disabled="!canConfirm"
                     @click="handleConfirm"
                 >
-                    确定
+                    OK
                 </button>
             </div>
         </div>
@@ -136,7 +136,7 @@ const props = withDefaults(
     }>(),
     {
         disabled: false,
-        placeholder: '选择发布时间'
+        placeholder: '配布時間を選擇'
     }
 )
 
@@ -157,7 +157,7 @@ const selectedHour = ref<number | null>(null)
 const selectedMinute = ref<number | null>(null)
 const selectedSecond = ref<number | null>(null)
 
-const weekDays = ['一', '二', '三', '四', '五', '六', '日']
+const weekDays = ['月', '火', '水', '木', '金', '土', '日']
 
 const displayText = computed(() => {
     if (!props.modelValue) return props.placeholder

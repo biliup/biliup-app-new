@@ -4,11 +4,11 @@
         <div class="video-buttons-group">
             <el-button type="primary" @click="$emit('selectVideo')" size="small">
                 <el-icon><upload-filled /></el-icon>
-                选择视频文件
+                動畫ファイルを選擇
             </el-button>
             <el-button type="info" @click="showFolderWatchDialog = true" size="small">
                 <el-icon><folder-opened /></el-icon>
-                文件夹监控
+                フォルダーを監視
             </el-button>
             <el-button
                 type="success"
@@ -154,7 +154,7 @@
                                 >
                             </div>
                             <div v-if="video.status === 'Failed'" class="error-message">
-                                {{ video.errorMessage || '上传失败' }}
+                                {{ video.errorMessage || 'アップロード失敗' }}
                             </div>
                             <div
                                 class="upload-speed"
@@ -215,14 +215,14 @@
                         @click="sortVideosByTitle('asc')"
                         :disabled="!videos || videos.length < 2"
                     >
-                        标题正序
+                        タイトル順番
                     </el-button>
                     <el-button
                         size="small"
                         @click="sortVideosByTitle('desc')"
                         :disabled="!videos || videos.length < 2"
                     >
-                        标题倒序
+                        タイトル逆番
                     </el-button>
                 </div>
             </div>
@@ -627,14 +627,14 @@ const formatFinishedTime = (timestamp: number | string): string => {
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-        if (diffMins < 1) return '刚刚完成'
-        if (diffMins < 60) return `${diffMins}分钟前`
-        if (diffHours < 24) return `${diffHours}小时前`
-        if (diffDays < 7) return `${diffDays}天前`
+        if (diffMins < 1) return '完成'
+        if (diffMins < 60) return `${diffMins}分前`
+        if (diffHours < 24) return `${diffHours}時間前`
+        if (diffDays < 7) return `${diffDays}日前`
 
         return ''
     } catch {
-        return '未知时间'
+        return '知らない時間'
     }
 }
 
@@ -643,11 +643,11 @@ const getStatusText = (status: string) => {
     const statusMap = {
         Waiting: '待开始',
         Pending: '等待中',
-        Running: '上传中',
-        Completed: '已完成',
-        Cancelled: '已取消',
-        Paused: '已暂停',
-        Failed: '失败'
+        Running: 'アップロード中',
+        Completed: '完成した',
+        Cancelled: 'キャンセルした',
+        Paused: '一時停止',
+        Failed: '失敗'
     }
     return statusMap[status as keyof typeof statusMap] || status
 }

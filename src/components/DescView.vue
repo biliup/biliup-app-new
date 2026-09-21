@@ -1,6 +1,6 @@
 <template>
     <div class="desc-view">
-        <el-form-item label="简介">
+        <el-form-item label="說明">
             <div class="desc-editor-block">
                 <div class="tiptap-shell" :class="{ disabled: disabled }">
                     <EditorContent v-if="editor" :editor="editor" class="tiptap-editor" />
@@ -16,10 +16,10 @@
                     class="mention-inline-popup"
                     :style="mentionPopupStyle"
                 >
-                    <div class="mention-inline-header">选择或输入你想@的人</div>
-                    <div v-if="mentionLoading" class="mention-inline-empty">搜索中...</div>
+                    <div class="mention-inline-header">@する人を選擇してください</div>
+                    <div v-if="mentionLoading" class="mention-inline-empty">檢索中...</div>
                     <div v-else-if="mentionOptions.length === 0" class="mention-inline-empty">
-                        暂无匹配用户
+                        ユーザーがありません
                     </div>
                     <div v-else class="mention-inline-list">
                         <div
@@ -45,10 +45,10 @@
             </div>
         </el-form-item>
 
-        <el-form-item label="粉丝动态">
+        <el-form-item label="ファンの動態">
             <el-input
                 v-model="dynamicModel"
-                placeholder="发布时的动态内容"
+                placeholder="動態内容の配布"
                 maxlength="233"
                 show-word-limit
                 :disabled="disabled"
@@ -472,7 +472,7 @@ const editor = useEditor({
     extensions: [
         StarterKit,
         Placeholder.configure({
-            placeholder: '请输入视频简介'
+            placeholder: '動畫說明を入力してください'
         }),
         Mention.configure({
             HTMLAttributes: {

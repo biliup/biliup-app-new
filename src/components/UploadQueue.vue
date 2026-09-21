@@ -2,7 +2,7 @@
     <el-dropdown trigger="click" class="upload-queue-dropdown">
         <el-button link class="queue-button">
             <el-icon><list /></el-icon>
-            上传队列
+            アップロードキュー
             <el-badge
                 :value="uploadQueue.filter(task => task.status !== 'Completed').length"
                 :hidden="uploadQueue.length === 0"
@@ -19,13 +19,13 @@
                         class="header-button clear-btn"
                         @click="clearCompleted"
                     >
-                        清空已完成
+                        完成を消去
                     </el-button>
                     <el-button link size="small" class="header-button start-btn" @click="startAll">
-                        开始全部
+                        すべてを開始
                     </el-button>
                     <el-button link size="small" class="header-button pause-btn" @click="pauseAll">
-                        暂停全部
+                        すべてを一時停止
                     </el-button>
                     <el-button
                         link
@@ -33,11 +33,11 @@
                         class="header-button cancel-btn"
                         @click="cancelAll"
                     >
-                        取消全部
+                        すべてを取り消す
                     </el-button>
                 </div>
                 <div class="queue-content">
-                    <div v-if="uploadQueue.length === 0" class="empty-queue">暂无上传任务</div>
+                    <div v-if="uploadQueue.length === 0" class="empty-queue">アップロードがありません</div>
                     <template v-for="task in uploadQueue" :key="task.id">
                         <!-- 已完成任务分割线 -->
                         <div
@@ -47,7 +47,7 @@
                             "
                             class="completed-divider"
                         >
-                            <span>已完成任务</span>
+                            <span>完成した仕事</span>
                         </div>
                         <div
                             class="queue-item"
@@ -186,7 +186,7 @@ const clearCompleted = async () => {
     try {
         const completedTasks = uploadStore.uploadQueue.filter(task => task.status === 'Completed')
         if (completedTasks.length === 0) {
-            utilsStore.showMessage('没有已完成的任务', 'info')
+            utilsStore.showMessage('完成した仕事がありません', 'info')
             return
         }
 
@@ -195,14 +195,14 @@ const clearCompleted = async () => {
             try {
                 successCount += await uploadStore.cancelUpload(task.id)
             } catch (error) {
-                console.error(`清空任务 ${task.video.title} 失败:`, error)
+                console.error(`仕事の ${task.video.title} の消去に失敗しました:`, error)
             }
         }
 
-        utilsStore.showMessage(`已清空 ${successCount} 个完成的任务`, 'success')
+        utilsStore.showMessage(` ${successCount} 本の完成した仕事を消去しました`, 'success')
     } catch (error) {
-        console.error('清空已完成任务失败:', error)
-        utilsStore.showMessage(`清空已完成任务失败: ${error}`, 'error')
+        console.error('完成した仕事の消去に失敗しました:', error)
+        utilsStore.showMessage(`完成した仕事の消去に失敗しました: ${error}`, 'error')
     }
 }
 
@@ -226,7 +226,7 @@ const startAll = async () => {
     try {
         const canBeStarted = uploadStore.uploadQueue.filter(task => canStart(task.status))
         if (canBeStarted.length === 0) {
-            utilsStore.showMessage('没有可开始的任务', 'info')
+            utilsStore.showMessage('開始できる仕事がありません', 'info')
             return
         }
 
@@ -235,24 +235,24 @@ const startAll = async () => {
             try {
                 successCount += await uploadStore.startUpload(task.id)
             } catch (error) {
-                console.error(`开始任务 ${task.video.title} 失败:`, error)
+                console.error(`仕事の ${task.video.title} の開始に失敗しました:`, error)
             }
         }
 
-        utilsStore.showMessage(`已开始 ${successCount} 个任务`, 'success')
+        utilsStore.showMessage(` ${successCount} 本の仕事を開始しました`, 'success')
     } catch (error) {
-        console.error('开始所有任务失败:', error)
-        utilsStore.showMessage(`开始所有任务失败: ${error}`, 'error')
+        console.error('すべての仕事の開始に失敗しました:', error)
+        utilsStore.showMessage(`すべての仕事の開始に失敗しました: ${error}`, 'error')
     }
 }
 
 const startUpload = async (taskId: string) => {
     try {
         await uploadStore.startUpload(taskId)
-        utilsStore.showMessage('任务已开始', 'success')
+        utilsStore.showMessage('仕事を開始しました', 'success')
     } catch (error) {
-        console.error('开始上传失败:', error)
-        utilsStore.showMessage(`开始上传失败: ${error}`, 'error')
+        console.error('仕事の開始に失敗しました:', error)
+        utilsStore.showMessage(`仕事の開始に失敗しました: ${error}`, 'error')
     }
 }
 
@@ -260,7 +260,7 @@ const pauseAll = async () => {
     try {
         const activeTasks = uploadStore.uploadQueue.filter(task => canPause(task.status))
         if (activeTasks.length === 0) {
-            utilsStore.showMessage('没有可暂停的任务', 'info')
+            utilsStore.showMessage('一時停止できる仕事がありません', 'info')
             return
         }
 
@@ -269,24 +269,24 @@ const pauseAll = async () => {
             try {
                 successCount += await uploadStore.pauseUpload(task.id)
             } catch (error) {
-                console.error(`暂停任务 ${task.video.title} 失败:`, error)
+                console.error(`仕事の ${task.video.title} の一時停止に失敗しました:`, error)
             }
         }
 
-        utilsStore.showMessage(`已暂停 ${successCount} 个任务`, 'success')
+        utilsStore.showMessage(` ${successCount} 本の仕事を一時停止しました`, 'success')
     } catch (error) {
-        console.error('暂停所有任务失败:', error)
-        utilsStore.showMessage(`暂停所有任务失败: ${error}`, 'error')
+        console.error('すべての仕事の一時停止に失敗しました:', error)
+        utilsStore.showMessage(`すべての仕事の一時停止に失敗しました: ${error}`, 'error')
     }
 }
 
 const pauseUpload = async (taskId: string) => {
     try {
         await uploadStore.pauseUpload(taskId)
-        utilsStore.showMessage('任务已暂停', 'success')
+        utilsStore.showMessage('仕事を一時停止しました', 'success')
     } catch (error) {
-        console.error('暂停上传失败:', error)
-        utilsStore.showMessage(`暂停上传失败: ${error}`, 'error')
+        console.error('仕事の一時停止に失敗しました:', error)
+        utilsStore.showMessage(`仕事の一時停止に失敗しました: ${error}`, 'error')
     }
 }
 
@@ -294,17 +294,17 @@ const cancelAll = async () => {
     try {
         const activeTasks = uploadStore.uploadQueue.filter(task => canCancel(task.status))
         if (activeTasks.length === 0) {
-            utilsStore.showMessage('没有可取消的任务', 'info')
+            utilsStore.showMessage('取り消せる仕事がありません', 'info')
             return
         }
 
         // 添加确认弹窗
         await ElMessageBox.confirm(
-            `确定要取消所有 ${activeTasks.length} 个任务吗？此操作不可撤销。`,
-            '确认取消所有任务',
+            `すべての ${activeTasks.length} 本の仕事を取り消すことを確認しますか？この動作を元に戻すことができません。`,
+            'すべての仕事を取り消すことを確認しますか',
             {
-                confirmButtonText: '确定取消',
-                cancelButtonText: '取消',
+                confirmButtonText: '確認',
+                cancelButtonText: 'キャンセル',
                 type: 'warning'
             }
         )
@@ -314,16 +314,16 @@ const cancelAll = async () => {
             try {
                 successCount += await uploadStore.cancelUpload(task.id)
             } catch (error) {
-                console.error(`取消任务 ${task.video.title} 失败:`, error)
+                console.error(`仕事の ${task.video.title} の取り消しに失敗しました:`, error)
             }
         }
 
-        utilsStore.showMessage(`已取消 ${successCount} 个任务`, 'success')
+        utilsStore.showMessage(` ${successCount} 本の仕事を取り消しました`, 'success')
     } catch (error) {
         // 如果用户取消了确认框，不显示错误消息
         if (error !== 'cancel') {
-            console.error('取消所有上传失败:', error)
-            utilsStore.showMessage(`取消所有上传失败: ${error}`, 'error')
+            console.error('すべてのアップロードの取り消しに失敗しました:', error)
+            utilsStore.showMessage(`すべてのアップロードの取り消しに失敗しました: ${error}`, 'error')
         }
     }
 }
@@ -332,26 +332,26 @@ const cancelUpload = async (taskId: string) => {
     try {
         // 获取任务信息用于确认提示
         const task = uploadStore.uploadQueue.find(t => t.id === taskId)
-        const taskTitle = task?.video?.title || '未知任务'
+        const taskTitle = task?.video?.title || '知らない仕事'
 
         // 添加确认弹窗
         await ElMessageBox.confirm(
-            `确定要取消上传任务"${taskTitle}"吗？此操作不可撤销。`,
+            `アップロードする仕事の "${taskTitle}" の取り消すことを確認しますか？この動作を元に戻すことができません。`,
             '确认取消任务',
             {
-                confirmButtonText: '确定取消',
-                cancelButtonText: '取消',
+                confirmButtonText: '確認',
+                cancelButtonText: 'キャンセル',
                 type: 'warning'
             }
         )
 
         await uploadStore.cancelUpload(taskId)
-        utilsStore.showMessage('任务已取消', 'success')
+        utilsStore.showMessage('仕事を取り消しました', 'success')
     } catch (error) {
         // 如果用户取消了确认框，不显示错误消息
         if (error !== 'cancel') {
-            console.error('取消上传失败:', error)
-            utilsStore.showMessage(`取消上传失败: ${error}`, 'error')
+            console.error('アップロードの取り消しに失敗しました:', error)
+            utilsStore.showMessage(`アップロードの取り消しに失敗しました: ${error}`, 'error')
         }
     }
 }
@@ -359,10 +359,10 @@ const cancelUpload = async (taskId: string) => {
 const retryUpload = async (taskId: string) => {
     try {
         await uploadStore.retryUpload(taskId)
-        utilsStore.showMessage('任务已重试', 'success')
+        utilsStore.showMessage('アップロードを再試行しました', 'success')
     } catch (error) {
-        console.error('重试上传失败:', error)
-        utilsStore.showMessage(`重试上传失败: ${error}`, 'error')
+        console.error('アップロードの再試行に失敗しました:', error)
+        utilsStore.showMessage(`アップロードの再試行に失敗しました: ${error}`, 'error')
     }
 }
 
@@ -376,18 +376,18 @@ const getTaskStatusClass = (status: string) => {
 }
 
 const getTaskDisplayName = (task: any) => {
-    return task.video?.title || '未知任务'
+    return task.video?.title || '知らない仕事'
 }
 
 const getStatusText = (status: string) => {
     const statusMap = {
-        Waiting: '待开始',
-        Pending: '等待中',
-        Running: '上传中',
-        Completed: '已完成',
-        Cancelled: '已取消',
-        Paused: '已暂停',
-        Failed: '失败'
+        Waiting: '開始しない',
+        Pending: '待っている',
+        Running: 'アップロード中',
+        Completed: '完成した',
+        Cancelled: 'キャンセルした',
+        Paused: '一時停止した',
+        Failed: '失敗しました'
     }
     return statusMap[status as keyof typeof statusMap] || status
 }
@@ -435,10 +435,10 @@ const formatFinishedTime = (timestamp: number | string): string => {
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-        if (diffMins < 1) return '刚刚完成'
-        if (diffMins < 60) return `${diffMins}分钟前`
-        if (diffHours < 24) return `${diffHours}小时前`
-        if (diffDays < 7) return `${diffDays}天前`
+        if (diffMins < 1) return '丁度完成'
+        if (diffMins < 60) return `${diffMins}分前`
+        if (diffHours < 24) return `${diffHours}時間前`
+        if (diffDays < 7) return `${diffDays}日前`
 
         // 超过7天显示具体日期
         return date.toLocaleDateString('zh-CN', {
@@ -448,7 +448,7 @@ const formatFinishedTime = (timestamp: number | string): string => {
             minute: '2-digit'
         })
     } catch {
-        return '未知时间'
+        return '知らない時間'
     }
 }
 
@@ -504,12 +504,12 @@ const getTaskWarningTooltip = (task: any): string => {
             )
 
             if (diffHours >= 10) {
-                return '此任务完成超过10小时，服务器可能已删除相关文件'
+                return 'この仕事を10時間以上完成して，サーバーが關するファイルを削除できました'
             } else {
-                return `此任务完成已${diffHours}小时，服务器将在10小时后删除相关文件`
+                return `この仕事を{diffHours}時間完成して，サーバーが關するファイルを10時間後で削除します`
             }
         } catch {
-            return '任务完成时间较长，可能无法上传'
+            return '仕事の完成時間は長くて，アップロードできません'
         }
     }
     return ''

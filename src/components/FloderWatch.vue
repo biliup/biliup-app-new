@@ -18,15 +18,15 @@
                 v-if="!monitoring && !waitingForStart"
             >
                 <div class="info-text">
-                    <p>📁 <strong>文件夹监控功能：</strong></p>
+                    <p>📁 <strong>フォルダー監視機能：</strong></p>
                     <ul>
-                        <li>选择监控文件夹，按设定间隔自动检测新增视频文件</li>
-                        <li>可设置文件大小稳定检测次数，确保文件完整后再添加</li>
-                        <li>自动将符合大小要求且稳定的视频文件添加到当前模板</li>
+                        <li>監視するフォルダーを選んで，設定された間で追加されたビデオファイルを自動的に檢出</li>
+                        <li>ファイルサイズと安定檢出回數を設定できて，ファイルの完全を確保して再追加</li>
+                        <li>似合うサイズと安定なビデオファイルを現在のテンプレートに自動的に追加</li>
                         <li v-if="settings.autoSubmit">
-                            启用自动提交后，连续{{
+                            自動的な提出の啓動の後で，連續に{{
                                 settings.maxEmptyChecks
-                            }}次检测，无小于1KB且无大小持续改变的文件后自动提交稿件
+                            }}回檢出，1KB以下またはサイズ持續變更されないファイルの後で投稿を自動的に提出
                         </li>
                     </ul>
                 </div>
@@ -35,10 +35,10 @@
             <!-- 设置区域 -->
             <div v-if="!monitoring" class="settings-section">
                 <el-form :model="settings" label-width="110px" label-position="right" size="small">
-                    <el-form-item label="监控文件夹" required>
+                    <el-form-item label="フォルダーを監視" required>
                         <div class="folder-selection">
                             <div v-if="settings.folderPaths.length === 0" class="no-folders">
-                                <el-text type="info">尚未选择监控文件夹</el-text>
+                                <el-text type="info">監視されるフォルダーがありません</el-text>
                             </div>
                             <div v-else class="selected-folders">
                                 <el-tag
@@ -59,7 +59,7 @@
                             <div class="folder-buttons">
                                 <el-button type="primary" @click="selectFolder">
                                     <el-icon><folder-opened /></el-icon>
-                                    添加文件夹
+                                    フォルダーを追加
                                 </el-button>
                                 <el-button
                                     v-if="settings.folderPaths.length > 0"
@@ -68,7 +68,7 @@
                                     plain
                                 >
                                     <el-icon><delete /></el-icon>
-                                    清空全部
+                                    すべてを消去
                                 </el-button>
                             </div>
                         </div>

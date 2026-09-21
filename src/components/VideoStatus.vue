@@ -1,13 +1,13 @@
 <template>
     <el-dialog
         v-model="dialogVisible"
-        title="视频转码状态"
+        title="動畫のコンバージョン状態"
         width="600px"
         :close-on-click-modal="false"
     >
         <div class="video-status-container">
             <div v-if="completedVideos.length === 0" class="empty-state">
-                <el-empty description="暂无已完成上传的视频文件" />
+                <el-empty description="アップロードしたビデオファイルがありません" />
             </div>
             <div v-else>
                 <el-table
@@ -27,13 +27,13 @@
                                 class="expanded-error-detail"
                             >
                                 <div class="error-message-full">
-                                    <strong>错误详情：</strong>{{ getErrorDetail(row.statusDesc) }}
+                                    <strong>エラーの詳細：</strong>{{ getErrorDetail(row.statusDesc) }}
                                 </div>
                             </div>
                         </template>
                     </el-table-column>
 
-                    <el-table-column prop="filename" label="文件名" min-width="250">
+                    <el-table-column prop="filename" label="ファイルネーム" min-width="250">
                         <template #default="{ row }">
                             <div class="filename-cell">
                                 <el-icon class="file-icon"><video-play /></el-icon>
@@ -43,7 +43,7 @@
                             </div>
                         </template>
                     </el-table-column>
-                    <el-table-column prop="status" label="转码状态" width="180" align="center">
+                    <el-table-column prop="status" label="コンバージョン状態" width="180" align="center">
                         <template #default="{ row }">
                             <div class="status-content">
                                 <el-tag
@@ -80,9 +80,9 @@
 
         <template #footer>
             <div class="dialog-footer">
-                <el-button @click="dialogVisible = false">关闭</el-button>
+                <el-button @click="dialogVisible = false">閉じる</el-button>
                 <el-button type="primary" @click="refreshAllStatus" :loading="refreshingAll">
-                    刷新全部
+                    すべてを読み込み
                 </el-button>
             </div>
         </template>
@@ -151,18 +151,18 @@ const getFilename = (video: VideoFile): string => {
     if (video.path) {
         return video.path.split(/[/\\]/).pop() || video.path
     }
-    return `视频文件 ${video.id}`
+    return `ビデオファイル ${video.id}`
 }
 
 // 获取状态文本
 const getStatusText = (statusCode: number): string => {
     switch (statusCode) {
         case ENCODING_STATUS.SUCCESS:
-            return '转码成功'
+            return 'コンバージョン成功'
         case ENCODING_STATUS.PROCESSING:
-            return '转码中'
+            return 'コンバージョン中'
         default:
-            return '转码失败'
+            return 'コンバージョン失敗'
     }
 }
 
@@ -212,7 +212,7 @@ const getRowClassName = ({ row }: { row: VideoStatusItem }): string => {
 
 // 获取错误详情
 const getErrorDetail = (statusDesc?: string): string => {
-    return statusDesc || '未知错误'
+    return statusDesc || '知らないエラー'
 }
 
 // 检查是否为失败状态
@@ -230,9 +230,9 @@ const refreshAllStatus = async () => {
         // 模拟刷新延迟
         await new Promise(resolve => setTimeout(resolve, 1500))
 
-        ElMessage.success('视频状态已刷新')
+        ElMessage.success('ビデオの狀態を読み込みました')
     } catch (error) {
-        ElMessage.error('刷新状态失败')
+        ElMessage.error('ビデオの狀態の読み込みに失敗しました')
     } finally {
         refreshingAll.value = false
     }
