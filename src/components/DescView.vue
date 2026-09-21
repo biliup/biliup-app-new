@@ -63,6 +63,7 @@ import { EditorContent, useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Mention from '@tiptap/extension-mention'
+import { parseDescriptionClipboardText } from '../utils/descriptionClipboard'
 import { useUtilsStore } from '../stores/utils'
 import {
     createMentionAvatarCache,
@@ -488,6 +489,7 @@ const editor = useEditor({
         content: [{ type: 'paragraph' }]
     },
     editorProps: {
+        clipboardTextParser: parseDescriptionClipboardText,
         handleKeyDown(_view, event) {
             if (
                 showMentionPicker.value &&
