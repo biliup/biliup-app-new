@@ -869,6 +869,20 @@
                                                 : '以多稿件模式分别提交视频'
                                         }}
                                     </el-button>
+                                    <el-button
+                                        size="large"
+                                        :disabled="
+                                            templateLoading ||
+                                            separateSubmitting ||
+                                            !currentForm.videos ||
+                                            currentForm.videos.length === 0
+                                        "
+                                        @click="separateCoverManagerVisible = true"
+                                    >
+                                        独立封面 {{ separateCoverCount }}/{{
+                                            currentForm.videos.length
+                                        }}
+                                    </el-button>
                                     <el-tooltip
                                         content="使用此功能时，将不再以分p模式提交视频，而是针对每一个视频单独提交一份稿件，稿件名即为当前的‘分p’名，其他内容完全复用当前模板内容，无法进行自定义。每条视频提交成功后会自动从当前视频列表移除。"
                                         placement="top"
@@ -943,6 +957,15 @@
             @clear="clearSubmitStats"
         />
 
+        <SeparateCoverManager
+            v-model="separateCoverManagerVisible"
+            :videos="currentForm?.videos || []"
+            :uid="selectedUser?.uid"
+            :default-cover-preview="coverDisplayUrl"
+            :disabled="templateLoading || separateSubmitting"
+            @update:videos="videos = $event"
+        />
+
         <!-- 全局配置对话框 -->
         <GlobalConfigView v-model="showGlobalConfigDialog" />
     </div>
@@ -988,6 +1011,8 @@ import DatePicker from '../components/DatePicker.vue'
 import StaffView from '../components/StaffView.vue'
 import DescView from '../components/DescView.vue'
 import SubmitStatsPage from '../components/SubmitStatsPage.vue'
+import SeparateCoverManager from '../components/SeparateCoverManager.vue'
+import { selectAndUploadCover } from '../utils/coverUpload'
 
 type SubmitModeText = '单稿件' | '多稿件'
 
@@ -1027,6 +1052,7 @@ const showNewTemplateDialog = ref(false)
 const showLoginDialog = ref(false)
 const showGlobalConfigDialog = ref(false)
 const submitStatsDialogVisible = ref(false)
+const separateCoverManagerVisible = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
@@ -1645,6 +1671,7 @@ const processSeparateSubmitQueue = async (templateKey: string) => {
         singleTemplate.aid = undefined
         singleTemplate.videos = [singleVideo]
         singleTemplate.title = (singleVideo.title || '').trim() || fallbackTitle
+        singleTemplate.cover = singleVideo.cover || targetTemplate.cover
         const cancelKey = getSeparateSubmitCancelKey(uid, templateName)
 
         try {
@@ -1744,9 +1771,11 @@ const submitTemplateAsSeparatePosts = async (options?: {
     }
 
     if (!options?.skipConfirm) {
+        const customCoverCount = sourceVideos.filter(video => Boolean(video.cover)).length
+        const inheritedCoverCount = sourceVideos.length - customCoverCount
         try {
             await ElMessageBox.confirm(
-                `即将按多稿件模式提交 ${sourceVideos.length} 个视频。每个视频将单独提交为一份稿件，确认继续吗？`,
+                `即将按多稿件模式提交 ${sourceVideos.length} 个视频。每个视频将单独提交为一份稿件；${customCoverCount} 个使用独立封面，${inheritedCoverCount} 个沿用公共封面。确认继续吗？`,
                 '确认多稿件提交',
                 {
                     confirmButtonText: '确认提交',
@@ -1957,6 +1986,10 @@ const videos = computed({
         }
     }
 })
+
+const separateCoverCount = computed(
+    () => currentForm.value?.videos?.filter(video => Boolean(video.cover)).length || 0
+)
 
 // 检查指定模板是否有未保存的改动
 const checkTemplateHasUnsavedChanges = (uid: number, templateName: string): boolean => {
@@ -3333,31 +3366,17 @@ const setSelectedCategoryByTid = (tid: number) => {
 // 选择封面
 const selectCoverWithTauri = async () => {
     try {
-        const selected = await open({
-            multiple: false,
-            filters: [
-                {
-                    name: 'Image',
-                    extensions: ['jpg', 'jpeg', 'png', 'pjp', 'pjpeg', 'jiff', 'gif']
-                }
-            ]
-        })
-
-        if (!selected || selected.length === 0) {
-            utilsStore.showMessage('未选择任何封面文件', 'warning')
-            return
-        }
-
         if (selectedUser.value && currentTemplate.value && currentForm.value) {
             coverLoading.value = true
             templateLoading.value = true
-            const url = await utilsStore.uploadCover(selectedUser.value.uid, selected)
-            if (url) {
-                currentTemplate.value.cover = url
-                currentForm.value.cover = url
-            } else {
-                throw new Error('封面上传失败')
+            const url = await selectAndUploadCover(selectedUser.value.uid, utilsStore.uploadCover)
+            if (!url) {
+                utilsStore.showMessage('未选择任何封面文件', 'warning')
+                return
             }
+
+            currentTemplate.value.cover = url
+            currentForm.value.cover = url
         } else {
             utilsStore.showMessage('请先选择用户和模板', 'error')
         }

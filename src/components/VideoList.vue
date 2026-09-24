@@ -112,6 +112,15 @@
                                     "
                                 >
                                     {{ video.title || video.videoname }}
+                                    <el-tag
+                                        v-if="video.cover"
+                                        class="custom-cover-tag"
+                                        type="success"
+                                        size="small"
+                                        effect="plain"
+                                    >
+                                        独立封面
+                                    </el-tag>
                                     <el-icon class="edit-icon"><edit /></el-icon>
                                 </div>
                             </div>
@@ -954,6 +963,14 @@ const handleSubmitVideos = (mode: 'single' | 'multi', options?: { auto?: boolean
     opacity: 0;
     font-size: 10px;
     transition: opacity 0.3s;
+}
+
+.custom-cover-tag {
+    flex-shrink: 0;
+    height: 17px;
+    padding: 0 4px;
+    font-size: 9px;
+    line-height: 15px;
 }
 
 .video-title-edit {
