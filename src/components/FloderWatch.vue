@@ -413,6 +413,9 @@ const startCountdownTimer = ref<number | null>(null)
 // 文件大小跟踪：存储每个文件最近3次的大小记录
 const fileSizeHistory = ref<Map<string, number[]>>(new Map())
 
+// 记录本次监控已添加的文件，避免多稿件提交移除视频后被下一轮重复添加
+const addedFilePaths = new Set<string>()
+
 // 正则表达式相关
 const regexError = ref('')
 const compiledRegex = ref<RegExp | null>(null)
@@ -633,6 +636,10 @@ const performCheck = async (): Promise<{
 
             const filePath = entry.path
 
+            if (addedFilePaths.has(filePath)) {
+                continue
+            }
+
             try {
                 // 获取文件大小
                 const fileSize = await utilsStore.getFileSize(filePath)
@@ -712,6 +719,7 @@ const performCheck = async (): Promise<{
 // 添加新文件到视频列表
 const addNewFiles = async (filenames: string[]) => {
     if (filenames.length > 0) {
+        filenames.forEach(filename => addedFilePaths.add(filename))
         emit('add-videos', filenames)
         addedFilesCount.value += filenames.length
         utilsStore.showMessage(`已添加 ${filenames.length} 个视频文件`, 'success')
@@ -829,6 +837,7 @@ const startMonitoringNow = async () => {
 
     // 清空文件大小历史记录
     fileSizeHistory.value.clear()
+    addedFilePaths.clear()
 
     const folderMsg = settings.value.includeSubfolders
         ? `开始监控文件夹 (${settings.value.folderPaths.length}个，包含子文件夹): ${settings.value.folderPaths.join(', ')}`
