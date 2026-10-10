@@ -134,18 +134,35 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, AppE
 pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, AppError> {
     let app_data = app.state::<AppData>();
 
-    if app_data.clients.lock().await.remove(&uid).is_some() {
-        let _ = app_data
-            .config
-            .lock()
-            .await
-            .remove_user_config(uid)
-            .map_err(|e| AppError::Config(format!("清除用户配置失败: {e}")))?;
-        info!("用户 {} 登出成功", uid);
-        Ok(true)
-    } else {
-        Err(AppError::UserNotFound(uid))
+    let queue = app_data
+        .upload_service
+        .get_upload_queue()
+        .await
+        .map_err(AppError::Internal)?;
+    if queue
+        .iter()
+        .any(|task| task.user.uid == uid && !task.is_completed() && !task.is_cancelled())
+    {
+        return Err(AppError::Custom(
+            "用户有未完成的上传任务，请先完成或取消任务".into(),
+        ));
     }
+    let mut clients = app_data.clients.lock().await;
+    if !clients.contains_key(&uid) {
+        return Err(AppError::UserNotFound(uid));
+    }
+    let mut config = app_data.config.lock().await;
+    let mut updated = config.clone();
+    updated
+        .remove_user_config(uid)
+        .map_err(|e| AppError::Config(format!("清除用户配置失败: {e}")))?;
+    updated
+        .save_to_file(&crate::utils::get_config_json_path().map_err(AppError::Internal)?)
+        .map_err(|e| AppError::Config(format!("保存退出登录状态失败: {e}")))?;
+    *config = updated;
+    clients.remove(&uid);
+    info!("用户 {} 登出成功", uid);
+    Ok(true)
 }
 
 /// 发送短信验证码

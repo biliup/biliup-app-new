@@ -167,7 +167,9 @@ const { syncSortable: syncUserSortable, destroySortable: destroyUserSortable } =
 
 // 检查用户是否有上传任务
 const isUserHasUploadTasks = (uid: number): boolean => {
-    return uploadStore.uploadQueue.some(task => task.user?.uid === uid)
+    return uploadStore.uploadQueue.some(
+        task => task.user?.uid === uid && !['Completed', 'Cancelled'].includes(task.status)
+    )
 }
 
 // 处理下拉菜单命令
@@ -180,13 +182,13 @@ const handleLogout = async (user: any) => {
     try {
         // 检查用户是否有未完成的上传任务
         if (isUserHasUploadTasks(user.uid)) {
-            utilsStore.showMessage('请先删除上传队列中属于该用户的任务', 'warning')
+            utilsStore.showMessage('请先完成或取消该用户的未完成上传任务', 'warning')
             return
         }
 
         // 确认对话框
         await ElMessageBox.confirm(
-            `确定要退出用户 "${user.username}" 吗？退出后会删除所有本地数据。`,
+            `确定要退出用户 "${user.username}" 吗？退出后会删除该账号的本地登录信息、设置及全部模板，不会删除本地视频文件或 B 站稿件。`,
             '确认登出',
             {
                 confirmButtonText: '确定登出',

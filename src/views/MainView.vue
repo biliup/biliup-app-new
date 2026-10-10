@@ -3902,14 +3902,16 @@ const openUserConfig = (user: any) => {
 
 // 检查用户是否有上传任务
 const isUserHasUploadTasks = (uid: number) => {
-    return uploadStore.uploadQueue.some((task: any) => task.user?.uid === uid)
+    return uploadStore.uploadQueue.some(
+        (task: any) => task.user?.uid === uid && !['Completed', 'Cancelled'].includes(task.status)
+    )
 }
 
 // 处理用户登出
 const handleLogoutUser = async (uid: number) => {
     // 如果用户有上传任务，不允许登出
     if (isUserHasUploadTasks(uid)) {
-        utilsStore.showMessage('用户有未完成的上传任务，无法登出', 'success')
+        utilsStore.showMessage('用户有未完成的上传任务，请先完成或取消任务', 'warning')
         return
     }
 
