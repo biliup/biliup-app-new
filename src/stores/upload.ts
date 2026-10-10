@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
-import { useUtilsStore } from './utils'
 
 interface UploadTask {
     id: string
@@ -28,7 +27,8 @@ interface BatchTaskActionResult {
 
 export const useUploadStore = defineStore('upload', () => {
     const uploadQueue = ref<UploadTask[]>([])
-    const utilsStore = useUtilsStore()
+    const speedSamples = new Map<string, { bytes: number; at: number }>()
+    let queueRequestId = 0
     const submitInvokeIntervalMs = 5000
     const submitCancelCode = 'SUBMIT_CANCELLED'
     const submitRequestQueue: Array<{
@@ -243,41 +243,25 @@ export const useUploadStore = defineStore('upload', () => {
 
     // 获取上传队列
     const getUploadQueue = async () => {
+        const requestId = ++queueRequestId
         try {
-            const queue: UploadTask[] = await invoke('get_upload_queue')
-            uploadQueue.value = queue
-            // 更新速率
+            const queue = await invoke<UploadTask[]>('get_upload_queue')
+            if (requestId !== queueRequestId) return uploadQueue.value
             const now = Date.now()
-            queue
-                .filter(task => task.started_at && task.status === 'Running')
-                .forEach(task => {
-                    const elapsed = now - task.started_at!
-                    task.speed = elapsed > 0 ? (task.total_transmit_bytes * 1000) / elapsed : 0
-                })
-
-            queue
-                .filter(
-                    task =>
-                        task.started_at &&
-                        task.status === 'Running' &&
-                        task.speed === 0 &&
-                        now - task.started_at! > 30000
-                )
-                .forEach(task => {
-                    if (task.retry_count && task.retry_count >= 3) {
-                        utilsStore.showMessage(
-                            `${task.user.username}-${task.video.title} 超过 3 次重试，取消任务`
-                        )
-                        cancelUpload(task.id)
-                    } else {
-                        utilsStore.showMessage(
-                            `${task.user.username}-${task.video.title} 超过 30 秒未上传，正在重试...`
-                        )
-                        task.retry_count = task.retry_count ? task.retry_count + 1 : 1
-                        retryUpload(task.id, false)
-                    }
-                })
-
+            const taskIds = new Set(queue.map(task => task.id))
+            for (const id of speedSamples.keys()) {
+                if (!taskIds.has(id)) speedSamples.delete(id)
+            }
+            for (const task of queue) {
+                const previous = speedSamples.get(task.id)
+                task.speed =
+                    task.status === 'Running' && previous && now > previous.at
+                        ? (Math.max(0, task.total_transmit_bytes - previous.bytes) * 1000) /
+                          (now - previous.at)
+                        : 0
+                speedSamples.set(task.id, { bytes: task.total_transmit_bytes, at: now })
+            }
+            uploadQueue.value = queue
             return queue
         } catch (error) {
             console.error('获取上传队列失败:', error)

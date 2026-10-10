@@ -221,6 +221,28 @@ async fn upload_background_interval(
         .lock()
         .await
         .retain(|_, worker| !worker.is_finished());
+    for task_mutex in queue.values() {
+        let (stalled, task_id) = {
+            let task = task_mutex.lock().await;
+            (task.has_stalled(), task.id.clone())
+        };
+        if !stalled {
+            continue;
+        }
+        let worker = handle.lock().await.remove(&task_id);
+        if let Some(worker) = worker {
+            worker.abort();
+            let _ = worker.await;
+        }
+        let mut task = task_mutex.lock().await;
+        if task.retry_count < 3 {
+            warn!("上传无进展，自动重试: {}", task.title());
+            task.cancel();
+            task.retry();
+        } else {
+            task.fail("上传长时间没有进展，自动重试次数已达上限，请检查网络后手动重试".into());
+        }
+    }
     let mut current_running = 0;
     for task_mutex in queue.values() {
         if task_mutex.lock().await.is_running() {
@@ -372,6 +394,11 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
     let video_file = VideoFile::new(&filepath)?;
     let total_size = task_mutex.lock().await.total_size;
     let parcel = probe.pre_upload(client, video_file).await?;
+    {
+        let mut task = task_mutex.lock().await;
+        task.transferring = true;
+        task.last_activity = std::time::Instant::now();
+    }
     let (file_read_tx, mut file_read_rx) = mpsc::unbounded_channel();
     let (net_send_tx, mut net_send_rx) = mpsc::unbounded_channel();
     let mut uploaded = 0;
@@ -511,5 +538,45 @@ mod tests {
         for (_, handle) in handles.lock().await.drain() {
             handle.abort();
         }
+    }
+    #[tokio::test]
+    async fn retry_mid_upload_stall_without_frontend_polling() {
+        let mut stalled = task("stalled");
+        stalled.start();
+        stalled.transferring = true;
+        stalled.total_size = 100;
+        stalled.total_transmit_bytes = 1;
+        stalled.last_activity -= std::time::Duration::from_secs(31);
+        let stalled = Arc::new(Mutex::new(stalled));
+        let queue = Arc::new(Mutex::new(IndexMap::from([(
+            "stalled".into(),
+            Arc::clone(&stalled),
+        )])));
+        let handles = Arc::new(Mutex::new(HashMap::from([(
+            "stalled".into(),
+            tokio::spawn(std::future::pending()),
+        )])));
+        upload_background_interval(queue, handles, Arc::new(Mutex::new(0))).await;
+        let task = stalled.lock().await;
+        assert!(task.is_pending());
+        assert_eq!(task.retry_count, 1);
+    }
+
+    #[test]
+    fn preparation_merge_and_pause_do_not_use_transfer_timeout() {
+        let mut task = task("phases");
+        task.start();
+        task.last_activity -= std::time::Duration::from_secs(31);
+        assert!(!task.has_stalled());
+        task.transferring = true;
+        task.total_size = 100;
+        task.total_transmit_bytes = 100;
+        task.progress = 100.0;
+        assert!(!task.has_stalled());
+        task.total_transmit_bytes = 1;
+        task.pause();
+        assert!(!task.has_stalled());
+        task.resume();
+        assert!(!task.has_stalled());
     }
 }

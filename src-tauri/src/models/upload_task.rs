@@ -25,6 +25,10 @@ pub struct UploadTask {
     pub total_size: u64,
     pub total_transmit_bytes: u64,
     #[serde(skip)]
+    pub last_activity: std::time::Instant,
+    #[serde(skip)]
+    pub transferring: bool,
+    #[serde(skip)]
     pub config: Arc<Mutex<ConfigRoot>>,
     #[serde(skip)]
     pub clients: DebugIgnore<Arc<Mutex<HashMap<u64, MyClient>>>>,
@@ -63,6 +67,8 @@ impl UploadTask {
             progress: 0.0,
             total_size: get_file_size(Path::new(&video.path)).unwrap_or(0),
             total_transmit_bytes: 0,
+            last_activity: std::time::Instant::now(),
+            transferring: false,
             config,
             clients: DebugIgnore(clients),
         }
@@ -73,12 +79,15 @@ impl UploadTask {
     }
 
     pub fn start(&mut self) {
+        self.last_activity = std::time::Instant::now();
+        self.transferring = false;
         self.status = TaskStatus::Running;
         self.total_transmit_bytes = 0;
         self.started_at = Some(chrono::Utc::now().timestamp_millis() as usize);
     }
 
     pub fn resume(&mut self) {
+        self.last_activity = std::time::Instant::now();
         self.status = TaskStatus::Running;
     }
 
@@ -122,11 +131,25 @@ impl UploadTask {
     }
 
     pub fn update_progress(&mut self, progress: f64) {
+        self.last_activity = std::time::Instant::now();
         self.progress = progress.clamp(0.0, 100.0);
     }
 
     pub fn update_total_transmit_bytes(&mut self, total_transmit_bytes: u64) {
+        self.last_activity = std::time::Instant::now();
         self.total_transmit_bytes += total_transmit_bytes;
+    }
+
+    pub fn has_stalled(&self) -> bool {
+        let timeout = if !self.transferring {
+            180
+        } else if self.progress >= 100.0 && self.total_transmit_bytes >= self.total_size {
+            // 数据流发送完后还需等待分片响应及服务端合并
+            300
+        } else {
+            30
+        };
+        self.is_running() && self.last_activity.elapsed().as_secs() >= timeout
     }
 
     pub fn is_waiting(&self) -> bool {
