@@ -2116,27 +2116,27 @@ const checkTemplateHasUnsavedChanges = (uid: number, templateName: string): bool
 }
 
 // 生命周期
-// 监听封面变化，异步加载显示用的封面URL
+// 按账号、模板和封面识别请求，避免旧请求覆盖当前预览
 watch(
-    () => currentForm.value?.cover,
-    async (newCover: string | undefined) => {
-        if (newCover && selectedUser.value) {
-            try {
-                coverLoading.value = true
-                const downloadedCover = await utilsStore.downloadCover(
-                    selectedUser.value.uid,
-                    newCover
-                )
-                coverDisplayUrl.value = downloadedCover || ''
-            } catch (error) {
-                console.error('Failed to download cover:', error)
-                clearCurrentCover()
-            } finally {
-                coverLoading.value = false
+    () => [selectedUser.value?.uid, currentTemplateName.value, currentForm.value?.cover] as const,
+    async ([uid, _templateName, cover], _previous, onCleanup) => {
+        let active = true
+        onCleanup(() => {
+            active = false
+        })
+        coverDisplayUrl.value = ''
+        coverLoading.value = Boolean(uid && cover)
+        if (!uid || !cover) return
+        try {
+            const preview = await utilsStore.downloadCover(uid, cover)
+            if (active) coverDisplayUrl.value = preview || ''
+        } catch (error) {
+            if (active) {
+                console.error('封面预览加载失败:', error)
+                utilsStore.showMessage('封面预览加载失败，已保留封面设置', 'warning')
             }
-        } else {
-            coverDisplayUrl.value = ''
-            coverLoading.value = false
+        } finally {
+            if (active) coverLoading.value = false
         }
     }
 )
@@ -2174,31 +2174,6 @@ watch(
             // 如果没有分区信息，清空分区选择
             selectedCategory.value = null
             selectedSubCategory.value = null
-        }
-    }
-)
-
-// 监听用户切换，重新加载封面
-watch(
-    () => selectedUser.value,
-    async (newUser: any) => {
-        if (currentForm.value?.cover && newUser) {
-            try {
-                coverLoading.value = true
-                const downloadedCover = await utilsStore.downloadCover(
-                    newUser.uid,
-                    currentForm.value.cover
-                )
-                coverDisplayUrl.value = downloadedCover || ''
-            } catch (error) {
-                console.error('Failed to download cover:', error)
-                clearCurrentCover()
-            } finally {
-                coverLoading.value = false
-            }
-        } else {
-            coverDisplayUrl.value = ''
-            coverLoading.value = false
         }
     }
 )
