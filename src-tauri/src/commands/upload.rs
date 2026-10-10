@@ -5,10 +5,18 @@ use crate::{
     error::AppError,
     models::{TemplateConfig, UploadTask, VideoInfo},
 };
+use serde::Serialize;
 use serde_json::Value;
 use tauri::{AppHandle, Manager};
 
 use tracing::{info, warn};
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BatchTaskActionResult {
+    pub success_count: u32,
+    pub failed_task_ids: Vec<String>,
+}
 
 /// 创建上传任务
 #[tauri::command]
@@ -47,56 +55,86 @@ pub async fn create_upload_task(
 
 /// 开始上传
 #[tauri::command]
-pub async fn start_upload(app: AppHandle, task_ids: Vec<String>) -> Result<u32, AppError> {
+pub async fn start_upload(
+    app: AppHandle,
+    task_ids: Vec<String>,
+) -> Result<BatchTaskActionResult, AppError> {
     let app_data = app.state::<AppData>();
     let upload_service = &app_data.upload_service;
 
     let mut started_count = 0u32;
+    let mut failed_task_ids = Vec::new();
     for task_id in task_ids {
         match upload_service.start_upload(&task_id).await {
             Ok(true) => started_count += 1,
-            Ok(false) => {}
-            Err(error) => warn!("开始上传失败 {}: {}", task_id, error),
+            Ok(false) => failed_task_ids.push(task_id),
+            Err(error) => {
+                warn!("开始上传失败 {}: {}", task_id, error);
+                failed_task_ids.push(task_id);
+            }
         }
     }
 
-    Ok(started_count)
+    Ok(BatchTaskActionResult {
+        success_count: started_count,
+        failed_task_ids,
+    })
 }
 
 /// 暂停上传
 #[tauri::command]
-pub async fn pause_upload(app: AppHandle, task_ids: Vec<String>) -> Result<u32, AppError> {
+pub async fn pause_upload(
+    app: AppHandle,
+    task_ids: Vec<String>,
+) -> Result<BatchTaskActionResult, AppError> {
     let app_data = app.state::<AppData>();
     let upload_service = &app_data.upload_service;
 
     let mut paused_count = 0u32;
+    let mut failed_task_ids = Vec::new();
     for task_id in task_ids {
         match upload_service.pause_upload(&task_id).await {
             Ok(true) => paused_count += 1,
-            Ok(false) => {}
-            Err(error) => warn!("暂停上传失败 {}: {}", task_id, error),
+            Ok(false) => failed_task_ids.push(task_id),
+            Err(error) => {
+                warn!("暂停上传失败 {}: {}", task_id, error);
+                failed_task_ids.push(task_id);
+            }
         }
     }
 
-    Ok(paused_count)
+    Ok(BatchTaskActionResult {
+        success_count: paused_count,
+        failed_task_ids,
+    })
 }
 
 /// 取消上传
 #[tauri::command]
-pub async fn cancel_upload(app: AppHandle, task_ids: Vec<String>) -> Result<u32, AppError> {
+pub async fn cancel_upload(
+    app: AppHandle,
+    task_ids: Vec<String>,
+) -> Result<BatchTaskActionResult, AppError> {
     let app_data = app.state::<AppData>();
     let upload_service = &app_data.upload_service;
 
     let mut cancelled_count = 0u32;
+    let mut failed_task_ids = Vec::new();
     for task_id in task_ids {
         match upload_service.cancel_upload(&task_id).await {
             Ok(true) => cancelled_count += 1,
-            Ok(false) => {}
-            Err(error) => warn!("取消上传失败 {}: {}", task_id, error),
+            Ok(false) => failed_task_ids.push(task_id),
+            Err(error) => {
+                warn!("取消上传失败 {}: {}", task_id, error);
+                failed_task_ids.push(task_id);
+            }
         }
     }
 
-    Ok(cancelled_count)
+    Ok(BatchTaskActionResult {
+        success_count: cancelled_count,
+        failed_task_ids,
+    })
 }
 
 /// 获取上传队列
@@ -112,20 +150,30 @@ pub async fn get_upload_queue(app: AppHandle) -> Result<Vec<UploadTask>, AppErro
 
 /// 重新上传失败的任务
 #[tauri::command]
-pub async fn retry_upload(app: AppHandle, task_ids: Vec<String>) -> Result<u32, AppError> {
+pub async fn retry_upload(
+    app: AppHandle,
+    task_ids: Vec<String>,
+) -> Result<BatchTaskActionResult, AppError> {
     let app_data = app.state::<AppData>();
     let upload_service = &app_data.upload_service;
 
     let mut retried_count = 0u32;
+    let mut failed_task_ids = Vec::new();
     for task_id in task_ids {
         match upload_service.retry_upload(&task_id).await {
             Ok(true) => retried_count += 1,
-            Ok(false) => {}
-            Err(error) => warn!("重试上传失败 {}: {}", task_id, error),
+            Ok(false) => failed_task_ids.push(task_id),
+            Err(error) => {
+                warn!("重试上传失败 {}: {}", task_id, error);
+                failed_task_ids.push(task_id);
+            }
         }
     }
 
-    Ok(retried_count)
+    Ok(BatchTaskActionResult {
+        success_count: retried_count,
+        failed_task_ids,
+    })
 }
 
 #[tauri::command]

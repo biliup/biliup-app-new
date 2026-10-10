@@ -20,6 +20,11 @@ interface UploadTask {
     retry_count: number
 }
 
+interface BatchTaskActionResult {
+    successCount: number
+    failedTaskIds: string[]
+}
+
 export const useUploadStore = defineStore('upload', () => {
     const uploadQueue = ref<UploadTask[]>([])
     const utilsStore = useUtilsStore()
@@ -193,12 +198,12 @@ export const useUploadStore = defineStore('upload', () => {
     // 开始上传
     const startUpload = async (taskIds: string | string[]) => {
         try {
-            const startedCount = await invoke<number>('start_upload', {
+            const startedResult = await invoke<BatchTaskActionResult>('start_upload', {
                 taskIds: normalizeTaskIds(taskIds)
             })
             await getUploadQueue()
 
-            return startedCount
+            return startedResult
         } catch (error) {
             console.error('开始上传失败:', error)
             throw error
@@ -208,12 +213,12 @@ export const useUploadStore = defineStore('upload', () => {
     // 暂停上传
     const pauseUpload = async (taskIds: string | string[]) => {
         try {
-            const pausedCount = await invoke<number>('pause_upload', {
+            const pausedResult = await invoke<BatchTaskActionResult>('pause_upload', {
                 taskIds: normalizeTaskIds(taskIds)
             })
             await getUploadQueue()
 
-            return pausedCount
+            return pausedResult
         } catch (error) {
             console.error('暂停上传失败:', error)
             throw error
@@ -223,12 +228,12 @@ export const useUploadStore = defineStore('upload', () => {
     // 取消上传
     const cancelUpload = async (taskIds: string | string[]) => {
         try {
-            const cancelledCount = await invoke<number>('cancel_upload', {
+            const cancelledResult = await invoke<BatchTaskActionResult>('cancel_upload', {
                 taskIds: normalizeTaskIds(taskIds)
             })
             await getUploadQueue()
 
-            return cancelledCount
+            return cancelledResult
         } catch (error) {
             console.error('取消上传失败:', error)
             throw error
@@ -282,13 +287,13 @@ export const useUploadStore = defineStore('upload', () => {
     // 重试上传
     const retryUpload = async (taskIds: string | string[], refresh: boolean = true) => {
         try {
-            const retriedCount = await invoke<number>('retry_upload', {
+            const retriedResult = await invoke<BatchTaskActionResult>('retry_upload', {
                 taskIds: normalizeTaskIds(taskIds)
             })
             if (refresh) {
                 await getUploadQueue()
             }
-            return retriedCount
+            return retriedResult
         } catch (error) {
             console.error('重试上传失败:', error)
             throw error

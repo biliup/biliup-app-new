@@ -159,6 +159,11 @@ import {
 const uploadStore = useUploadStore()
 const utilsStore = useUtilsStore()
 
+interface BatchActionResult {
+    successCount: number
+    failedTaskIds: string[]
+}
+
 // 计算属性
 const uploadQueue = computed(() => {
     const queue = uploadStore.uploadQueue
@@ -181,6 +186,39 @@ const uploadQueue = computed(() => {
     return [...activeTasks, ...sortedCompletedTasks]
 })
 
+const getTaskFileNameById = (taskId: string) => {
+    const task = uploadStore.uploadQueue.find(item => item.id === taskId)
+    return task?.video?.filename || task?.video?.title || '未知文件'
+}
+
+const formatFailedFiles = (taskIds: string[]) => {
+    const names = Array.from(new Set(taskIds.map(getTaskFileNameById))).filter(Boolean)
+    if (names.length <= 5) {
+        return names.join('、')
+    }
+    return `${names.slice(0, 5).join('、')} 等 ${names.length} 个文件`
+}
+
+const showBatchResultMessage = (actionText: string, result: BatchActionResult) => {
+    const { successCount, failedTaskIds } = result
+
+    if (failedTaskIds.length === 0) {
+        utilsStore.showMessage(`已${actionText} ${successCount} 个任务`, 'success')
+        return
+    }
+
+    const failedFiles = formatFailedFiles(failedTaskIds)
+    if (successCount > 0) {
+        utilsStore.showMessage(
+            `已${actionText} ${successCount} 个任务，以下文件操作失败：${failedFiles}`,
+            'warning'
+        )
+        return
+    }
+
+    utilsStore.showMessage(`以下文件操作失败：${failedFiles}`, 'warning')
+}
+
 // 上传队列相关方法
 const clearCompleted = async () => {
     try {
@@ -190,9 +228,8 @@ const clearCompleted = async () => {
             return
         }
 
-        const successCount = await uploadStore.cancelUpload(completedTasks.map(task => task.id))
-
-        utilsStore.showMessage(`已清空 ${successCount} 个完成的任务`, 'success')
+        const result = await uploadStore.cancelUpload(completedTasks.map(task => task.id))
+        showBatchResultMessage('清空', result)
     } catch (error) {
         console.error('清空已完成任务失败:', error)
         utilsStore.showMessage(`清空已完成任务失败: ${error}`, 'error')
@@ -223,9 +260,8 @@ const startAll = async () => {
             return
         }
 
-        const successCount = await uploadStore.startUpload(canBeStarted.map(task => task.id))
-
-        utilsStore.showMessage(`已开始 ${successCount} 个任务`, 'success')
+        const result = await uploadStore.startUpload(canBeStarted.map(task => task.id))
+        showBatchResultMessage('开始', result)
     } catch (error) {
         console.error('开始所有任务失败:', error)
         utilsStore.showMessage(`开始所有任务失败: ${error}`, 'error')
@@ -234,8 +270,14 @@ const startAll = async () => {
 
 const startUpload = async (taskId: string) => {
     try {
-        await uploadStore.startUpload(taskId)
-        utilsStore.showMessage('任务已开始', 'success')
+        const result = await uploadStore.startUpload(taskId)
+        if (result.successCount > 0) {
+            utilsStore.showMessage('任务已开始', 'success')
+            return
+        }
+
+        const failedName = formatFailedFiles(result.failedTaskIds)
+        utilsStore.showMessage(`开始失败：${failedName}`, 'warning')
     } catch (error) {
         console.error('开始上传失败:', error)
         utilsStore.showMessage(`开始上传失败: ${error}`, 'error')
@@ -250,9 +292,8 @@ const pauseAll = async () => {
             return
         }
 
-        const successCount = await uploadStore.pauseUpload(activeTasks.map(task => task.id))
-
-        utilsStore.showMessage(`已暂停 ${successCount} 个任务`, 'success')
+        const result = await uploadStore.pauseUpload(activeTasks.map(task => task.id))
+        showBatchResultMessage('暂停', result)
     } catch (error) {
         console.error('暂停所有任务失败:', error)
         utilsStore.showMessage(`暂停所有任务失败: ${error}`, 'error')
@@ -261,8 +302,14 @@ const pauseAll = async () => {
 
 const pauseUpload = async (taskId: string) => {
     try {
-        await uploadStore.pauseUpload(taskId)
-        utilsStore.showMessage('任务已暂停', 'success')
+        const result = await uploadStore.pauseUpload(taskId)
+        if (result.successCount > 0) {
+            utilsStore.showMessage('任务已暂停', 'success')
+            return
+        }
+
+        const failedName = formatFailedFiles(result.failedTaskIds)
+        utilsStore.showMessage(`暂停失败：${failedName}`, 'warning')
     } catch (error) {
         console.error('暂停上传失败:', error)
         utilsStore.showMessage(`暂停上传失败: ${error}`, 'error')
@@ -288,9 +335,8 @@ const cancelAll = async () => {
             }
         )
 
-        const successCount = await uploadStore.cancelUpload(activeTasks.map(task => task.id))
-
-        utilsStore.showMessage(`已取消 ${successCount} 个任务`, 'success')
+        const result = await uploadStore.cancelUpload(activeTasks.map(task => task.id))
+        showBatchResultMessage('取消', result)
     } catch (error) {
         // 如果用户取消了确认框，不显示错误消息
         if (error !== 'cancel') {
@@ -317,8 +363,14 @@ const cancelUpload = async (taskId: string) => {
             }
         )
 
-        await uploadStore.cancelUpload(taskId)
-        utilsStore.showMessage('任务已取消', 'success')
+        const result = await uploadStore.cancelUpload(taskId)
+        if (result.successCount > 0) {
+            utilsStore.showMessage('任务已取消', 'success')
+            return
+        }
+
+        const failedName = formatFailedFiles(result.failedTaskIds)
+        utilsStore.showMessage(`取消失败：${failedName}`, 'warning')
     } catch (error) {
         // 如果用户取消了确认框，不显示错误消息
         if (error !== 'cancel') {
@@ -330,8 +382,14 @@ const cancelUpload = async (taskId: string) => {
 
 const retryUpload = async (taskId: string) => {
     try {
-        await uploadStore.retryUpload(taskId)
-        utilsStore.showMessage('任务已重试', 'success')
+        const result = await uploadStore.retryUpload(taskId)
+        if (result.successCount > 0) {
+            utilsStore.showMessage('任务已重试', 'success')
+            return
+        }
+
+        const failedName = formatFailedFiles(result.failedTaskIds)
+        utilsStore.showMessage(`重试失败：${failedName}`, 'warning')
     } catch (error) {
         console.error('重试上传失败:', error)
         utilsStore.showMessage(`重试上传失败: ${error}`, 'error')

@@ -851,6 +851,12 @@
                                             type="primary"
                                             size="large"
                                             :loading="submitting"
+                                            :class="{
+                                                'multi-submit-main-btn':
+                                                    isMultiSubmitMode &&
+                                                    !currentTemplate?.aid &&
+                                                    !getCurrentAutoSubmitting
+                                            }"
                                             @click="handleMainSubmit"
                                             :disabled="
                                                 templateLoading ||
@@ -3693,8 +3699,8 @@ const autoStartWaitingTasks = async () => {
 
     if (pendingTasks.length > 0) {
         try {
-            const startedCount = await uploadStore.startUpload(pendingTasks.map(task => task.id))
-            console.log(`自动开始任务: ${startedCount} 个`)
+            const startResult = await uploadStore.startUpload(pendingTasks.map(task => task.id))
+            console.log(`自动开始任务: ${startResult.successCount} 个`)
         } catch (error) {
             console.error('自动开始任务失败:', error)
         }
@@ -4657,6 +4663,17 @@ const checkUpdate = async () => {
 
 .upload-actions .el-button {
     min-width: 140px;
+}
+
+.multi-submit-main-btn {
+    --el-button-bg-color: #eebe77;
+    --el-button-border-color: #eebe77;
+    --el-button-hover-bg-color: #f2c98b;
+    --el-button-hover-border-color: #f2c98b;
+    --el-button-active-bg-color: #e4b873;
+    --el-button-active-border-color: #e4b873;
+    --el-button-disabled-bg-color: #f6d8a7;
+    --el-button-disabled-border-color: #f6d8a7;
 }
 
 .upload-action-main-row {
