@@ -157,7 +157,7 @@ pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, AppErr
         .remove_user_config(uid)
         .map_err(|e| AppError::Config(format!("清除用户配置失败: {e}")))?;
     updated
-        .save_to_file(&crate::utils::get_config_json_path().map_err(AppError::Internal)?)
+        .save_logout_to_file(&crate::utils::get_config_json_path().map_err(AppError::Internal)?)
         .map_err(|e| AppError::Config(format!("保存退出登录状态失败: {e}")))?;
     *config = updated;
     clients.remove(&uid);

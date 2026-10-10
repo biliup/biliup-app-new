@@ -238,6 +238,14 @@ impl ConfigRoot {
         atomic_write(path, &json_content)
     }
 
+    pub fn save_logout_to_file(&mut self, path: &PathBuf) -> Result<()> {
+        self.normalize_template_metadata();
+        let content = serde_json::to_vec_pretty(self)?;
+        // 先清除备份中的登录信息，避免主配置恢复时重新登录已退出的账号。
+        atomic_write(&path.with_extension("json.bak"), &content)?;
+        atomic_write(path, &content)
+    }
+
     pub fn normalize_template_metadata(&mut self) {
         self.normalize_user_order();
         for user_config in self.config.values_mut() {
@@ -682,6 +690,38 @@ mod persistence_tests {
         assert_eq!(ConfigRoot::from_file(&path).unwrap().max_curr, 4);
         fs::write(&path, "{").unwrap();
         assert_eq!(ConfigRoot::from_file(&path).unwrap().max_curr, 1);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn logout_backup_does_not_restore_removed_account() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("biliup-logout-test-{}-{nonce}", std::process::id()));
+        let path = dir.join("config.json");
+        let cookie: LoginInfo = serde_json::from_value(serde_json::json!({
+            "cookie_info": {"cookies": [{"name": "SESSDATA", "value": "test-secret"}]},
+            "sso": [],
+            "token_info": {"access_token": "", "expires_in": 0, "mid": 1, "refresh_token": ""},
+            "platform": null
+        }))
+        .unwrap();
+        let mut config = ConfigRoot::default();
+        config.new_user_config(1, "测试账号".into(), cookie.clone(), None);
+        config.new_user_config(2, "保留账号".into(), cookie, None);
+        config.save_to_file(&path).unwrap();
+        config.remove_user_config(1).unwrap();
+        config.save_logout_to_file(&path).unwrap();
+        let current = ConfigRoot::from_file(&path).unwrap();
+        assert!(!current.config.contains_key(&1));
+        assert!(current.config.contains_key(&2));
+        fs::write(&path, "{").unwrap();
+        let recovered = ConfigRoot::from_file(&path).unwrap();
+        assert!(!recovered.config.contains_key(&1));
+        assert!(recovered.config.contains_key(&2));
         fs::remove_dir_all(dir).unwrap();
     }
 
