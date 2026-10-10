@@ -78,6 +78,10 @@ impl UploadTask {
         self.started_at = Some(chrono::Utc::now().timestamp_millis() as usize);
     }
 
+    pub fn resume(&mut self) {
+        self.status = TaskStatus::Running;
+    }
+
     pub fn pending(&mut self) {
         self.status = TaskStatus::Pending;
     }

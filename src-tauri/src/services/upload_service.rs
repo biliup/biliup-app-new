@@ -14,13 +14,12 @@ use futures::Stream;
 use futures::StreamExt;
 use indexmap::IndexMap;
 use reqwest::Body;
-use tauri::async_runtime::block_on;
 use tokio::{
     select,
     sync::{Mutex, mpsc},
     task,
 };
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, warn};
 
 // define a macro :  task_title!(task_mutex)
 macro_rules! task_title {
@@ -100,94 +99,91 @@ impl UploadService {
     }
 
     pub async fn get_upload_queue(&self) -> Result<Vec<UploadTask>> {
+        let task_mutexes: Vec<_> = self.upload_queue.lock().await.values().cloned().collect();
         let mut tasks = Vec::new();
-        // trace!("获取上传队列");
-        for task_mutex in self.upload_queue.lock().await.values() {
-            let task = task_mutex.lock().await;
-            let cloned = task.clone();
-            let should_cleanup = task.is_completed() || task.is_failed();
-            let task_id = task.id.clone();
-            let title = task.title();
-            drop(task);
-
-            tasks.push(cloned);
-            if should_cleanup {
-                if self.upload_handle.lock().await.remove(&task_id).is_some() {
-                    info!("清理后台任务: {}", title)
-                }
-            }
+        for task_mutex in task_mutexes {
+            tasks.push(task_mutex.lock().await.clone());
         }
         Ok(tasks)
     }
 
-    /// 上传视频
+    async fn stop_handle(&self, task_id: &str) {
+        let handle = self.upload_handle.lock().await.remove(task_id);
+        if let Some(handle) = handle {
+            handle.abort();
+            let _ = handle.await;
+        }
+    }
+
     pub async fn start_upload(&self, task_id: &str) -> Result<bool> {
-        info!("尝试开始任务: {}", task_id);
-        if let Some(task_mutex) = self.upload_queue.lock().await.get(task_id) {
-            let mut task = task_mutex.lock().await;
-            if task.is_running() || task.is_completed() {
-                return Ok(false);
-            }
-            if task.is_paused() || task.is_failed() || task.is_waiting() {
-                info!("任务切换至等待状态: {}", task.title());
-                task.pending();
-                return Ok(true);
-            }
-            Ok(false)
-        } else {
-            Err(anyhow::anyhow!("任务ID不存在: {}", task_id))
+        let queue = self.upload_queue.lock().await;
+        let task_mutex = queue
+            .get(task_id)
+            .ok_or_else(|| anyhow::anyhow!("任务ID不存在: {}", task_id))?;
+        let failed = task_mutex.lock().await.is_failed();
+        if failed {
+            self.stop_handle(task_id).await;
         }
+        let mut task = task_mutex.lock().await;
+        if task.is_failed() {
+            task.cancel();
+            task.retry();
+            return Ok(true);
+        }
+        if task.is_paused() || task.is_waiting() {
+            task.pending();
+            return Ok(true);
+        }
+        Ok(false)
     }
 
-    /// 暂停上传
     pub async fn pause_upload(&self, task_id: &str) -> Result<bool> {
-        if let Some(task_mutex) = self.upload_queue.lock().await.get(task_id) {
-            info!("任务已暂停: {}", task_title!(task_mutex));
-            task_mutex.lock().await.pause();
-            Ok(true)
-        } else {
-            Err(anyhow::anyhow!("任务ID不存在: {}", task_id))
+        let queue = self.upload_queue.lock().await;
+        let task_mutex = queue
+            .get(task_id)
+            .ok_or_else(|| anyhow::anyhow!("任务ID不存在: {}", task_id))?;
+        let mut task = task_mutex.lock().await;
+        if !(task.is_running() || task.is_pending()) {
+            return Ok(false);
         }
+        task.pause();
+        Ok(true)
     }
 
-    /// 取消上传
     pub async fn cancel_upload(&self, task_id: &str) -> Result<bool> {
-        if let Some(task_mutex) = self.upload_queue.lock().await.shift_remove(task_id) {
-            task_mutex.lock().await.cancel();
-
-            let handle = self.upload_handle.lock().await.remove(task_id);
-            if let Some(handle) = handle {
-                handle.abort();
-                info!("结束后台任务: {}", task_title!(task_mutex));
-            }
-            info!("取消任务成功: {}", task_title!(task_mutex));
-            Ok(true)
-        } else {
-            Err(anyhow::anyhow!("任务ID不存在: {}", task_id))
-        }
+        let mut queue = self.upload_queue.lock().await;
+        let task_mutex = queue
+            .shift_remove(task_id)
+            .ok_or_else(|| anyhow::anyhow!("任务ID不存在: {}", task_id))?;
+        self.stop_handle(task_id).await;
+        task_mutex.lock().await.cancel();
+        Ok(true)
     }
 
     pub async fn retry_upload(&self, task_id: &str) -> Result<bool> {
-        if let Some(task_mutex) = self.upload_queue.lock().await.get(task_id) {
-            task_mutex.lock().await.cancel();
-
-            let handle = self.upload_handle.lock().await.remove(task_id);
-            if let Some(handle) = handle {
-                handle.abort();
-                info!("结束后台任务: {}", task_title!(task_mutex));
-            }
-            task_mutex.lock().await.retry();
-            info!("任务重试: {}", task_title!(task_mutex));
-            Ok(true)
-        } else {
-            Err(anyhow::anyhow!("任务ID不存在: {}", task_id))
+        let queue = self.upload_queue.lock().await;
+        let task_mutex = queue
+            .get(task_id)
+            .ok_or_else(|| anyhow::anyhow!("任务ID不存在: {}", task_id))?;
+        if task_mutex.lock().await.is_completed() {
+            return Ok(false);
         }
+        self.stop_handle(task_id).await;
+        let mut task = task_mutex.lock().await;
+        task.cancel();
+        task.retry();
+        Ok(true)
     }
 }
 
 impl Drop for UploadService {
     fn drop(&mut self) {
-        let _ = block_on(self.stop_tx.send(()));
+        let _ = self.stop_tx.try_send(());
+        if let Ok(mut handles) = self.upload_handle.try_lock() {
+            for (_, handle) in handles.drain() {
+                handle.abort();
+            }
+        }
         info!("上传服务已停止");
     }
 }
@@ -220,54 +216,43 @@ async fn upload_background_interval(
     handle: Arc<Mutex<HashMap<String, task::JoinHandle<()>>>>,
     max_running: Arc<Mutex<u32>>,
 ) {
-    let current_running = handle.lock().await.len() as u32;
-    let mut remain = max_running.lock().await.saturating_sub(current_running);
-    if remain > 0 {
-        // debug!(
-        //     "当前运行任务数: {}, 最大并行数: {}",
-        //     current_running,
-        //     max_running.lock().await
-        // );
-    } else {
-        trace!("当前运行任务数已达最大并行数: {}", current_running);
-        return;
+    let queue = queue.lock().await;
+    handle
+        .lock()
+        .await
+        .retain(|_, worker| !worker.is_finished());
+    let mut current_running = 0;
+    for task_mutex in queue.values() {
+        if task_mutex.lock().await.is_running() {
+            current_running += 1;
+        }
     }
-
-    let task_mutexes: Vec<_> = queue.lock().await.values().cloned().collect();
-    for task_mutex in task_mutexes {
-        // let task_guard = task_mutex.lock().await;
-        // trace!(
-        //     "任务：{}, 状态: {:?}",
-        //     task_guard.title(),
-        //     task_guard.status
-        // );
-        // drop(task_guard); // 显式释放锁
-
-        let (is_pending, task_id) = {
-            let task = task_mutex.lock().await;
-            (task.is_pending(), task.id.clone())
-        };
-        if is_pending && remain > 0 {
-            if handle.lock().await.get(&task_id).is_some() {
-                continue;
-            }
-            let task_mutex_clone = Arc::clone(&task_mutex);
-            handle.lock().await.insert(
-                task_id,
+    let mut remain = max_running.lock().await.saturating_sub(current_running);
+    for task_mutex in queue.values() {
+        if remain == 0 {
+            break;
+        }
+        let mut task = task_mutex.lock().await;
+        if !task.is_pending() {
+            continue;
+        }
+        let mut handles = handle.lock().await;
+        if handles.contains_key(&task.id) {
+            task.resume();
+        } else {
+            task.start();
+            let task_mutex_clone = Arc::clone(task_mutex);
+            handles.insert(
+                task.id.clone(),
                 task::spawn(async move {
-                    let task = Arc::clone(&task_mutex_clone);
-                    if let Err(e) = upload_impl(task).await {
+                    if let Err(e) = upload_impl(Arc::clone(&task_mutex_clone)).await {
                         error!("上传任务失败: {}", e);
                         task_mutex_clone.lock().await.fail(e.to_string());
                     }
                 }),
             );
-            remain -= 1;
         }
-
-        if remain == 0 {
-            break;
-        }
+        remain -= 1;
     }
 }
 
@@ -322,7 +307,6 @@ impl From<ChunkedBuffer> for Body {
 
 async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
     info!("开始上传任务: {}", task_title!(task_mutex));
-    task_mutex.lock().await.start();
     let uid = task_mutex.lock().await.user.uid;
 
     let (line, _proxy, limit) = {
@@ -410,7 +394,10 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
 
     let mut paused = false;
     loop {
-        while task_mutex.lock().await.is_paused() {
+        while {
+            let task = task_mutex.lock().await;
+            task.is_paused() || task.is_pending()
+        } {
             paused = true;
             tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
@@ -422,7 +409,6 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
                 return Ok(());
             }
             info!("任务已恢复: {}", task_title!(task_mutex));
-            task_mutex.lock().await.start();
         }
 
         select! {
@@ -453,6 +439,77 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
                     }
                 }
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn task(id: &str) -> UploadTask {
+        let video: VideoInfo = serde_json::from_value(serde_json::json!({"id": id})).unwrap();
+        UploadTask::new(
+            &User::new(1, "测试账号".into(), String::new(), false),
+            "测试模板",
+            &video,
+            Arc::new(Mutex::new(ConfigRoot::default())),
+            Arc::new(Mutex::new(HashMap::new())),
+        )
+    }
+
+    #[tokio::test]
+    async fn restart_failed_task_without_querying_queue() {
+        let service = UploadService::new(0);
+        let mut failed = task("failed");
+        failed.fail("测试错误".into());
+        service
+            .upload_queue
+            .lock()
+            .await
+            .insert("failed".into(), Arc::new(Mutex::new(failed)));
+        service
+            .upload_handle
+            .lock()
+            .await
+            .insert("failed".into(), tokio::spawn(std::future::pending()));
+        assert!(service.start_upload("failed").await.unwrap());
+        assert!(!service.upload_handle.lock().await.contains_key("failed"));
+        let queue = service.get_upload_queue().await.unwrap();
+        assert!(queue[0].is_pending());
+        assert!(queue[0].error_message.is_none());
+        assert_eq!(queue[0].retry_count, 1);
+    }
+
+    #[tokio::test]
+    async fn paused_worker_releases_slot_and_resume_waits_for_scheduler() {
+        let mut paused = task("paused");
+        paused.pause();
+        let mut pending = task("pending");
+        pending.pending();
+        let paused = Arc::new(Mutex::new(paused));
+        let pending = Arc::new(Mutex::new(pending));
+        let queue = Arc::new(Mutex::new(IndexMap::from([
+            ("paused".into(), Arc::clone(&paused)),
+            ("pending".into(), Arc::clone(&pending)),
+        ])));
+        let handles = Arc::new(Mutex::new(HashMap::from([
+            ("paused".into(), tokio::spawn(std::future::pending())),
+            ("pending".into(), tokio::spawn(std::future::pending())),
+        ])));
+        let maximum = Arc::new(Mutex::new(1));
+        upload_background_interval(
+            Arc::clone(&queue),
+            Arc::clone(&handles),
+            Arc::clone(&maximum),
+        )
+        .await;
+        assert!(pending.lock().await.is_running());
+        paused.lock().await.pending();
+        upload_background_interval(queue, Arc::clone(&handles), maximum).await;
+        assert!(paused.lock().await.is_pending());
+        for (_, handle) in handles.lock().await.drain() {
+            handle.abort();
         }
     }
 }
