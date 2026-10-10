@@ -814,83 +814,98 @@
 
                             <!-- 上传操作区域 -->
                             <div class="upload-actions">
-                                <el-button
-                                    v-if="!separateSubmitting"
-                                    type="primary"
-                                    size="large"
-                                    :loading="submitting"
-                                    @click="submitTemplate"
-                                    :disabled="
-                                        separateSubmitting ||
-                                        templateLoading ||
-                                        !currentForm.videos ||
-                                        currentForm.videos.length === 0 ||
-                                        !currentForm.title ||
-                                        currentForm.title.trim() === ''
-                                    "
-                                >
-                                    <el-icon v-if="!allFilesUploaded && !submitting"
-                                        ><loading
-                                    /></el-icon>
-                                    <el-icon v-else-if="!submitting"><check /></el-icon>
-                                    {{
-                                        !getCurrentAutoSubmitting
-                                            ? currentTemplate?.aid
-                                                ? '编辑稿件'
-                                                : '新增单个稿件'
-                                            : '上传完成后自动提交'
-                                    }}
-                                </el-button>
-                                <div
-                                    v-if="
-                                        currentForm && !currentForm.aid && !getCurrentAutoSubmitting
-                                    "
-                                    class="multi-submit-entry"
-                                >
-                                    <el-button
-                                        type="warning"
-                                        size="large"
-                                        :disabled="
-                                            !separateSubmitting &&
-                                            (submitting ||
+                                <div class="upload-action-main-row">
+                                    <div
+                                        v-if="
+                                            currentForm &&
+                                            !currentForm.aid &&
+                                            !getCurrentAutoSubmitting
+                                        "
+                                        class="submit-mode-column"
+                                    >
+                                        <div class="submit-mode-toggle">
+                                            <span class="submit-mode-label">多稿件模式</span>
+                                            <el-switch
+                                                v-model="isMultiSubmitMode"
+                                                :disabled="
+                                                    templateLoading ||
+                                                    submitting ||
+                                                    separateSubmitting
+                                                "
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="submit-action-column">
+                                        <el-button
+                                            type="primary"
+                                            size="large"
+                                            :loading="submitting"
+                                            @click="handleMainSubmit"
+                                            :disabled="
                                                 templateLoading ||
-                                                !currentForm.videos ||
-                                                currentForm.videos.length === 0)
-                                        "
-                                        @click="
-                                            separateSubmitting
-                                                ? stopSeparateSubmit()
-                                                : submitTemplateAsSeparatePosts()
-                                        "
-                                    >
-                                        {{
-                                            separateSubmitting
-                                                ? '停止多稿件提交'
-                                                : '以多稿件模式分别提交视频'
-                                        }}
-                                    </el-button>
-                                    <el-button
-                                        size="large"
-                                        :disabled="
-                                            templateLoading ||
-                                            separateSubmitting ||
-                                            !currentForm.videos ||
-                                            currentForm.videos.length === 0
-                                        "
-                                        @click="separateCoverManagerVisible = true"
-                                    >
-                                        独立封面 {{ separateCoverCount }}/{{
-                                            currentForm.videos.length
-                                        }}
-                                    </el-button>
-                                    <el-tooltip
-                                        content="使用此功能时，将不再以分p模式提交视频，而是针对每一个视频单独提交一份稿件，稿件名即为当前的‘分p’名，其他内容完全复用当前模板内容，无法进行自定义。每条视频提交成功后会自动从当前视频列表移除。"
-                                        placement="top"
-                                    >
-                                        <el-icon class="multi-submit-help-icon">
-                                            <QuestionFilled />
-                                        </el-icon>
-                                    </el-tooltip>
+                                                (!separateSubmitting &&
+                                                    (!currentForm.videos ||
+                                                        currentForm.videos.length === 0 ||
+                                                        (!isMultiSubmitMode &&
+                                                            (!currentForm.title ||
+                                                                currentForm.title.trim() === ''))))
+                                            "
+                                        >
+                                            <el-icon v-if="!allFilesUploaded && !submitting"
+                                                ><loading
+                                            /></el-icon>
+                                            <el-icon v-else-if="!submitting"><check /></el-icon>
+                                            {{
+                                                separateSubmitting
+                                                    ? '停止多稿件提交'
+                                                    : !getCurrentAutoSubmitting
+                                                      ? isMultiSubmitMode && !currentTemplate?.aid
+                                                          ? '以多稿件模式提交'
+                                                          : currentTemplate?.aid
+                                                            ? '编辑稿件'
+                                                            : '新增单个稿件'
+                                                      : '上传完成后自动提交'
+                                            }}
+                                        </el-button>
+
+                                        <div
+                                            v-if="
+                                                isMultiSubmitMode &&
+                                                currentForm &&
+                                                !currentForm.aid &&
+                                                !getCurrentAutoSubmitting
+                                            "
+                                            class="multi-submit-entry"
+                                        >
+                                            <el-button
+                                                size="small"
+                                                type="info"
+                                                plain
+                                                class="separate-cover-btn"
+                                                :disabled="
+                                                    templateLoading ||
+                                                    separateSubmitting ||
+                                                    !currentForm.videos ||
+                                                    currentForm.videos.length === 0
+                                                "
+                                                @click="separateCoverManagerVisible = true"
+                                            >
+                                                独立封面 {{ separateCoverCount }}/{{
+                                                    currentForm.videos.length
+                                                }}
+                                            </el-button>
+                                            <el-tooltip
+                                                content="使用此功能时，将不再以分p模式提交视频，而是针对每一个视频单独提交一份稿件，稿件名即为当前的‘分p’名，其他内容完全复用当前模板内容，无法进行自定义。每条视频提交成功后会自动从当前视频列表移除。"
+                                                placement="top"
+                                                popper-class="multi-submit-help-tooltip"
+                                            >
+                                                <el-icon class="multi-submit-help-icon">
+                                                    <QuestionFilled />
+                                                </el-icon>
+                                            </el-tooltip>
+                                        </div>
+                                    </div>
                                 </div>
                                 <div class="form-tip" v-if="separateSubmitting">
                                     <div>上传完成数量: {{ separateSubmitUploadedCount }}</div>
@@ -1053,6 +1068,7 @@ const showLoginDialog = ref(false)
 const showGlobalConfigDialog = ref(false)
 const submitStatsDialogVisible = ref(false)
 const separateCoverManagerVisible = ref(false)
+const isMultiSubmitMode = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
@@ -1821,6 +1837,20 @@ const submitTemplateAsSeparatePosts = async (options?: {
         clearSeparateSubmitStateByKey(templateKey)
     }
 }
+const handleMainSubmit = async () => {
+    if (separateSubmitting.value) {
+        stopSeparateSubmit()
+        return
+    }
+
+    if (isMultiSubmitMode.value && !currentTemplate.value?.aid) {
+        await submitTemplateAsSeparatePosts()
+        return
+    }
+
+    await submitTemplate()
+}
+
 const lastSubmit = ref<string>('')
 
 // 卡片折叠状态
@@ -4598,9 +4628,10 @@ const checkUpdate = async () => {
 /* 上传操作区域 */
 .upload-actions {
     display: flex;
+    flex-direction: column;
     justify-content: center;
     align-items: center;
-    gap: 16px;
+    gap: 12px;
     padding: 20px 0;
     margin-top: 20px;
     border-top: 1px solid #e4e7ed;
@@ -4610,10 +4641,55 @@ const checkUpdate = async () => {
     min-width: 140px;
 }
 
-.multi-submit-entry {
+.upload-action-main-row {
+    display: grid;
+    grid-template-columns: 170px minmax(0, 1fr);
+    align-items: center;
+    column-gap: 20px;
+    width: min(760px, 100%);
+}
+
+.submit-mode-column {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.submit-action-column {
     display: inline-flex;
     align-items: center;
     gap: 10px;
+    flex-wrap: wrap;
+    border-left: 2px solid #d8dee9;
+    padding: 6px 0 6px 20px;
+    background: #f8fbff;
+    border-radius: 8px;
+}
+
+.submit-mode-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.submit-mode-label {
+    color: #606266;
+    font-size: 13px;
+}
+
+.multi-submit-entry {
+    display: inline-flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+}
+
+.multi-submit-entry .separate-cover-btn {
+    min-width: 98px;
+    padding: 7px 6px;
+    font-size: 13px;
 }
 
 .multi-submit-help-icon {
@@ -4625,6 +4701,28 @@ const checkUpdate = async () => {
 
 .multi-submit-help-icon:hover {
     color: #606266;
+}
+
+:deep(.multi-submit-help-tooltip) {
+    max-width: 200px;
+}
+
+@media (max-width: 768px) {
+    .upload-action-main-row {
+        grid-template-columns: 1fr;
+        row-gap: 10px;
+    }
+
+    .submit-mode-column {
+        justify-content: center;
+    }
+
+    .submit-action-column {
+        border-left: none;
+        padding: 0;
+        background: transparent;
+        justify-content: center;
+    }
 }
 
 /* 拖拽覆盖层样式 */
