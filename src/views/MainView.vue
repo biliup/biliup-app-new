@@ -1414,20 +1414,23 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
         return
     }
 
-    const isNewSubmission = !template?.aid
-    const configuredSeasonId = Number(template?.season_id || 0)
+    const templateAid = Number(template?.aid || 0)
+    const templateSeasonId = Number(template?.season_id || 0)
+    const templateSectionId = Number(template?.section_id || 0)
+    const isNewSubmission = templateAid <= 0
+    const configuredSeasonId = templateSeasonId
     // 新增稿件未设置合集时，不触发合集提交
     if (isNewSubmission && configuredSeasonId <= 0) {
         return
     }
 
     try {
-        const old_season_id = await utilsStore.getVideoSeason(uid, resp.aid)
+        const old_season_id = Number(await utilsStore.getVideoSeason(uid, resp.aid))
         let add = old_season_id && old_season_id !== 0 ? false : true
 
-        if (template && old_season_id !== template.season_id && template.videos[0]?.cid) {
-            const new_season_id = template.season_id || 0
-            const new_section_id = template.section_id || 0
+        if (template && old_season_id !== templateSeasonId && template.videos[0]?.cid) {
+            const new_season_id = templateSeasonId
+            const new_section_id = templateSectionId
             await utilsStore.switchSeason(
                 uid,
                 resp.aid,
@@ -1439,8 +1442,8 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
             )
 
             const season_title =
-                utilsStore.seasonlist.find((s: any) => s.season_id === template.season_id)?.title ||
-                template.season_id
+                utilsStore.seasonlist.find((s: any) => Number(s.season_id) === templateSeasonId)
+                    ?.title || templateSeasonId
             utilsStore.showMessage(`视频${resp.bvid}加入合集${season_title}`, 'success')
             console.log(`视频${resp.bvid}加入合集${season_title}`, 'success')
         }

@@ -183,7 +183,7 @@ export const useUtilsStore = defineStore('template', () => {
     }
 
     const getVideoSeason = async (uid: number, aid: number) => {
-        if (!hasSeason) {
+        if (!hasSeason.value) {
             return 0
         }
 
@@ -205,7 +205,7 @@ export const useUtilsStore = defineStore('template', () => {
         title: string,
         add: boolean
     ) => {
-        if (!hasSeason) {
+        if (!hasSeason.value) {
             return
         }
 
