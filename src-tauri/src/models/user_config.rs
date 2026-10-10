@@ -64,6 +64,8 @@ pub struct VideoInfo {
     #[serde(default)]
     pub desc: String,
     #[serde(default)]
+    pub cover: String,
+    #[serde(default)]
     pub path: String,
     #[serde(default)]
     pub finished_at: u64,

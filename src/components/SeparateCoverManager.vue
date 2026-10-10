@@ -5,9 +5,7 @@
         size="560px"
         @update:model-value="emit('update:modelValue', $event)"
     >
-        <div class="cover-manager-tip">
-            独立封面仅用于当前多稿件提交，不会随模板保存；未单独设置时，将沿用基本信息中的公共封面。
-        </div>
+        <div class="cover-manager-tip">未单独设置时，将沿用基本信息中的公共封面。</div>
 
         <el-empty v-if="!videos.length" description="请先添加视频" />
 

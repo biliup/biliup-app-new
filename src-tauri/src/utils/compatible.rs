@@ -148,6 +148,7 @@ impl CompatibilityConverter {
                             cid: 0,
                             filename: v.filename,
                             desc: v.desc,
+                            cover: String::new(),
                             path: String::new(), // 旧版配置没有path字段，留空
                             finished_at: 0,      // 旧版配置没有finished_at字段，默认0
                             encoding_status: 0,  // 旧版配置没有encoding_status字段，默认0

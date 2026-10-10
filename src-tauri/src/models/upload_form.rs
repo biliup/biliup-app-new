@@ -189,7 +189,17 @@ impl TemplateConfig {
                 lan: String::new(), // 默认语言
             },
             tag: self.tag,
-            videos: self.videos.into_iter().map(|v| json!(v)).collect(),
+            videos: self
+                .videos
+                .into_iter()
+                .map(|v| {
+                    let mut value = json!(v);
+                    if let Some(obj) = value.as_object_mut() {
+                        obj.remove("cover");
+                    }
+                    value
+                })
+                .collect(),
             dtime: self.dtime,
             open_subtitle: self.open_subtitle,
             interactive: self.interactive,

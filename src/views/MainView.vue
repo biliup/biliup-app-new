@@ -2495,7 +2495,7 @@ const hasUnsavedChanges = (
         const currentVideo = currentVideos[i]
         const baseVideo = baseVideos[i]
 
-        const videoFieldsToCompare = ['title', 'filename', 'desc', 'path', 'cid']
+        const videoFieldsToCompare = ['title', 'filename', 'desc', 'path', 'cid', 'cover']
         for (const field of videoFieldsToCompare) {
             if (
                 stableStringify((currentVideo as any)[field]) !==
@@ -4680,7 +4680,6 @@ const checkUpdate = async () => {
     flex-wrap: wrap;
     border-left: 2px solid #d8dee9;
     padding: 6px 0 6px 20px;
-    background: #f8fbff;
     border-radius: 8px;
 }
 
