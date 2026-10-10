@@ -71,7 +71,7 @@ pub struct VideoInfo {
     #[serde(default)]
     pub finished_at: u64,
     #[serde(default)]
-    pub encoding_status: i64,
+    pub encoding_status: Option<i64>,
     #[serde(default)]
     pub status_desc: String,
 }

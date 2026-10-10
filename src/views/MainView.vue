@@ -974,12 +974,7 @@
             :videos="currentForm?.videos || []"
             :user="selectedUser"
             :template-aid="currentTemplate?.aid"
-            @reload-template="
-                () =>
-                    selectedUser &&
-                    currentTemplate?.aid &&
-                    reloadTemplateFromAV(selectedUser.uid, currentTemplate.aid)
-            "
+            :reload-status="refreshVideoEncodingStatus"
         />
 
         <SubmitStatsPage
@@ -3196,15 +3191,15 @@ const getNewTemplateFromAv = async (userUid: number, aid: number) => {
 const reloadTemplateFromAV = async (userUid: number, aid: number) => {
     // 如果正在加载模板，禁止重新加载
     if (templateLoading.value) {
-        return
+        return false
     }
 
     if (!selectedUser.value || selectedUser.value.uid !== userUid) {
-        return
+        return false
     }
 
     if (!currentForm.value || currentForm.value.aid !== aid) {
-        return
+        return false
     }
 
     templateLoading.value = true
@@ -3212,6 +3207,7 @@ const reloadTemplateFromAV = async (userUid: number, aid: number) => {
         const newTemplate = await getNewTemplateFromAv(userUid, aid)
         currentForm.value = newTemplate
         utilsStore.showMessage('模板数据已刷新', 'success')
+        return true
     } catch (error) {
         console.error('刷新失败: ', error)
         utilsStore.showMessage(`刷新失败: ${error}`, 'error')
@@ -3995,6 +3991,13 @@ const exportLogs = async () => {
     } catch (error) {
         console.error('导出日志失败:', error)
     }
+}
+
+const refreshVideoEncodingStatus = async () => {
+    const uid = selectedUser.value?.uid
+    const aid = currentTemplate.value?.aid
+    if (!uid || !aid) return false
+    return reloadTemplateFromAV(uid, aid)
 }
 
 // 检查视频转码状态

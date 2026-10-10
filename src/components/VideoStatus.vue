@@ -114,7 +114,7 @@ interface VideoFile {
 interface VideoStatusItem {
     id: string
     filename: string
-    statusCode: number
+    statusCode: number | null
     statusText: string
     statusDesc?: string
 }
@@ -124,11 +124,11 @@ const props = defineProps<{
     videos: VideoFile[]
     user?: any
     templateAid?: number
+    reloadStatus: () => Promise<boolean>
 }>()
 
 const emit = defineEmits<{
     'update:modelValue': [value: boolean]
-    'reload-template': []
 }>()
 
 const dialogVisible = computed({
@@ -155,8 +155,10 @@ const getFilename = (video: VideoFile): string => {
 }
 
 // 获取状态文本
-const getStatusText = (statusCode: number): string => {
+const getStatusText = (statusCode: number | null): string => {
     switch (statusCode) {
+        case null:
+            return '状态未知'
         case ENCODING_STATUS.SUCCESS:
             return '转码成功'
         case ENCODING_STATUS.PROCESSING:
@@ -171,15 +173,17 @@ const videoStatusList = computed<VideoStatusItem[]>(() => {
     return completedVideos.value.map(video => ({
         id: video.id,
         filename: getFilename(video),
-        statusCode: video.encoding_status ?? ENCODING_STATUS.SUCCESS,
-        statusText: getStatusText(video.encoding_status ?? ENCODING_STATUS.SUCCESS),
+        statusCode: video.encoding_status ?? null,
+        statusText: getStatusText(video.encoding_status ?? null),
         statusDesc: video.status_desc
     }))
 })
 
 // 获取状态标签类型
-const getStatusType = (statusCode: number): string => {
+const getStatusType = (statusCode: number | null): string => {
     switch (statusCode) {
+        case null:
+            return 'info'
         case ENCODING_STATUS.SUCCESS:
             return 'success'
         case ENCODING_STATUS.PROCESSING:
@@ -216,21 +220,21 @@ const getErrorDetail = (statusDesc?: string): string => {
 }
 
 // 检查是否为失败状态
-const isFailedStatus = (statusCode: number): boolean => {
-    return statusCode !== ENCODING_STATUS.SUCCESS && statusCode !== ENCODING_STATUS.PROCESSING
+const isFailedStatus = (statusCode: number | null): boolean => {
+    return (
+        statusCode !== null &&
+        statusCode !== ENCODING_STATUS.SUCCESS &&
+        statusCode !== ENCODING_STATUS.PROCESSING
+    )
 }
 
 // 刷新全部状态
 const refreshAllStatus = async () => {
     refreshingAll.value = true
     try {
-        // 触发模板重新加载
-        emit('reload-template')
-
-        // 模拟刷新延迟
-        await new Promise(resolve => setTimeout(resolve, 1500))
-
-        ElMessage.success('视频状态已刷新')
+        const refreshed = await props.reloadStatus()
+        if (refreshed) ElMessage.success('视频状态已刷新')
+        else ElMessage.info('当前无法刷新，请等待模板加载完成后重试')
     } catch (error) {
         ElMessage.error('刷新状态失败')
     } finally {
