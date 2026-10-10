@@ -3705,14 +3705,15 @@ const createUpload = async () => {
 // 处理文件夹监控添加视频事件
 const handleAddVideosToForm = async (
     newVideos: any[],
-    done: (accepted: string[]) => void,
+    done: (accepted: string[], retry: boolean) => void,
     isActive: () => boolean
 ) => {
     const accepted: string[] = []
     if (templateLoading.value || !isActive()) {
-        done(accepted)
+        done(accepted, true)
         return
     }
+    let retry = false
     templateLoading.value = true
     try {
         for (const videoPath of newVideos) {
@@ -3720,12 +3721,13 @@ const handleAddVideosToForm = async (
             try {
                 if (await addVideoToCurrentForm(videoPath)) accepted.push(videoPath)
             } catch (error) {
+                retry = true
                 console.error(`添加视频失败: ${videoPath}`, error)
             }
         }
     } finally {
         templateLoading.value = false
-        done(accepted)
+        done(accepted, retry)
     }
 }
 
