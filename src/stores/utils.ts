@@ -4,6 +4,8 @@ import { invoke } from '@tauri-apps/api/core'
 import { ElMessage } from 'element-plus'
 import type { MentionUserGroup } from '../types/mention'
 
+const originalConsoleError = console.error.bind(console)
+
 export const useUtilsStore = defineStore('template', () => {
     const archieve_pre = ref<any>(null)
     const topiclist = ref<any[]>([])
@@ -252,7 +254,7 @@ export const useUtilsStore = defineStore('template', () => {
                 messages: messages.map(msg => (typeof msg === 'string' ? msg : JSON.stringify(msg)))
             })
         } catch (error) {
-            console.error('日志转发失败:', error)
+            originalConsoleError('日志转发失败:', error)
         }
     }
 

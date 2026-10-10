@@ -2340,12 +2340,17 @@ watch(
 )
 
 let keyboardCleanup: (() => void) | null = null
+let consoleCleanups: Array<() => void> = []
 
 const forwardConsole = (fnName: keyof Console, logger: (level: string, ...args: any[]) => void) => {
     const original = console[fnName] as (...args: any[]) => void
-    ;(console as any)[fnName] = (...args: any[]) => {
+    const forwarded = (...args: any[]) => {
         original(...args)
         logger(fnName as string, ...args)
+    }
+    ;(console as any)[fnName] = forwarded
+    return () => {
+        if (console[fnName] === forwarded) (console as any)[fnName] = original
     }
 }
 
@@ -2355,9 +2360,11 @@ onMounted(async () => {
     await setupDragAndDrop()
     keyboardCleanup = await setupKeyboardShortcuts()
 
-    forwardConsole('log', utilsStore.log)
-    forwardConsole('error', utilsStore.log)
-    forwardConsole('warn', utilsStore.log)
+    consoleCleanups = [
+        forwardConsole('log', utilsStore.log),
+        forwardConsole('error', utilsStore.log),
+        forwardConsole('warn', utilsStore.log)
+    ]
 
     // 禁用右键菜单刷新
     document.addEventListener('contextmenu', (event: MouseEvent) => {
@@ -2367,6 +2374,8 @@ onMounted(async () => {
 
 // 在组件卸载时清理
 onUnmounted(() => {
+    consoleCleanups.forEach(cleanup => cleanup())
+    consoleCleanups = []
     if (keyboardCleanup) {
         keyboardCleanup()
     }
