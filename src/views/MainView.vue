@@ -1084,7 +1084,6 @@ const showLoginDialog = ref(false)
 const showGlobalConfigDialog = ref(false)
 const submitStatsDialogVisible = ref(false)
 const separateCoverManagerVisible = ref(false)
-const isMultiSubmitMode = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
 const submitting = ref(false)
@@ -1106,6 +1105,7 @@ const autoSubmitProcessingKeys = ref<Set<string>>(new Set())
 const separateSubmittingRecord = ref<Record<string, boolean>>({})
 const separateSubmitProcessingKeys = ref<Set<string>>(new Set())
 const separateSubmitCancelledKeys = ref<Set<string>>(new Set())
+const multiSubmitModeRecord = ref<Record<string, boolean>>({})
 
 interface SeparateSubmitState {
     uid: number
@@ -1316,6 +1316,47 @@ const setAutoSubmitting = (uid: number, templateName: string, status: boolean) =
         delete autoSubmittingRecord.value[key]
     }
 }
+
+const setMultiSubmitModeForTemplate = (uid: number, templateName: string, status: boolean) => {
+    const key = getTemplateKey(uid, templateName)
+    if (status) {
+        multiSubmitModeRecord.value[key] = true
+    } else {
+        delete multiSubmitModeRecord.value[key]
+    }
+}
+
+const moveMultiSubmitModeTemplateKey = (uid: number, oldName: string, newName: string) => {
+    const oldKey = getTemplateKey(uid, oldName)
+    const newKey = getTemplateKey(uid, newName)
+    if (multiSubmitModeRecord.value[oldKey]) {
+        multiSubmitModeRecord.value[newKey] = true
+        delete multiSubmitModeRecord.value[oldKey]
+    }
+}
+
+const clearMultiSubmitModeForTemplate = (uid: number, templateName: string) => {
+    const key = getTemplateKey(uid, templateName)
+    delete multiSubmitModeRecord.value[key]
+}
+
+const isMultiSubmitMode = computed({
+    get() {
+        if (!selectedUser.value || !currentTemplateName.value) {
+            return false
+        }
+
+        const key = getTemplateKey(selectedUser.value.uid, currentTemplateName.value)
+        return Boolean(multiSubmitModeRecord.value[key])
+    },
+    set(value: boolean) {
+        if (!selectedUser.value || !currentTemplateName.value) {
+            return
+        }
+
+        setMultiSubmitModeForTemplate(selectedUser.value.uid, currentTemplateName.value, value)
+    }
+})
 
 const getSubmitUserLabel = (uid: number) => {
     const user = loginUsers.value.find(item => item.uid === uid)
@@ -1837,6 +1878,8 @@ const submitTemplateAsSeparatePosts = async (options?: {
     submitState.successBvids = []
     submitState.failedVideoNames = []
 
+    // 避免同模板下单稿件自动提交与多稿件提交并行
+    setAutoSubmitting(submitUid, submitTemplateName, false)
     separateSubmittingRecord.value[templateKey] = true
     separateSubmitCancelledKeys.value.delete(templateKey)
 
@@ -1865,6 +1908,12 @@ const submitTemplateAsSeparatePosts = async (options?: {
 const handleMainSubmit = async () => {
     if (separateSubmitting.value) {
         stopSeparateSubmit()
+        return
+    }
+
+    // 优先处理当前模板自动提交取消，避免被多稿件分支截走
+    if (getCurrentAutoSubmitting.value) {
+        await submitTemplate()
         return
     }
 
@@ -3274,6 +3323,7 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                 }
 
                 await userConfigStore.renameUserTemplate(user.uid, template.name, trimmedName)
+                moveMultiSubmitModeTemplateKey(user.uid, template.name, trimmedName)
 
                 // 更新当前选择
                 if (
@@ -3304,6 +3354,7 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                 })
 
                 await userConfigStore.removeUserTemplate(user.uid, template_name)
+                clearMultiSubmitModeForTemplate(user.uid, template_name)
 
                 // 如果删除的是当前选中的模板，清空选择
                 if (
@@ -3722,6 +3773,12 @@ const submitTemplate = async () => {
         return
     }
 
+    const templateKey = getTemplateKey(selectedUser.value.uid, currentTemplateName.value)
+    if (!allFilesUploaded.value && separateSubmittingRecord.value[templateKey]) {
+        utilsStore.showMessage('当前模板正在多稿件提交，请先停止后再开启自动提交', 'warning')
+        return
+    }
+
     if (!allFilesUploaded.value) {
         const currentAutoSubmitting = getCurrentAutoSubmitting.value
         if (!currentAutoSubmitting) {
@@ -3802,6 +3859,7 @@ const saveTemplateName = async () => {
             currentTemplateName.value,
             newName
         )
+        moveMultiSubmitModeTemplateKey(selectedUser.value.uid, currentTemplateName.value, newName)
 
         // 更新当前选择
         currentTemplateName.value = newName
