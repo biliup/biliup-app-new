@@ -85,7 +85,7 @@ impl UploadService {
     ) -> Result<bool> {
         let task = UploadTask::new(user, template, video, config_copy, clients);
         if self.upload_queue.lock().await.contains_key(&task.id) {
-            warn!("任务已存在: {:?}", task);
+            warn!("任务已存在: {}", task.title());
             return Ok(false); // 任务已存在
         }
         // 将任务添加到上传队列

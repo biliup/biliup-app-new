@@ -175,8 +175,7 @@ pub async fn send_sms_code(
         .await
         .map_err(|e| AppError::Custom(format!("发送验证码失败: {e}")))?;
 
-    let full_phone = format!("+{country_code}{phone}");
-    info!("请求发送验证码到: {}", full_phone);
+    info!("已请求发送短信验证码");
 
     match result {
         SmsSendState::Sent => Ok(json!({
@@ -269,11 +268,7 @@ pub async fn login_with_sms(
     persist_login_success(config, clients, bilibili, user.clone(), proxy_opt).await;
     auth_service.lock().await.destroy();
 
-    let full_phone = format!("+{country_code}{phone}");
-    info!(
-        "用户：{} - {} 通过短信登录成功，手机号 {}",
-        user.uid, user.username, full_phone
-    );
+    info!("用户：{} - {} 通过短信登录成功", user.uid, user.username);
 
     Ok(LoginResponse {
         success: true,

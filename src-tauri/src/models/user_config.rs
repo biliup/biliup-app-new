@@ -343,8 +343,13 @@ impl ConfigRoot {
         );
         if let Some(user_config) = self.config.get_mut(&uid) {
             info!(
-                "UID {} 用户配置更新: line={:?}, proxy={:?}, limit={}, watermark={}, auto_edit={}",
-                uid, line, proxy, limit, watermark, auto_edit
+                "UID {} 用户配置更新: line={:?}, proxy_enabled={}, limit={}, watermark={}, auto_edit={}",
+                uid,
+                line,
+                proxy.is_some(),
+                limit,
+                watermark,
+                auto_edit
             );
             user_config.line = line;
             user_config.proxy = proxy;
