@@ -1,7 +1,7 @@
 {
   "name": "biliup-app",
   "private": true,
-  "version": "1.2.4",
+  "version": "1.3.0",
   "type": "module",
   "scripts": {
     "test:description": "node --experimental-strip-types --test tests/descriptionClipboard.test.mjs",
