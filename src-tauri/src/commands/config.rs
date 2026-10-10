@@ -19,6 +19,11 @@ fn persist_update<T>(
     Ok(result)
 }
 
+#[tauri::command]
+pub async fn get_startup_error(app: AppHandle) -> Option<String> {
+    app.state::<AppData>().startup_error.clone()
+}
+
 /// 加载配置文件
 #[tauri::command]
 pub async fn load_config(app: AppHandle) -> Result<ConfigRoot, AppError> {

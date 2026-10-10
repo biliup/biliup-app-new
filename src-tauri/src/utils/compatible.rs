@@ -78,8 +78,9 @@ impl CompatibilityConverter {
         let json_path = get_config_json_path()?;
         let yaml_path = get_config_yaml_path()?;
 
-        let json_exists = json_path.exists();
-        let yaml_exists = yaml_path.exists();
+        let json_exists =
+            json_path.try_exists()? || json_path.with_extension("json.bak").try_exists()?;
+        let yaml_exists = yaml_path.try_exists()?;
 
         // 只有当JSON不存在但YAML存在时，才进入兼容模式
         Ok(!json_exists && yaml_exists)

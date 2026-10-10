@@ -49,6 +49,7 @@ impl MyClient {
 }
 
 pub struct AppData {
+    pub startup_error: Option<String>,
     pub config: Arc<Mutex<ConfigRoot>>,
     pub auth_service: Arc<Mutex<AuthService>>,
     pub upload_service: UploadService,
@@ -77,11 +78,12 @@ impl AppData {
 
 async fn startup() -> Result<AppData> {
     let config_path = get_config_json_path()?;
-    let config = if config_path.exists() || config_path.with_extension("json.bak").exists() {
-        ConfigRoot::from_file(&config_path)?
-    } else {
-        ConfigRoot::default()
-    };
+    let config =
+        if config_path.try_exists()? || config_path.with_extension("json.bak").try_exists()? {
+            ConfigRoot::from_file(&config_path)?
+        } else {
+            ConfigRoot::default()
+        };
     let mut clients = HashMap::new();
 
     for user_config in config.config.values() {
@@ -166,6 +168,7 @@ async fn startup() -> Result<AppData> {
 
     let max_curr = config.max_curr;
     Ok(AppData {
+        startup_error: None,
         config: Arc::new(Mutex::new(config)),
         auth_service: Arc::new(Mutex::new(AuthService::new())),
         upload_service: UploadService::new(max_curr),
@@ -179,7 +182,10 @@ fn setup_logs(log_level: &str) -> Result<()> {
         "biliup-{}.log",
         chrono::Utc::now().format("%Y-%m-%d_%H-%M-%S")
     );
-    let file_appender = tracing_appender::rolling::never(log_dir, &log_file);
+    let file_appender = tracing_appender::rolling::RollingFileAppender::builder()
+        .rotation(tracing_appender::rolling::Rotation::NEVER)
+        .filename_prefix(log_file.clone())
+        .build(log_dir)?;
 
     let level = match log_level.to_lowercase().as_str() {
         "trace" => tracing_subscriber::filter::LevelFilter::TRACE,
@@ -240,12 +246,26 @@ pub async fn run() {
     let appdata = match startup().await {
         Ok(data) => data,
         Err(e) => {
-            eprintln!("加载配置失败，已保留原配置文件，请检查配置或从备份恢复: {e}");
-            return;
+            let path = get_config_json_path()
+                .map(|path| path.display().to_string())
+                .unwrap_or_else(|error| format!("无法确定配置路径：{error}"));
+            let config = ConfigRoot {
+                read_only: true,
+                ..ConfigRoot::default()
+            };
+            AppData {
+                startup_error: Some(format!("配置路径：{path}\n加载失败：{e}")),
+                config: Arc::new(Mutex::new(config)),
+                auth_service: Arc::new(Mutex::new(AuthService::new())),
+                upload_service: UploadService::new(0),
+                clients: Arc::new(Mutex::new(HashMap::new())),
+            }
         }
     };
 
-    setup_logs(&appdata.config.lock().await.log_level.clone()).expect("日志初始化失败");
+    if let Err(e) = setup_logs(&appdata.config.lock().await.log_level.clone()) {
+        eprintln!("日志初始化失败：{e}");
+    }
 
     tauri::Builder::default()
         .plugin(tauri_plugin_http::init())
@@ -285,6 +305,7 @@ pub async fn run() {
             retry_upload,
             submit,
             // 配置相关命令
+            get_startup_error,
             load_config,
             save_config,
             save_user_config,

@@ -177,6 +177,8 @@ pub struct UserConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConfigRoot {
+    #[serde(skip)]
+    pub read_only: bool,
     #[serde(default)]
     pub max_curr: u32,
     #[serde(default)]
@@ -223,6 +225,10 @@ impl ConfigRoot {
     }
 
     pub fn save_to_file(&mut self, path: &PathBuf) -> Result<()> {
+        anyhow::ensure!(
+            !self.read_only,
+            "配置恢复模式禁止保存，请修复原配置后重启应用"
+        );
         self.normalize_template_metadata();
         let parent = path
             .parent()
@@ -239,6 +245,10 @@ impl ConfigRoot {
     }
 
     pub fn save_logout_to_file(&mut self, path: &PathBuf) -> Result<()> {
+        anyhow::ensure!(
+            !self.read_only,
+            "配置恢复模式禁止保存，请修复原配置后重启应用"
+        );
         self.normalize_template_metadata();
         let content = serde_json::to_vec_pretty(self)?;
         // 先清除备份中的登录信息，避免主配置恢复时重新登录已退出的账号。
@@ -501,6 +511,7 @@ impl ConfigRoot {
 impl Default for ConfigRoot {
     fn default() -> Self {
         Self {
+            read_only: false,
             max_curr: 1,
             auto_start: true,
             auto_upload: true,
@@ -722,6 +733,35 @@ mod persistence_tests {
         let recovered = ConfigRoot::from_file(&path).unwrap();
         assert!(!recovered.config.contains_key(&1));
         assert!(recovered.config.contains_key(&2));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn recovery_mode_preserves_primary_and_backup() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "biliup-readonly-test-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        let backup = path.with_extension("json.bak");
+        fs::write(&path, "original-primary").unwrap();
+        fs::write(&backup, "original-backup").unwrap();
+        let mut config = ConfigRoot {
+            read_only: true,
+            ..ConfigRoot::default()
+        };
+        assert!(config.save_to_file(&path).is_err());
+        assert!(config.save_logout_to_file(&path).is_err());
+        let mut cloned = config.clone();
+        assert!(cloned.save_to_file(&path).is_err());
+        assert_eq!(fs::read_to_string(&path).unwrap(), "original-primary");
+        assert_eq!(fs::read_to_string(&backup).unwrap(), "original-backup");
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 2);
         fs::remove_dir_all(dir).unwrap();
     }
 
