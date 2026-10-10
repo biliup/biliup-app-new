@@ -12,7 +12,7 @@ use commands::*;
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_window_state::{AppHandleExt, StateFlags};
 use tokio::sync::Mutex;
-use tracing::{error, info};
+use tracing::{info, warn};
 use utils::CompatibilityConverter;
 
 use crate::{
@@ -76,34 +76,70 @@ impl AppData {
 }
 
 async fn startup() -> Result<AppData> {
-    let config = ConfigRoot::from_file(&get_config_json_path()?)?;
+    let config_path = get_config_json_path()?;
+    let config = if config_path.exists() {
+        ConfigRoot::from_file(&config_path)?
+    } else {
+        ConfigRoot::default()
+    };
     let mut clients = HashMap::new();
 
     for user_config in config.config.values() {
-        let bilibili = biliup::credential::bilibili_from_info(
+        let bilibili = match biliup::credential::bilibili_from_info(
             user_config.user.cookie.clone(),
             user_config.proxy.as_deref(),
-        )?;
+        ) {
+            Ok(client) => client,
+            Err(e) => {
+                warn!(
+                    "无法初始化账号 {}，保留本地配置: {}",
+                    user_config.user.uid, e
+                );
+                continue;
+            }
+        };
 
         let fallback_uid = user_config.user.uid;
         let fallback_name = user_config.user.name.clone();
 
-        let myinfo = bilibili.my_info().await?;
+        let myinfo = match tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            bilibili.my_info(),
+        )
+        .await
+        {
+            Ok(Ok(info)) => info,
+            result => {
+                warn!(
+                    "账号 {} 暂时无法验证，保留本地配置: {:?}",
+                    fallback_uid, result
+                );
+                clients.insert(
+                    fallback_uid,
+                    MyClient {
+                        bilibili,
+                        user: User::new(fallback_uid, fallback_name, String::new(), false),
+                    },
+                );
+                continue;
+            }
+        };
         let code = myinfo["code"].as_i64().unwrap_or(-1);
         let uid = myinfo["data"]["mid"].as_u64().unwrap_or(0);
 
         if code == 0 && uid > 0 {
             let username = myinfo["data"]["name"].as_str().unwrap_or("").to_owned();
             let avatar_url = myinfo["data"]["face"].as_str().unwrap_or("").to_string();
-            let avatar = bilibili
-                .client
-                .get(avatar_url)
-                .send()
-                .await
-                .map_err(|e| anyhow::anyhow!("获取用户头像失败: {}", e))?
-                .bytes()
-                .await?;
-            let avatar = encode_base64(&avatar);
+            let avatar = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                let response = bilibili.client.get(avatar_url).send().await?;
+                let bytes = response.error_for_status()?.bytes().await?;
+                Ok::<_, reqwest::Error>(encode_base64(&bytes))
+            })
+            .await;
+            let avatar = match avatar {
+                Ok(Ok(avatar)) => avatar,
+                _ => String::new(),
+            };
 
             clients.insert(
                 uid,
@@ -201,17 +237,13 @@ pub async fn run() {
         info!("无旧biliup配置: {}", e);
     }
 
-    let appdata = startup().await.unwrap_or_else(|e| {
-        error!("加载配置失败: {}", e);
-        let config = ConfigRoot::default();
-        let max_curr = config.max_curr;
-        AppData {
-            config: Arc::new(Mutex::new(config)),
-            auth_service: Arc::new(Mutex::new(AuthService::new())),
-            upload_service: UploadService::new(max_curr),
-            clients: Arc::new(Mutex::new(HashMap::new())),
+    let appdata = match startup().await {
+        Ok(data) => data,
+        Err(e) => {
+            eprintln!("加载配置失败，已保留原配置文件，请检查配置或从备份恢复: {e}");
+            return;
         }
-    });
+    };
 
     setup_logs(&appdata.config.lock().await.log_level.clone()).expect("日志初始化失败");
 
