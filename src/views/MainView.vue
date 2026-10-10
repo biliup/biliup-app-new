@@ -1543,6 +1543,7 @@ const performTemplateSubmit = async (
     template: any,
     options?: { showLoading?: boolean }
 ) => {
+    const snapshot = JSON.parse(JSON.stringify(template))
     const user = loginUsers.value.find(u => u.uid === uid)
     if (!user) throw new Error('用户不存在')
 
@@ -1552,7 +1553,7 @@ const performTemplateSubmit = async (
     }
 
     try {
-        const resp = (await uploadStore.submitTemplate(uid, template)) as any
+        const resp = (await uploadStore.submitTemplate(uid, snapshot)) as any
         const bvid = resp?.bvid ? String(resp.bvid) : '-'
         recordSubmitStats({
             user: user.username,
@@ -1570,17 +1571,17 @@ const performTemplateSubmit = async (
         utilsStore.showMessage(`视频${resp.bvid}提交成功 (模板: ${templateName})`, 'success')
         console.log(`视频${resp.bvid}提交成功 (模板: ${templateName})`, 'success')
 
-        await syncSeasonAfterSubmit(uid, resp, template)
+        await syncSeasonAfterSubmit(uid, resp, snapshot)
 
         await new Promise(resolve => setTimeout(resolve, 500))
 
         try {
-            await handleAutoEditAfterSubmit(uid, templateName, template, resp)
+            await handleAutoEditAfterSubmit(uid, templateName, snapshot, resp)
         } catch (error) {
             utilsStore.showMessage(`${error}`, 'error')
         }
     } catch (error) {
-        const failedVideoNames = collectFailedVideoNames(template)
+        const failedVideoNames = collectFailedVideoNames(snapshot)
         for (const videoName of failedVideoNames) {
             recordSubmitStats({
                 user: user.username,

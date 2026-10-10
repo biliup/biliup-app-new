@@ -303,10 +303,11 @@ export const useUploadStore = defineStore('upload', () => {
 
     // 提交视频
     const submitTemplate = async (uid: number, upload: any, options?: { cancelKey?: string }) => {
+        const snapshot = JSON.parse(JSON.stringify(upload))
         return new Promise<any>((resolve, reject) => {
             submitRequestQueue.push({
                 uid,
-                upload,
+                upload: snapshot,
                 cancelKey: options?.cancelKey,
                 cancelled: false,
                 resolve,
