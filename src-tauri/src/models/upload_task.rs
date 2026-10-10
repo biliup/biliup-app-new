@@ -141,14 +141,9 @@ impl UploadTask {
     }
 
     pub fn has_stalled(&self) -> bool {
-        let timeout = if !self.transferring {
-            180
-        } else if self.progress >= 100.0 && self.total_transmit_bytes >= self.total_size {
-            // 数据流发送完后还需等待分片响应及服务端合并
-            300
-        } else {
-            30
-        };
+        // 上传库未暴露分片响应状态，等待响应期间也可能没有字节进展。
+        // 传输阶段覆盖分片请求的 240 秒超时，避免中止正常的慢请求。
+        let timeout = if self.transferring { 300 } else { 180 };
         self.is_running() && self.last_activity.elapsed().as_secs() >= timeout
     }
 

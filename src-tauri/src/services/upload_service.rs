@@ -544,7 +544,7 @@ mod tests {
         stalled.transferring = true;
         stalled.total_size = 100;
         stalled.total_transmit_bytes = 1;
-        stalled.last_activity -= std::time::Duration::from_secs(31);
+        stalled.last_activity -= std::time::Duration::from_secs(301);
         let stalled = Arc::new(Mutex::new(stalled));
         let queue = Arc::new(Mutex::new(IndexMap::from([(
             "stalled".into(),
@@ -567,11 +567,16 @@ mod tests {
         task.last_activity -= std::time::Duration::from_secs(31);
         assert!(!task.has_stalled());
         task.transferring = true;
+        task.last_activity -= std::time::Duration::from_secs(268);
+        assert!(!task.has_stalled());
         task.total_size = 100;
         task.total_transmit_bytes = 100;
         task.progress = 100.0;
         assert!(!task.has_stalled());
         task.total_transmit_bytes = 1;
+        assert!(!task.has_stalled());
+        task.last_activity -= std::time::Duration::from_secs(2);
+        assert!(task.has_stalled());
         task.pause();
         assert!(!task.has_stalled());
         task.resume();
