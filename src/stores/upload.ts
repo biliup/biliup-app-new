@@ -22,6 +22,7 @@ interface UploadTask {
 
 interface BatchTaskActionResult {
     successCount: number
+    noopTaskIds: string[]
     failedTaskIds: string[]
 }
 

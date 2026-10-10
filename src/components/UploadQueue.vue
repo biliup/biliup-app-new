@@ -161,6 +161,7 @@ const utilsStore = useUtilsStore()
 
 interface BatchActionResult {
     successCount: number
+    noopTaskIds: string[]
     failedTaskIds: string[]
 }
 
@@ -200,23 +201,47 @@ const formatFailedFiles = (taskIds: string[]) => {
 }
 
 const showBatchResultMessage = (actionText: string, result: BatchActionResult) => {
-    const { successCount, failedTaskIds } = result
+    const { successCount, noopTaskIds, failedTaskIds } = result
 
-    if (failedTaskIds.length === 0) {
+    if (failedTaskIds.length === 0 && noopTaskIds.length === 0) {
         utilsStore.showMessage(`已${actionText} ${successCount} 个任务`, 'success')
         return
     }
 
-    const failedFiles = formatFailedFiles(failedTaskIds)
-    if (successCount > 0) {
+    if (failedTaskIds.length === 0 && noopTaskIds.length > 0) {
         utilsStore.showMessage(
-            `已${actionText} ${successCount} 个任务，以下文件操作失败：${failedFiles}`,
-            'warning'
+            `已${actionText} ${successCount} 个任务，${noopTaskIds.length} 个任务状态未变化`,
+            'info'
         )
         return
     }
 
-    utilsStore.showMessage(`以下文件操作失败：${failedFiles}`, 'warning')
+    if (failedTaskIds.length > 0 && noopTaskIds.length === 0) {
+        if (successCount > 0) {
+            const failedFiles = formatFailedFiles(failedTaskIds)
+            utilsStore.showMessage(
+                `已${actionText} ${successCount} 个任务，以下文件操作失败：${failedFiles}`,
+                'warning'
+            )
+            return
+        }
+
+        const failedFiles = formatFailedFiles(failedTaskIds)
+        utilsStore.showMessage(`以下文件操作失败：${failedFiles}`, 'warning')
+        return
+    }
+
+    if (failedTaskIds.length > 0 && noopTaskIds.length > 0) {
+        const failedFiles = formatFailedFiles(failedTaskIds)
+        if (successCount > 0) {
+            utilsStore.showMessage(`已${actionText} ${successCount} 个任务`, 'success')
+        }
+        utilsStore.showMessage(
+            `以下文件操作失败：${failedFiles}；另有 ${noopTaskIds.length} 个任务状态未变化`,
+            'warning'
+        )
+        return
+    }
 }
 
 // 上传队列相关方法
@@ -276,6 +301,11 @@ const startUpload = async (taskId: string) => {
             return
         }
 
+        if (result.noopTaskIds.length > 0 && result.failedTaskIds.length === 0) {
+            utilsStore.showMessage('任务状态未变化', 'info')
+            return
+        }
+
         const failedName = formatFailedFiles(result.failedTaskIds)
         utilsStore.showMessage(`开始失败：${failedName}`, 'warning')
     } catch (error) {
@@ -305,6 +335,11 @@ const pauseUpload = async (taskId: string) => {
         const result = await uploadStore.pauseUpload(taskId)
         if (result.successCount > 0) {
             utilsStore.showMessage('任务已暂停', 'success')
+            return
+        }
+
+        if (result.noopTaskIds.length > 0 && result.failedTaskIds.length === 0) {
+            utilsStore.showMessage('任务状态未变化', 'info')
             return
         }
 
@@ -369,6 +404,11 @@ const cancelUpload = async (taskId: string) => {
             return
         }
 
+        if (result.noopTaskIds.length > 0 && result.failedTaskIds.length === 0) {
+            utilsStore.showMessage('任务状态未变化', 'info')
+            return
+        }
+
         const failedName = formatFailedFiles(result.failedTaskIds)
         utilsStore.showMessage(`取消失败：${failedName}`, 'warning')
     } catch (error) {
@@ -385,6 +425,11 @@ const retryUpload = async (taskId: string) => {
         const result = await uploadStore.retryUpload(taskId)
         if (result.successCount > 0) {
             utilsStore.showMessage('任务已重试', 'success')
+            return
+        }
+
+        if (result.noopTaskIds.length > 0 && result.failedTaskIds.length === 0) {
+            utilsStore.showMessage('任务状态未变化', 'info')
             return
         }
 

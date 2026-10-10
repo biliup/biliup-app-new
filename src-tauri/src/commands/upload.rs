@@ -15,6 +15,7 @@ use tracing::{info, warn};
 #[serde(rename_all = "camelCase")]
 pub struct BatchTaskActionResult {
     pub success_count: u32,
+    pub noop_task_ids: Vec<String>,
     pub failed_task_ids: Vec<String>,
 }
 
@@ -63,11 +64,12 @@ pub async fn start_upload(
     let upload_service = &app_data.upload_service;
 
     let mut started_count = 0u32;
+    let mut noop_task_ids = Vec::new();
     let mut failed_task_ids = Vec::new();
     for task_id in task_ids {
         match upload_service.start_upload(&task_id).await {
             Ok(true) => started_count += 1,
-            Ok(false) => failed_task_ids.push(task_id),
+            Ok(false) => noop_task_ids.push(task_id),
             Err(error) => {
                 warn!("开始上传失败 {}: {}", task_id, error);
                 failed_task_ids.push(task_id);
@@ -77,6 +79,7 @@ pub async fn start_upload(
 
     Ok(BatchTaskActionResult {
         success_count: started_count,
+        noop_task_ids,
         failed_task_ids,
     })
 }
@@ -91,11 +94,12 @@ pub async fn pause_upload(
     let upload_service = &app_data.upload_service;
 
     let mut paused_count = 0u32;
+    let mut noop_task_ids = Vec::new();
     let mut failed_task_ids = Vec::new();
     for task_id in task_ids {
         match upload_service.pause_upload(&task_id).await {
             Ok(true) => paused_count += 1,
-            Ok(false) => failed_task_ids.push(task_id),
+            Ok(false) => noop_task_ids.push(task_id),
             Err(error) => {
                 warn!("暂停上传失败 {}: {}", task_id, error);
                 failed_task_ids.push(task_id);
@@ -105,6 +109,7 @@ pub async fn pause_upload(
 
     Ok(BatchTaskActionResult {
         success_count: paused_count,
+        noop_task_ids,
         failed_task_ids,
     })
 }
@@ -119,11 +124,12 @@ pub async fn cancel_upload(
     let upload_service = &app_data.upload_service;
 
     let mut cancelled_count = 0u32;
+    let mut noop_task_ids = Vec::new();
     let mut failed_task_ids = Vec::new();
     for task_id in task_ids {
         match upload_service.cancel_upload(&task_id).await {
             Ok(true) => cancelled_count += 1,
-            Ok(false) => failed_task_ids.push(task_id),
+            Ok(false) => noop_task_ids.push(task_id),
             Err(error) => {
                 warn!("取消上传失败 {}: {}", task_id, error);
                 failed_task_ids.push(task_id);
@@ -133,6 +139,7 @@ pub async fn cancel_upload(
 
     Ok(BatchTaskActionResult {
         success_count: cancelled_count,
+        noop_task_ids,
         failed_task_ids,
     })
 }
@@ -158,11 +165,12 @@ pub async fn retry_upload(
     let upload_service = &app_data.upload_service;
 
     let mut retried_count = 0u32;
+    let mut noop_task_ids = Vec::new();
     let mut failed_task_ids = Vec::new();
     for task_id in task_ids {
         match upload_service.retry_upload(&task_id).await {
             Ok(true) => retried_count += 1,
-            Ok(false) => failed_task_ids.push(task_id),
+            Ok(false) => noop_task_ids.push(task_id),
             Err(error) => {
                 warn!("重试上传失败 {}: {}", task_id, error);
                 failed_task_ids.push(task_id);
@@ -172,6 +180,7 @@ pub async fn retry_upload(
 
     Ok(BatchTaskActionResult {
         success_count: retried_count,
+        noop_task_ids,
         failed_task_ids,
     })
 }
