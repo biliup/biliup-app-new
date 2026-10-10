@@ -160,6 +160,7 @@ const searchKeyword = ref('')
 const showTopicDialog = ref(false)
 const searchTimer = ref<number | null>(null) // 防抖定时器
 const isSearching = ref(false) // 搜索状态
+let topicRequestId = 0
 
 // 计算属性 - 直接使用utilsStore中的topiclist，并使用联合主键去重
 const allTopics = computed(() => {
@@ -195,6 +196,9 @@ const formatPlayCount = (count: number): string => {
 
 // 搜索处理函数
 const handleSearch = (query?: string) => {
+    const requestId = ++topicRequestId
+    const uid = props.userUid
+    isSearching.value = false
     const searchQuery = query !== undefined ? query : searchKeyword.value
     searchKeyword.value = searchQuery
 
@@ -210,7 +214,7 @@ const handleSearch = (query?: string) => {
     // 如果有搜索内容，设置防抖定时器进行远程搜索
     if (searchQuery && searchQuery.trim()) {
         searchTimer.value = setTimeout(async () => {
-            await performRemoteSearch(searchQuery.trim())
+            await performRemoteSearch(searchQuery.trim(), requestId, uid)
         }, 1000)
     }
 }
@@ -240,8 +244,8 @@ const performLocalSearch = (searchQuery: string) => {
 }
 
 // 执行远程搜索
-const performRemoteSearch = async (query: string) => {
-    if (!props.userUid) {
+const performRemoteSearch = async (query: string, requestId: number, uid?: number) => {
+    if (!uid || requestId !== topicRequestId || uid !== props.userUid) {
         console.warn('用户UID未提供，跳过远程搜索')
         return
     }
@@ -251,8 +255,9 @@ const performRemoteSearch = async (query: string) => {
         console.log('开始远程搜索:', query)
 
         // 调用utils store的搜索方法
-        const searchResults = (await utilsStore.searchTopics(props.userUid, query)) as any[]
+        const searchResults = (await utilsStore.searchTopics(uid, query)) as any[]
 
+        if (requestId !== topicRequestId || uid !== props.userUid) return
         if (searchResults && searchResults.length > 0) {
             console.log('远程搜索返回结果:', searchResults.length)
 
@@ -283,9 +288,9 @@ const performRemoteSearch = async (query: string) => {
             }
         }
     } catch (error) {
-        console.error('远程搜索失败:', error)
+        if (requestId === topicRequestId) console.error('远程搜索失败:', error)
     } finally {
-        isSearching.value = false
+        if (requestId === topicRequestId) isSearching.value = false
     }
 }
 
@@ -422,15 +427,18 @@ watch(selectedTopicName, newValue => {
     emit('update:topicName', newValue)
 })
 
+watch(
+    () => props.userUid,
+    () => handleSearch('')
+)
+
 // 监听allTopics变化，更新过滤列表
 watch(
     allTopics,
     newTopics => {
-        if (newTopics.length > 0) {
-            handleSearch('')
-            // 更新selectedIndex
-            updateSelectedIndex()
-        }
+        void newTopics
+        handleSearch('')
+        updateSelectedIndex()
     },
     { immediate: true }
 )
@@ -442,6 +450,7 @@ watch([() => props.modelValue, () => props.topicId], () => {
 
 // 组件卸载时清理定时器
 onUnmounted(() => {
+    topicRequestId++
     if (searchTimer.value) {
         clearTimeout(searchTimer.value)
         searchTimer.value = null
