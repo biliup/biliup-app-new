@@ -336,6 +336,8 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
         (config.line.clone(), config.proxy.clone(), config.limit)
     };
 
+    anyhow::ensure!((1..=12).contains(&limit), "上传并发数必须在 1 到 12 之间");
+
     let client = &task_mutex
         .lock()
         .await

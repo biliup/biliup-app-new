@@ -160,7 +160,7 @@ pub struct UserConfig {
     pub line: Option<String>,
     #[serde(default)]
     pub proxy: Option<String>,
-    #[serde(default)]
+    #[serde(default = "default_upload_limit")]
     pub limit: u32,
     #[serde(default)]
     pub watermark: u8,
@@ -188,6 +188,10 @@ pub struct ConfigRoot {
     pub user_order: Vec<u64>,
     #[serde(default)]
     pub config: HashMap<u64, UserConfig>,
+}
+
+fn default_upload_limit() -> u32 {
+    3
 }
 
 fn default_log_level() -> String {
@@ -220,6 +224,9 @@ impl ConfigRoot {
     pub fn normalize_template_metadata(&mut self) {
         self.normalize_user_order();
         for user_config in self.config.values_mut() {
+            if !(1..=12).contains(&user_config.limit) {
+                user_config.limit = default_upload_limit();
+            }
             user_config.normalize_template_metadata();
         }
     }
@@ -255,7 +262,7 @@ impl ConfigRoot {
             user: user_info,
             line: None,
             proxy,
-            limit: 0,
+            limit: default_upload_limit(),
             watermark: 0,
             auto_edit: 0,
             templates: HashMap::new(),
@@ -306,6 +313,7 @@ impl ConfigRoot {
         watermark: u8,
         auto_edit: u8,
     ) -> Result<&Self> {
+        anyhow::ensure!((1..=12).contains(&limit), "上传并发数必须在 1 到 12 之间");
         if let Some(user_config) = self.config.get_mut(&uid) {
             info!(
                 "UID {} 用户配置更新: line={:?}, proxy={:?}, limit={}, watermark={}, auto_edit={}",
