@@ -1956,6 +1956,7 @@ const selectedCategory = ref<any>(null)
 const selectedSubCategory = ref<any>(null)
 const categoryPopoverVisible = ref(false)
 let generalUpdateTimer: number | null = null
+let queueRefreshRunning = false
 
 const currentTemplate = computed(() => {
     if (!selectedUser.value || !currentTemplateName.value || !userConfigStore.configRoot?.config) {
@@ -2371,6 +2372,7 @@ const forwardConsole = (fnName: keyof Console, logger: (level: string, ...args: 
 
 onMounted(async () => {
     await initializeData()
+    startQueueUpdates()
     await setupDragAndDrop()
     keyboardCleanup = await setupKeyboardShortcuts()
 
@@ -2402,6 +2404,39 @@ onUnmounted(() => {
     autoSubmittingRecord.value = {}
 })
 
+const startQueueUpdates = () => {
+    if (!generalUpdateTimer) {
+        generalUpdateTimer = setInterval(async () => {
+            if (authStore.loginUsers.length === 0 || queueRefreshRunning) return
+            queueRefreshRunning = true
+            try {
+                await uploadStore.getUploadQueue()
+                for (const task of uploadStore.uploadQueue) {
+                    if (task.status === 'Completed') {
+                        const templateName = task.template
+                        const uid = task.user.uid
+                        const videos =
+                            userConfigStore.configRoot?.config[uid]?.templates[templateName]
+                                ?.videos || []
+
+                        const video = videos.find(v => v.id === task.video?.id)
+                        if (video && video.filename !== task.video?.filename) {
+                            video.filename = task.video.filename
+                            video.path = task.video.path
+                            video.complete = true
+                            video.finished_at = task.finished_at
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('刷新上传队列失败:', error)
+            } finally {
+                queueRefreshRunning = false
+            }
+        }, 666) // 更新上传队列
+    }
+}
+
 // 初始化数据
 const initializeData = async () => {
     try {
@@ -2415,30 +2450,6 @@ const initializeData = async () => {
             await utilsStore.initTopicList(loginUsers.value[0].uid)
             await userConfigStore.ensureUserTemplatesReady()
             await uploadStore.getUploadQueue()
-            if (!generalUpdateTimer) {
-                generalUpdateTimer = setInterval(() => {
-                    if (authStore.loginUsers.length > 0) {
-                        uploadStore.getUploadQueue()
-                    }
-                    for (const task of uploadStore.uploadQueue) {
-                        if (task.status === 'Completed') {
-                            const templateName = task.template
-                            const uid = task.user.uid
-                            const videos =
-                                userConfigStore.configRoot?.config[uid]?.templates[templateName]
-                                    ?.videos || []
-
-                            const video = videos.find(v => v.id === task.video?.id)
-                            if (video && video.filename !== task.video?.filename) {
-                                video.filename = task.video.filename
-                                video.path = task.video.path
-                                video.complete = true
-                                video.finished_at = task.finished_at
-                            }
-                        }
-                    }
-                }, 666) // 更新上传队列
-            }
         }
 
         setTimeout(async () => {
