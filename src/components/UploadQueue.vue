@@ -190,14 +190,7 @@ const clearCompleted = async () => {
             return
         }
 
-        let successCount = 0
-        for (const task of completedTasks) {
-            try {
-                successCount += await uploadStore.cancelUpload(task.id)
-            } catch (error) {
-                console.error(`清空任务 ${task.video.title} 失败:`, error)
-            }
-        }
+        const successCount = await uploadStore.cancelUpload(completedTasks.map(task => task.id))
 
         utilsStore.showMessage(`已清空 ${successCount} 个完成的任务`, 'success')
     } catch (error) {
@@ -230,14 +223,7 @@ const startAll = async () => {
             return
         }
 
-        let successCount = 0
-        for (const task of canBeStarted) {
-            try {
-                successCount += await uploadStore.startUpload(task.id)
-            } catch (error) {
-                console.error(`开始任务 ${task.video.title} 失败:`, error)
-            }
-        }
+        const successCount = await uploadStore.startUpload(canBeStarted.map(task => task.id))
 
         utilsStore.showMessage(`已开始 ${successCount} 个任务`, 'success')
     } catch (error) {
@@ -264,14 +250,7 @@ const pauseAll = async () => {
             return
         }
 
-        let successCount = 0
-        for (const task of activeTasks) {
-            try {
-                successCount += await uploadStore.pauseUpload(task.id)
-            } catch (error) {
-                console.error(`暂停任务 ${task.video.title} 失败:`, error)
-            }
-        }
+        const successCount = await uploadStore.pauseUpload(activeTasks.map(task => task.id))
 
         utilsStore.showMessage(`已暂停 ${successCount} 个任务`, 'success')
     } catch (error) {
@@ -309,14 +288,7 @@ const cancelAll = async () => {
             }
         )
 
-        let successCount = 0
-        for (const task of activeTasks) {
-            try {
-                successCount += await uploadStore.cancelUpload(task.id)
-            } catch (error) {
-                console.error(`取消任务 ${task.video.title} 失败:`, error)
-            }
-        }
+        const successCount = await uploadStore.cancelUpload(activeTasks.map(task => task.id))
 
         utilsStore.showMessage(`已取消 ${successCount} 个任务`, 'success')
     } catch (error) {

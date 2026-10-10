@@ -161,46 +161,44 @@ export const useUploadStore = defineStore('upload', () => {
     // 创建上传任务
     const createUploadTask = async (uid: number, template: string, videoFiles: any[]) => {
         try {
-            var count = 0
-            // 遍历videoFiles, 将所有id不存在uploadQueue中的任务添加到uploadQueue
-            for (const video of videoFiles) {
-                console.log(video)
+            const pendingVideos = videoFiles.filter(video => {
                 if (video.complete !== undefined && video.complete) {
-                    console.log('跳过已完成视频文件:', video)
-                    continue
+                    return false
                 }
-                if (!uploadQueue.value.some(task => task.id === video.id)) {
-                    try {
-                        const created = await invoke<boolean>('create_upload_task', {
-                            uid,
-                            template,
-                            video
-                        })
-                        if (created) {
-                            count++
-                        }
-                    } catch (error) {
-                        console.error('创建上传任务失败:', error)
-                        throw error
-                    }
-                }
+                return !uploadQueue.value.some(task => task.id === video.id)
+            })
+
+            if (pendingVideos.length === 0) {
+                return 0
             }
 
+            const createdCount = await invoke<number>('create_upload_task', {
+                uid,
+                template,
+                videos: pendingVideos
+            })
+
             await getUploadQueue() // 刷新队列
-            return count
+            return createdCount
         } catch (error) {
             console.error('创建上传任务失败:', error)
             throw error
         }
     }
 
+    const normalizeTaskIds = (taskIds: string | string[]) => {
+        return Array.isArray(taskIds) ? taskIds : [taskIds]
+    }
+
     // 开始上传
-    const startUpload = async (taskId: string) => {
+    const startUpload = async (taskIds: string | string[]) => {
         try {
-            const success = await invoke('start_upload', { taskId })
+            const startedCount = await invoke<number>('start_upload', {
+                taskIds: normalizeTaskIds(taskIds)
+            })
             await getUploadQueue()
 
-            return success ? 1 : 0
+            return startedCount
         } catch (error) {
             console.error('开始上传失败:', error)
             throw error
@@ -208,12 +206,14 @@ export const useUploadStore = defineStore('upload', () => {
     }
 
     // 暂停上传
-    const pauseUpload = async (taskId: string) => {
+    const pauseUpload = async (taskIds: string | string[]) => {
         try {
-            const paused = await invoke('pause_upload', { taskId })
+            const pausedCount = await invoke<number>('pause_upload', {
+                taskIds: normalizeTaskIds(taskIds)
+            })
             await getUploadQueue()
 
-            return paused ? 1 : 0
+            return pausedCount
         } catch (error) {
             console.error('暂停上传失败:', error)
             throw error
@@ -221,12 +221,14 @@ export const useUploadStore = defineStore('upload', () => {
     }
 
     // 取消上传
-    const cancelUpload = async (taskId: string) => {
+    const cancelUpload = async (taskIds: string | string[]) => {
         try {
-            const canceled = await invoke('cancel_upload', { taskId })
+            const cancelledCount = await invoke<number>('cancel_upload', {
+                taskIds: normalizeTaskIds(taskIds)
+            })
             await getUploadQueue()
 
-            return canceled ? 1 : 0
+            return cancelledCount
         } catch (error) {
             console.error('取消上传失败:', error)
             throw error
@@ -278,12 +280,15 @@ export const useUploadStore = defineStore('upload', () => {
     }
 
     // 重试上传
-    const retryUpload = async (taskId: string, refresh: boolean = true) => {
+    const retryUpload = async (taskIds: string | string[], refresh: boolean = true) => {
         try {
-            await invoke('retry_upload', { taskId })
+            const retriedCount = await invoke<number>('retry_upload', {
+                taskIds: normalizeTaskIds(taskIds)
+            })
             if (refresh) {
                 await getUploadQueue()
             }
+            return retriedCount
         } catch (error) {
             console.error('重试上传失败:', error)
             throw error

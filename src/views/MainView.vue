@@ -3530,13 +3530,12 @@ const clearAllVideos = async () => {
             videoIds.includes(task.video?.id)
         )
 
-        for (const task of correspondingTasks) {
+        if (correspondingTasks.length > 0) {
             try {
-                await uploadStore.cancelUpload(task.id)
-                console.log(`已取消对应的上传任务: ${task.id}`)
+                await uploadStore.cancelUpload(correspondingTasks.map(task => task.id))
+                console.log(`已取消对应的上传任务: ${correspondingTasks.length} 个`)
             } catch (error) {
                 console.error('取消上传任务失败:', error)
-                // 继续处理其他任务
             }
         }
 
@@ -3579,7 +3578,7 @@ const removeUploadedFile = async (videoId: string) => {
             )
             if (correspondingTask) {
                 try {
-                    await uploadStore.cancelUpload(correspondingTask.id)
+                    await uploadStore.cancelUpload([correspondingTask.id])
                     console.log(`已取消对应的上传任务: ${correspondingTask.id}`)
                 } catch (error) {
                     console.error('取消上传任务失败:', error)
@@ -3689,13 +3688,12 @@ const autoStartWaitingTasks = async () => {
     // 获取所有待处理的任务
     const pendingTasks = uploadStore.uploadQueue.filter(task => task.status === 'Waiting')
 
-    for (const task of pendingTasks) {
+    if (pendingTasks.length > 0) {
         try {
-            await uploadStore.startUpload(task.id)
-            console.log(`自动开始任务: ${task.id}`)
+            const startedCount = await uploadStore.startUpload(pendingTasks.map(task => task.id))
+            console.log(`自动开始任务: ${startedCount} 个`)
         } catch (error) {
-            console.error(`自动开始任务失败 ${task.id}:`, error)
-            // 继续处理下一个任务
+            console.error('自动开始任务失败:', error)
         }
     }
 }
