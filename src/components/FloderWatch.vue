@@ -361,7 +361,12 @@ interface Props {
 
 interface Emits {
     (e: 'update:modelValue', value: boolean): void
-    (e: 'add-videos', files: any[]): void
+    (
+        e: 'add-videos',
+        files: any[],
+        done: (accepted: string[]) => void,
+        isActive: () => boolean
+    ): void
     (e: 'submit-videos', mode: 'single' | 'multi', options?: { auto?: boolean }): void
 }
 
@@ -423,9 +428,12 @@ const testFilename = ref('')
 
 // 定时器
 let monitorTimer: number | null = null
+let delayedStartTimer: number | null = null
+let monitorSession = 0
 
 // 监听窗口打开状态，每次打开时清空文件夹路径
 watch(visible, (newValue, oldValue) => {
+    if (!newValue && (monitoring.value || waitingForStart.value)) stopMonitoring()
     if (newValue && !oldValue) {
         // 窗口从关闭变为打开状态，清空文件夹路径
         settings.value.folderPaths = []
@@ -590,7 +598,9 @@ const isFileSizeStable = (filename: string, currentSize: number): boolean => {
 }
 
 // 执行一次文件夹检测
-const performCheck = async (): Promise<{
+const performCheck = async (
+    isActive: () => boolean
+): Promise<{
     newFiles: string[]
     resetCounter: boolean
     stableFiles: string[]
@@ -610,6 +620,7 @@ const performCheck = async (): Promise<{
                             isDirectory: file.is_directory
                         }))
                     )
+                if (!isActive()) return { newFiles: [], resetCounter: false, stableFiles: [] }
                 allEntries.push(...entries)
             } catch (error) {
                 console.error(`读取文件夹 ${folderPath} 失败:`, error)
@@ -643,6 +654,7 @@ const performCheck = async (): Promise<{
             try {
                 // 获取文件大小
                 const fileSize = await utilsStore.getFileSize(filePath)
+                if (!isActive()) return { newFiles: [], resetCounter: false, stableFiles: [] }
                 const fileSizeMB = fileSize / (1024 * 1024) // 转换为MB
 
                 const isVideoFile = isSupportedVideoFormat(entry.name)
@@ -672,7 +684,7 @@ const performCheck = async (): Promise<{
 
                         if (!fileAlreadyExists) {
                             // 检查文件大小是否稳定
-                            const isStable = isFileSizeStable(entry.name, fileSize)
+                            const isStable = isFileSizeStable(filePath, fileSize)
 
                             if (isStable) {
                                 if (shouldIgnoreByRegex) {
@@ -717,12 +729,16 @@ const performCheck = async (): Promise<{
 }
 
 // 添加新文件到视频列表
-const addNewFiles = async (filenames: string[]) => {
-    if (filenames.length > 0) {
-        filenames.forEach(filename => addedFilePaths.add(filename))
-        emit('add-videos', filenames)
-        addedFilesCount.value += filenames.length
-        utilsStore.showMessage(`已添加 ${filenames.length} 个视频文件`, 'success')
+const addNewFiles = async (filenames: string[], isActive: () => boolean) => {
+    if (filenames.length === 0 || !isActive()) return
+    const accepted = await new Promise<string[]>(resolve => {
+        emit('add-videos', filenames, resolve, isActive)
+    })
+    if (!isActive()) return
+    accepted.forEach(path => addedFilePaths.add(path))
+    addedFilesCount.value += accepted.length
+    if (accepted.length > 0) {
+        utilsStore.showMessage(`已添加 ${accepted.length} 个视频文件`, 'success')
     }
 }
 
@@ -733,14 +749,18 @@ const updateNextCheckTime = () => {
 }
 
 // 执行监控循环
-const performMonitoringCycle = async () => {
+const performMonitoringCycle = async (session: number) => {
+    const isActive = () => monitoring.value && session === monitorSession
+    if (!isActive()) return
     try {
-        const result = await performCheck()
+        const result = await performCheck(isActive)
+        if (!isActive()) return
         lastCheckResult.value = result
 
         // 添加新文件
         if (result.newFiles.length > 0) {
-            await addNewFiles(result.newFiles)
+            await addNewFiles(result.newFiles, isActive)
+            if (!isActive()) return
 
             // 多稿件自动提交模式下，新增文件后立即尝试提交（无需等待监控结束）
             if (settings.value.autoSubmit && settings.value.autoSubmitMode === 'multi') {
@@ -774,9 +794,17 @@ const performMonitoringCycle = async () => {
         // 更新下次检测时间
         updateNextCheckTime()
     } catch (error) {
-        console.error('监控检测失败:', error)
-        utilsStore.showMessage('监控检测失败，请检查文件夹路径', 'error')
-        stopMonitoring()
+        if (isActive()) {
+            console.error('监控检测失败:', error)
+            utilsStore.showMessage('监控检测失败，请检查文件夹路径', 'error')
+            stopMonitoring()
+        }
+    } finally {
+        if (isActive()) {
+            monitorTimer = window.setTimeout(() => {
+                void performMonitoringCycle(session)
+            }, settings.value.checkInterval * 1000)
+        }
     }
 }
 
@@ -805,8 +833,11 @@ const startMonitoring = async () => {
 
         // 设置定时器，在指定时间开始监控
         const delay = startTime.getTime() - now.getTime()
-        setTimeout(() => {
-            if (waitingForStart.value) {
+        const session = ++monitorSession
+        if (delayedStartTimer !== null) clearTimeout(delayedStartTimer)
+        delayedStartTimer = window.setTimeout(() => {
+            delayedStartTimer = null
+            if (waitingForStart.value && session === monitorSession) {
                 startMonitoringNow()
             }
         }, delay)
@@ -824,6 +855,12 @@ const startMonitoring = async () => {
 
 // 立即开始监控（实际的监控逻辑）
 const startMonitoringNow = async () => {
+    if (monitoring.value) return
+    const session = ++monitorSession
+    if (delayedStartTimer !== null) {
+        clearTimeout(delayedStartTimer)
+        delayedStartTimer = null
+    }
     monitoring.value = true
     waitingForStart.value = false
     currentCheckRound.value = 0
@@ -850,10 +887,8 @@ const startMonitoringNow = async () => {
     console.log(`${folderMsg}，${configMsg}`)
 
     // 立即执行第一次检测
-    await performMonitoringCycle()
-
-    // 设置定时器，按配置的间隔检测
-    monitorTimer = setInterval(performMonitoringCycle, settings.value.checkInterval * 1000)
+    await performMonitoringCycle(session)
+    if (!monitoring.value || session !== monitorSession) return
 
     let successMsg = settings.value.includeSubfolders
         ? `开始监控文件夹（包含子文件夹，最小${settings.value.minFileSize}MB`
@@ -870,6 +905,11 @@ const startMonitoringNow = async () => {
 
 // 取消定时开始
 const cancelDelayedStart = () => {
+    monitorSession++
+    if (delayedStartTimer !== null) {
+        clearTimeout(delayedStartTimer)
+        delayedStartTimer = null
+    }
     waitingForStart.value = false
 
     if (startCountdownTimer.value) {
@@ -927,11 +967,16 @@ const startCountdown = () => {
 
 // 停止监控
 const stopMonitoring = () => {
+    monitorSession++
+    if (delayedStartTimer !== null) {
+        clearTimeout(delayedStartTimer)
+        delayedStartTimer = null
+    }
     monitoring.value = false
     waitingForStart.value = false
 
     if (monitorTimer) {
-        clearInterval(monitorTimer)
+        clearTimeout(monitorTimer)
         monitorTimer = null
     }
 
@@ -953,8 +998,12 @@ const closeDialog = () => {
 
 // 清理定时器
 onUnmounted(() => {
+    monitorSession++
+    monitoring.value = false
+    waitingForStart.value = false
+    if (delayedStartTimer !== null) clearTimeout(delayedStartTimer)
     if (monitorTimer) {
-        clearInterval(monitorTimer)
+        clearTimeout(monitorTimer)
     }
     if (startCountdownTimer.value) {
         clearInterval(startCountdownTimer.value)

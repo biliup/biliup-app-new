@@ -284,7 +284,7 @@ const emit = defineEmits<{
     clearAllVideos: []
     removeFile: [id: string]
     createUpload: []
-    addVideosToForm: [videos: any[]]
+    addVideosToForm: [videos: any[], done: (accepted: string[]) => void, isActive: () => boolean]
     submitTemplate: [mode?: 'single' | 'multi', options?: { auto?: boolean }]
 }>()
 
@@ -740,9 +740,13 @@ const handleRemoveFile = (id: string) => {
 }
 
 // 处理文件夹监控添加视频
-const handleAddVideos = (newVideos: any[]) => {
+const handleAddVideos = (
+    newVideos: any[],
+    done: (accepted: string[]) => void,
+    isActive: () => boolean
+) => {
     // 发出添加视频事件到MainView，让它调用addVideoToCurrentForm处理每个视频
-    emit('addVideosToForm', newVideos)
+    emit('addVideosToForm', newVideos, done, isActive)
 }
 
 // 处理文件夹监控提交稿件

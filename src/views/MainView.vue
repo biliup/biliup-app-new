@@ -3694,16 +3694,30 @@ const createUpload = async () => {
 }
 
 // 处理文件夹监控添加视频事件
-const handleAddVideosToForm = async (newVideos: any[]) => {
-    templateLoading.value = true
-    for (const videoPath of newVideos) {
-        try {
-            await addVideoToCurrentForm(videoPath)
-        } catch (error) {
-            console.error(`添加视频失败: ${videoPath}`, error)
-        }
+const handleAddVideosToForm = async (
+    newVideos: any[],
+    done: (accepted: string[]) => void,
+    isActive: () => boolean
+) => {
+    const accepted: string[] = []
+    if (templateLoading.value || !isActive()) {
+        done(accepted)
+        return
     }
-    templateLoading.value = false
+    templateLoading.value = true
+    try {
+        for (const videoPath of newVideos) {
+            if (!isActive()) break
+            try {
+                if (await addVideoToCurrentForm(videoPath)) accepted.push(videoPath)
+            } catch (error) {
+                console.error(`添加视频失败: ${videoPath}`, error)
+            }
+        }
+    } finally {
+        templateLoading.value = false
+        done(accepted)
+    }
 }
 
 // 处理文件夹监控提交稿件事件
