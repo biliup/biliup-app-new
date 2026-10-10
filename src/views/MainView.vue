@@ -796,6 +796,16 @@
                                                 仅自己可见
                                             </el-checkbox>
                                         </el-form-item>
+                                        <el-form-item v-if="!currentForm.aid" label="编辑">
+                                            <el-checkbox
+                                                v-model="currentForm.auto_edit_after_submit"
+                                                :true-value="1"
+                                                :false-value="0"
+                                                :disabled="templateLoading"
+                                            >
+                                                提交后自动打开编辑
+                                            </el-checkbox>
+                                        </el-form-item>
                                         <el-form-item
                                             v-if="Boolean(currentForm.aid)"
                                             label="全景视频"
@@ -1448,7 +1458,13 @@ const handleAutoEditAfterSubmit = async (
 ) => {
     if (!template.aid) {
         const userConfig = userConfigStore.configRoot?.config[uid]
-        if (userConfig && userConfig.auto_edit && newTemplateRef.value) {
+        const templateAutoEdit = Number(template?.auto_edit_after_submit || 0) === 1
+        const shouldFallbackToUserConfig = template?.auto_edit_after_submit === undefined
+        const shouldAutoEdit = shouldFallbackToUserConfig
+            ? templateAutoEdit || Boolean(userConfig?.auto_edit)
+            : templateAutoEdit
+
+        if (shouldAutoEdit && newTemplateRef.value) {
             // 新增稿件且auto_edit开启，创建编辑模板
             await newTemplateRef.value.createTemplateFromBV(uid, resp.bvid, resp.bvid, true)
             utilsStore.showMessage('从BV号创建模板成功', 'success')
@@ -2430,6 +2446,7 @@ const hasUnsavedChanges = (
         'no_reprint',
         'open_elec',
         'no_disturbance',
+        'auto_edit_after_submit',
         'up_selection_reply',
         'up_close_reply',
         'up_close_danmu',

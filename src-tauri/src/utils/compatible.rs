@@ -55,6 +55,8 @@ pub struct LegacyStreamerConfig {
     pub up_close_danmu: bool,
     #[serde(rename = "atomicInt")]
     pub atomic_int: u32,
+    #[serde(default)]
+    pub auto_edit_after_submit: u8,
     pub changed: Option<bool>,
 }
 
@@ -168,6 +170,7 @@ impl CompatibilityConverter {
                 no_reprint: streamer_config.no_reprint,
                 open_elec: streamer_config.open_elec,
                 no_disturbance: 0, // 旧版配置没有该字段
+                auto_edit_after_submit: streamer_config.auto_edit_after_submit,
                 aid: streamer_config.aid,
                 up_selection_reply: if streamer_config.up_selection_reply {
                     1

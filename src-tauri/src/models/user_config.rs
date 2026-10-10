@@ -126,6 +126,8 @@ pub struct TemplateConfig {
     #[serde(default)]
     pub no_disturbance: u8,
     #[serde(default)]
+    pub auto_edit_after_submit: u8,
+    #[serde(default)]
     pub aid: Option<u64>,
     #[serde(default)]
     pub up_selection_reply: u8,
@@ -517,6 +519,7 @@ impl ConfigRoot {
             compare_field!(no_reprint, old, new);
             compare_field!(open_elec, old, new);
             compare_field!(no_disturbance, old, new);
+            compare_field!(auto_edit_after_submit, old, new);
             compare_field!(aid, old, new);
             compare_field!(up_selection_reply, old, new);
             compare_field!(up_close_reply, old, new);
@@ -579,6 +582,7 @@ impl Default for TemplateConfig {
             no_reprint: 0,
             open_elec: 0,
             no_disturbance: 0,
+            auto_edit_after_submit: 0,
             aid: None,
             up_selection_reply: 0,
             up_close_reply: 0,

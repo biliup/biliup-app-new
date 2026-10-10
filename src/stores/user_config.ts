@@ -46,6 +46,7 @@ export interface TemplateConfig {
     no_reprint: number
     open_elec: number
     no_disturbance: number
+    auto_edit_after_submit: number
     aid?: number
     up_selection_reply: number
     up_close_reply: number
@@ -257,6 +258,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         no_reprint: 0,
         open_elec: 0,
         no_disturbance: 0,
+        auto_edit_after_submit: 0,
         aid: undefined,
         up_selection_reply: 0,
         up_close_reply: 0,
