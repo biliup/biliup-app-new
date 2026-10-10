@@ -241,6 +241,9 @@ impl ConfigRoot {
     pub fn normalize_template_metadata(&mut self) {
         self.normalize_user_order();
         for user_config in self.config.values_mut() {
+            if matches!(user_config.line.as_deref(), Some("ws" | "qn")) {
+                user_config.line = None;
+            }
             if !(1..=12).contains(&user_config.limit) {
                 user_config.limit = default_upload_limit();
             }
@@ -331,6 +334,13 @@ impl ConfigRoot {
         auto_edit: u8,
     ) -> Result<&Self> {
         anyhow::ensure!((1..=12).contains(&limit), "上传并发数必须在 1 到 12 之间");
+        anyhow::ensure!(
+            matches!(
+                line.as_deref(),
+                None | Some("auto" | "bda2" | "bldsa" | "tx" | "txa" | "bda" | "alia")
+            ),
+            "不支持的上传线路，请重新选择"
+        );
         if let Some(user_config) = self.config.get_mut(&uid) {
             info!(
                 "UID {} 用户配置更新: line={:?}, proxy={:?}, limit={}, watermark={}, auto_edit={}",

@@ -102,8 +102,6 @@
                         <el-select v-model="userConfigForm.line" placeholder="请选择上传线路">
                             <el-option label="自动选择" value="auto" />
                             <el-option label="BDA2" value="bda2" />
-                            <el-option label="WS" value="ws" />
-                            <el-option label="QN" value="qn" />
                             <el-option label="BLDSA" value="bldsa" />
                             <el-option label="TX" value="tx" />
                             <el-option label="TXA" value="txa" />

@@ -358,9 +358,7 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
     let retry_count = task_mutex.lock().await.retry_count();
 
     // 定义可用的上传线路列表
-    let available_lines = [
-        "auto", "bda2", "ws", "qn", "bldsa", "tx", "txa", "bda", "alia",
-    ];
+    let available_lines = ["auto", "bda2", "bldsa", "tx", "txa", "bda", "alia"];
 
     // 根据重试次数自动选择线路
     let selected_line = if let Some(config_line) = &line {
