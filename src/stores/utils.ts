@@ -7,8 +7,7 @@ import type { MentionUserGroup } from '../types/mention'
 export const useUtilsStore = defineStore('template', () => {
     const archieve_pre = ref<any>(null)
     const topiclist = ref<any[]>([])
-    const seasonlist = ref<any[]>([])
-    const hasSeason = ref<boolean>(false)
+    const seasonsByUid = ref<Record<number, any[]>>({})
 
     const common_staff_conf = computed(() => {
         const conf = archieve_pre.value?.common_staff_conf || {}
@@ -142,19 +141,18 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
-    const getSeasonList = async (uid: number) => {
-        hasSeason.value = false
+    const getCachedSeasons = (uid: number): any[] => seasonsByUid.value[uid] || []
 
+    const getSeasonList = async (uid: number) => {
         try {
-            seasonlist.value = ((await invoke('get_season_list', { uid })) as any).seasons
-            // {"seasons": [{season_id: 1, section_id: 2, title: '合集1'}, {season_id: 2, section_id: 2, title: '合集2'}]}
-            hasSeason.value = seasonlist.value.length > 0
+            const result = await invoke<{ seasons: any[] }>('get_season_list', { uid })
+            if (!Array.isArray(result.seasons)) throw new Error('合集列表响应格式错误')
+            seasonsByUid.value[uid] = result.seasons
+            return result.seasons.length > 0
         } catch (error) {
             console.error('获取合集列表失败:', error)
-            seasonlist.value = []
             throw error
         }
-        return hasSeason.value
     }
 
     const uploadCover = async (uid: number, file: string) => {
@@ -183,10 +181,6 @@ export const useUtilsStore = defineStore('template', () => {
     }
 
     const getVideoSeason = async (uid: number, aid: number) => {
-        if (!hasSeason.value) {
-            return 0
-        }
-
         try {
             const season = (await invoke('get_video_season', { uid, aid })) as number
             return season
@@ -205,10 +199,6 @@ export const useUtilsStore = defineStore('template', () => {
         title: string,
         add: boolean
     ) => {
-        if (!hasSeason.value) {
-            return
-        }
-
         try {
             await invoke('switch_season', { uid, aid, cid, seasonId, sectionId, title, add })
         } catch (error) {
@@ -272,7 +262,7 @@ export const useUtilsStore = defineStore('template', () => {
         typeListV2: computed<any[]>(() => (archieve_pre.value?.type_list_v2 || []) as any[]),
         common_staff_conf,
         topiclist: computed(() => topiclist.value),
-        seasonlist: computed(() => seasonlist.value),
+        getCachedSeasons,
         getCurrentVersion,
         getFileSize,
         getAvatarCacheDir,
@@ -284,7 +274,6 @@ export const useUtilsStore = defineStore('template', () => {
         searchTopics,
         searchMention,
         getVideoDetail,
-        hasSeason,
         getSeasonList,
         getVideoSeason,
         switchSeason,

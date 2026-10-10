@@ -273,9 +273,9 @@ const createTemplateFromBV = async (
             const season_id = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
 
             if (season_id !== 0) {
-                const section_id = await utilsStore.seasonlist.find(
-                    item => item.season_id === season_id
-                )?.section_id
+                const section_id = await utilsStore
+                    .getCachedSeasons(userUid)
+                    .find(item => item.season_id === season_id)?.section_id
                 newTemplate.season_id = season_id
                 newTemplate.section_id = section_id
             }

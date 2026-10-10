@@ -1457,7 +1457,7 @@ const checkAutoSubmitAll = async () => {
 }
 
 const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
-    if (!(resp && resp.aid && utilsStore.hasSeason)) {
+    if (!(resp && resp.aid)) {
         return
     }
 
@@ -1472,6 +1472,7 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
     }
 
     try {
+        if (configuredSeasonId > 0) await utilsStore.getSeasonList(uid)
         const old_season_id = Number(await utilsStore.getVideoSeason(uid, resp.aid))
         let add = old_season_id && old_season_id !== 0 ? false : true
 
@@ -1489,8 +1490,10 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
             )
 
             const season_title =
-                utilsStore.seasonlist.find((s: any) => Number(s.season_id) === templateSeasonId)
-                    ?.title || templateSeasonId
+                utilsStore
+                    .getCachedSeasons(uid)
+                    .find((s: any) => Number(s.season_id) === templateSeasonId)?.title ||
+                templateSeasonId
             utilsStore.showMessage(`视频${resp.bvid}加入合集${season_title}`, 'success')
             console.log(`视频${resp.bvid}加入合集${season_title}`, 'success')
         }
@@ -3165,9 +3168,9 @@ const getNewTemplateFromAv = async (userUid: number, aid: number) => {
             const season_id = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
 
             if (season_id !== 0) {
-                const section_id = await utilsStore.seasonlist.find(
-                    item => item.season_id === season_id
-                )?.section_id
+                const section_id = await utilsStore
+                    .getCachedSeasons(userUid)
+                    .find(item => item.season_id === season_id)?.section_id
                 newTemplate.season_id = season_id
                 newTemplate.section_id = section_id
             }

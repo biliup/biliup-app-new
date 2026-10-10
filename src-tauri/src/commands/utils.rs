@@ -411,7 +411,9 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, A
             .await
         {
             Ok(res) => {
-                // debug!("获取合集列表成功: {}", res);
+                if res["code"].as_i64() != Some(0) {
+                    return Err(AppError::Biliup(res["message"].as_str().unwrap_or("获取合集失败").to_string()));
+                }
                 let mut season_vec = Vec::new();
 
                 let seasons = res["data"]["seasons"].as_array()

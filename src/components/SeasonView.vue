@@ -198,7 +198,11 @@ const handleSectionChange = (value: number | undefined) => {
     selectedSectionId.value = value
 }
 
+let seasonRequestId = 0
+
 const loadSeasons = async () => {
+    const requestId = ++seasonRequestId
+    const uid = props.userUid
     if (!props.userUid) {
         allSeasons.value = []
         clearSelection()
@@ -207,11 +211,12 @@ const loadSeasons = async () => {
 
     try {
         isSearching.value = true
-        await utilsStore.getSeasonList(props.userUid)
+        await utilsStore.getSeasonList(uid!)
+        if (requestId !== seasonRequestId || props.userUid !== uid) return
 
         const seasonMap = new Map<number, SeasonOption>()
 
-        for (const rawSeason of utilsStore.seasonlist || []) {
+        for (const rawSeason of utilsStore.getCachedSeasons(uid!)) {
             const season = normalizeSeason(rawSeason)
             if (!season) {
                 continue
@@ -232,10 +237,11 @@ const loadSeasons = async () => {
         allSeasons.value = Array.from(seasonMap.values())
         syncSelectionWithCurrentSeason()
     } catch (error) {
+        if (requestId !== seasonRequestId || props.userUid !== uid) return
         console.error('加载合集列表失败:', error)
         utilsStore.showMessage(`加载合集列表失败: ${error}`, 'error')
     } finally {
-        isSearching.value = false
+        if (requestId === seasonRequestId) isSearching.value = false
     }
 }
 
