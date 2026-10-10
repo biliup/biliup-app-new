@@ -729,17 +729,18 @@ const performCheck = async (
 }
 
 // 添加新文件到视频列表
-const addNewFiles = async (filenames: string[], isActive: () => boolean) => {
-    if (filenames.length === 0 || !isActive()) return
+const addNewFiles = async (filenames: string[], isActive: () => boolean): Promise<string[]> => {
+    if (filenames.length === 0 || !isActive()) return []
     const accepted = await new Promise<string[]>(resolve => {
         emit('add-videos', filenames, resolve, isActive)
     })
-    if (!isActive()) return
+    if (!isActive()) return []
     accepted.forEach(path => addedFilePaths.add(path))
     addedFilesCount.value += accepted.length
     if (accepted.length > 0) {
         utilsStore.showMessage(`已添加 ${accepted.length} 个视频文件`, 'success')
     }
+    return accepted
 }
 
 // 更新下次检测时间显示
@@ -759,11 +760,18 @@ const performMonitoringCycle = async (session: number) => {
 
         // 添加新文件
         if (result.newFiles.length > 0) {
-            await addNewFiles(result.newFiles, isActive)
+            const accepted = await addNewFiles(result.newFiles, isActive)
             if (!isActive()) return
+            if (result.newFiles.some(path => !accepted.includes(path))) {
+                result.resetCounter = true
+            }
 
             // 多稿件自动提交模式下，新增文件后立即尝试提交（无需等待监控结束）
-            if (settings.value.autoSubmit && settings.value.autoSubmitMode === 'multi') {
+            if (
+                accepted.length > 0 &&
+                settings.value.autoSubmit &&
+                settings.value.autoSubmitMode === 'multi'
+            ) {
                 emit('submit-videos', 'multi', { auto: true })
             }
         }

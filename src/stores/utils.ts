@@ -153,6 +153,7 @@ export const useUtilsStore = defineStore('template', () => {
             return result.seasons.length > 0
         } catch (error) {
             console.error('获取合集列表失败:', error)
+            seasonsByUid.value[uid] = []
             throw error
         }
     }
