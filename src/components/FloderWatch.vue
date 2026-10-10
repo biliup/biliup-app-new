@@ -784,7 +784,7 @@ const performMonitoringCycle = async (session: number) => {
                 emit('submit-videos', settings.value.autoSubmitMode)
             } else {
                 utilsStore.showMessage(
-                    `连续 ${settings.value.maxEmptyChecks} 次检测，文件夹监控结束}"`,
+                    `连续 ${settings.value.maxEmptyChecks} 次检测，文件夹监控结束"`,
                     'success'
                 )
             }
