@@ -4,9 +4,10 @@ use serde::{Deserialize, Serialize};
 use std::{
     collections::{HashMap, HashSet},
     fs,
+    io::Write,
     path::PathBuf,
 };
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 fn current_timestamp() -> u64 {
     chrono::Utc::now().timestamp().max(0) as u64
@@ -200,25 +201,41 @@ fn default_log_level() -> String {
 
 impl ConfigRoot {
     pub fn from_file(path: &PathBuf) -> Result<Self> {
-        let json_content = fs::read_to_string(path)?;
-        let mut config: Self = serde_json::from_str(&json_content)?;
+        let load = |path: &PathBuf| -> Result<Self> {
+            let json_content = fs::read_to_string(path)?;
+            Ok(serde_json::from_str(&json_content)?)
+        };
+        let mut config = match load(path) {
+            Ok(config) => config,
+            Err(original_error) => {
+                let backup = path.with_extension("json.bak");
+                match load(&backup) {
+                    Ok(config) => {
+                        warn!("主配置无法加载，已从备份恢复: {}", original_error);
+                        config
+                    }
+                    Err(_) => return Err(original_error),
+                }
+            }
+        };
         config.normalize_template_metadata();
         Ok(config)
     }
 
     pub fn save_to_file(&mut self, path: &PathBuf) -> Result<()> {
         self.normalize_template_metadata();
-
-        // 确保父目录存在
-        if let Some(parent) = path.parent()
-            && !parent.exists()
-        {
-            fs::create_dir_all(parent)?;
+        let parent = path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or_else(|| std::path::Path::new("."));
+        fs::create_dir_all(parent)?;
+        let json_content = serde_json::to_vec_pretty(self)?;
+        if let Ok(previous) = fs::read(path) {
+            if serde_json::from_slice::<Self>(&previous).is_ok() {
+                atomic_write(&path.with_extension("json.bak"), &previous)?;
+            }
         }
-
-        let json_content = serde_json::to_string_pretty(self)?;
-        fs::write(path, json_content)?;
-        Ok(())
+        atomic_write(path, &json_content)
     }
 
     pub fn normalize_template_metadata(&mut self) {
@@ -605,5 +622,68 @@ impl Default for TemplateConfig {
             state: None,
             state_desc: None,
         }
+    }
+}
+
+fn atomic_write(path: &std::path::Path, content: &[u8]) -> Result<()> {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let temporary = path.with_extension(format!("{}.{}.tmp", std::process::id(), nonce));
+    let result = (|| -> Result<()> {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)?;
+        file.write_all(content)?;
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temporary, path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+#[cfg(test)]
+mod persistence_tests {
+    use super::*;
+
+    #[test]
+    fn recover_previous_config_after_corrupt_primary() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("biliup-config-test-{}-{nonce}", std::process::id()));
+        let path = dir.join("config.json");
+        let mut config = ConfigRoot::default();
+        config.save_to_file(&path).unwrap();
+        config.max_curr = 4;
+        config.save_to_file(&path).unwrap();
+        assert_eq!(ConfigRoot::from_file(&path).unwrap().max_curr, 4);
+        fs::write(&path, "{").unwrap();
+        assert_eq!(ConfigRoot::from_file(&path).unwrap().max_curr, 1);
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn failed_replace_preserves_destination_and_cleans_temporary_file() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("biliup-write-test-{}-{nonce}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        fs::create_dir(&path).unwrap();
+        assert!(atomic_write(&path, b"{}").is_err());
+        assert!(path.is_dir());
+        assert_eq!(fs::read_dir(&dir).unwrap().count(), 1);
+        fs::remove_dir_all(dir).unwrap();
     }
 }

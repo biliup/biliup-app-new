@@ -77,7 +77,7 @@ impl AppData {
 
 async fn startup() -> Result<AppData> {
     let config_path = get_config_json_path()?;
-    let config = if config_path.exists() {
+    let config = if config_path.exists() || config_path.with_extension("json.bak").exists() {
         ConfigRoot::from_file(&config_path)?
     } else {
         ConfigRoot::default()
