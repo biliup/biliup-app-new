@@ -1511,13 +1511,12 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
         const old_season_id = Number(await utilsStore.getVideoSeason(uid, resp.aid))
         let add = old_season_id && old_season_id !== 0 ? false : true
 
-        if (template && old_season_id !== templateSeasonId && template.videos[0]?.cid) {
+        if (template && old_season_id !== templateSeasonId) {
             const new_season_id = templateSeasonId
             const new_section_id = templateSectionId
             await utilsStore.switchSeason(
                 uid,
                 resp.aid,
-                template.videos[0]?.cid,
                 new_season_id,
                 new_section_id,
                 template.title,
@@ -2626,7 +2625,7 @@ const hasUnsavedChanges = (
         const currentVideo = currentVideos[i]
         const baseVideo = baseVideos[i]
 
-        const videoFieldsToCompare = ['title', 'filename', 'desc', 'path', 'cid', 'cover']
+        const videoFieldsToCompare = ['title', 'filename', 'desc', 'path', 'cover']
         for (const field of videoFieldsToCompare) {
             if (
                 stableStringify((currentVideo as any)[field]) !==

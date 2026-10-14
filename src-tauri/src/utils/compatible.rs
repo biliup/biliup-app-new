@@ -146,7 +146,6 @@ impl CompatibilityConverter {
                         vids.push(VideoInfo {
                             title: v.title,
                             id: v.filename.clone(), // 旧配置的id和filename相同
-                            cid: 0,
                             filename: v.filename,
                             desc: v.desc,
                             cover: String::new(),

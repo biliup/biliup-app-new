@@ -662,7 +662,6 @@ pub async fn switch_season(
     app: tauri::AppHandle,
     uid: u64,
     aid: u64,
-    cid: u64,
     season_id: u64,
     section_id: u64,
     title: String,
@@ -671,6 +670,15 @@ pub async fn switch_season(
     let app_data = app.state::<AppData>();
     let my_client = app_data.get_client(uid).await?;
     let csrf = my_client.get_csrf()?;
+    let video = my_client
+        .bilibili
+        .video_data(&biliup::bilibili::Vid::Aid(aid), None)
+        .await
+        .map_err(|e| AppError::Biliup(e.to_string()))?;
+    let cid = video["videos"][0]["cid"]
+        .as_u64()
+        .filter(|cid| *cid > 0)
+        .ok_or_else(|| AppError::Custom("无法获取稿件首个分 P 的 CID".to_string()))?;
 
     if add {
         let res = my_client

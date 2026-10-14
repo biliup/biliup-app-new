@@ -488,7 +488,6 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
                         // rewrite the stored id & name
                         task_mutex.lock().await.video.filename = return_video.filename.clone();
                         task_mutex.lock().await.video.path.clear();
-                        task_mutex.lock().await.video.cid = return_video.cid as u64;
                         info!("{}", crate::tr!("upload.task_completed", title = task_title!(task_mutex), filename = return_video.filename));
                         task_mutex.lock().await.complete();
 

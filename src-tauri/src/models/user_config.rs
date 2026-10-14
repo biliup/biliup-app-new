@@ -57,8 +57,6 @@ pub struct VideoInfo {
     #[serde(default)]
     pub id: String,
     #[serde(default)]
-    pub cid: u64,
-    #[serde(default)]
     pub title: String,
     #[serde(default)]
     pub filename: String,
@@ -723,6 +721,51 @@ fn atomic_write(path: &std::path::Path, content: &[u8]) -> Result<()> {
 #[cfg(test)]
 mod persistence_tests {
     use super::*;
+
+    #[test]
+    fn legacy_video_cid_is_ignored_when_loading_and_saving_config() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "biliup-legacy-cid-test-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.json");
+        let legacy_config = serde_json::json!({
+            "config": {
+                "1": {
+                    "user": {
+                        "uid": 1,
+                        "name": "测试账号",
+                        "cookie": {
+                            "cookie_info": {"cookies": []},
+                            "sso": [],
+                            "token_info": {"access_token": "", "expires_in": 0, "mid": 1, "refresh_token": ""},
+                            "platform": null
+                        }
+                    },
+                    "templates": {
+                        "旧模板": {"videos": [{"filename": "test-video", "cid": 12345}]}
+                    }
+                }
+            }
+        });
+        fs::write(&path, serde_json::to_vec(&legacy_config).unwrap()).unwrap();
+        let mut config = ConfigRoot::from_file(&path).unwrap();
+        assert_eq!(
+            config.config[&1].templates["旧模板"].videos[0].filename,
+            "test-video"
+        );
+        config.save_to_file(&path).unwrap();
+        let saved: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let video = &saved["config"]["1"]["templates"]["旧模板"]["videos"][0];
+        assert_eq!(video["filename"], "test-video");
+        assert!(video.get("cid").is_none());
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn language_persists_and_old_configs_remain_compatible() {
