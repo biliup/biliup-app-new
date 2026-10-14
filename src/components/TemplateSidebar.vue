@@ -581,8 +581,15 @@ onUnmounted(() => {
 
 .header-buttons {
     display: flex;
+    flex: 1;
+    min-width: 0;
+    flex-wrap: wrap;
     gap: 8px;
     align-items: center;
+}
+
+.header-buttons > .el-button {
+    margin-left: 0;
 }
 
 .highlight-checkbox {

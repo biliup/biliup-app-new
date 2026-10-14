@@ -63,6 +63,7 @@ body {
     background-color: #f5f5f5;
 }
 
+html[lang='en-US'] .el-form-item__label,
 html[lang='ja-JP'] .el-form-item__label {
     height: auto;
     min-height: var(--el-component-size);
