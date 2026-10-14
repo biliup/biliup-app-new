@@ -186,7 +186,10 @@ export const useUtilsStore = defineStore('template', () => {
 
     const getVideoSeason = async (uid: number, aid: number) => {
         try {
-            const season = (await invoke('get_video_season', { uid, aid })) as number
+            const season = await invoke<{ season_id: number; section_id: number }>(
+                'get_video_season',
+                { uid, aid }
+            )
             return season
         } catch (error) {
             console.error(t('获取视频合集失败:'), error)
@@ -194,16 +197,9 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
-    const switchSeason = async (
-        uid: number,
-        aid: number,
-        seasonId: number,
-        sectionId: number,
-        title: string,
-        add: boolean
-    ) => {
+    const switchSeason = async (uid: number, aid: number, seasonId: number, sectionId: number) => {
         try {
-            await invoke('switch_season', { uid, aid, seasonId, sectionId, title, add })
+            return await invoke<boolean>('switch_season', { uid, aid, seasonId, sectionId })
         } catch (error) {
             console.error(t('设置合集失败:'), error)
             throw error

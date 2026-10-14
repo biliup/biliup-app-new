@@ -1508,35 +1508,25 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
 
     try {
         if (configuredSeasonId > 0) await utilsStore.getSeasonList(uid)
-        const old_season_id = Number(await utilsStore.getVideoSeason(uid, resp.aid))
-        let add = old_season_id && old_season_id !== 0 ? false : true
+        const changed = await utilsStore.switchSeason(
+            uid,
+            resp.aid,
+            templateSeasonId,
+            templateSectionId
+        )
+        if (!changed) return
 
-        if (template && old_season_id !== templateSeasonId) {
-            const new_season_id = templateSeasonId
-            const new_section_id = templateSectionId
-            await utilsStore.switchSeason(
-                uid,
-                resp.aid,
-                new_season_id,
-                new_section_id,
-                template.title,
-                add
-            )
-
-            const season_title =
-                utilsStore
-                    .getCachedSeasons(uid)
-                    .find((s: any) => Number(s.season_id) === templateSeasonId)?.title ||
-                templateSeasonId
-            utilsStore.showMessage(
-                t('视频{0}加入合集{1}', { 0: String(resp.bvid), 1: String(season_title) }),
-                'success'
-            )
-            console.log(
-                t('视频{0}加入合集{1}', { 0: String(resp.bvid), 1: String(season_title) }),
-                'success'
-            )
-        }
+        const seasonTitle =
+            utilsStore
+                .getCachedSeasons(uid)
+                .find((s: any) => Number(s.season_id) === templateSeasonId)?.title ||
+            templateSeasonId
+        const message =
+            templateSeasonId > 0
+                ? t('视频{0}加入合集{1}', { 0: String(resp.bvid), 1: String(seasonTitle) })
+                : t('视频{0}已移出合集', { 0: String(resp.bvid) })
+        utilsStore.showMessage(message, 'success')
+        console.log(message)
     } catch (error) {
         console.error(t('设置合集失败: '), error)
         utilsStore.showMessage(t('设置合集失败: {0}', { 0: String(error) }), 'error')
@@ -3263,14 +3253,11 @@ const getNewTemplateFromAv = async (userUid: number, aid: number) => {
         }
 
         if (newTemplate.aid && (await utilsStore.getSeasonList(userUid))) {
-            const season_id = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
+            const membership = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
 
-            if (season_id !== 0) {
-                const section_id = await utilsStore
-                    .getCachedSeasons(userUid)
-                    .find(item => item.season_id === season_id)?.section_id
-                newTemplate.season_id = season_id
-                newTemplate.section_id = section_id
+            if (membership.season_id !== 0) {
+                newTemplate.season_id = membership.season_id
+                newTemplate.section_id = membership.section_id
             }
         }
 

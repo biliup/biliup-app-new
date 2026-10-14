@@ -275,14 +275,11 @@ const createTemplateFromBV = async (
         }
 
         if (newTemplate.aid && (await utilsStore.getSeasonList(userUid))) {
-            const season_id = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
+            const membership = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
 
-            if (season_id !== 0) {
-                const section_id = await utilsStore
-                    .getCachedSeasons(userUid)
-                    .find(item => item.season_id === season_id)?.section_id
-                newTemplate.season_id = season_id
-                newTemplate.section_id = section_id
+            if (membership.season_id !== 0) {
+                newTemplate.season_id = membership.season_id
+                newTemplate.section_id = membership.section_id
             }
         }
 
