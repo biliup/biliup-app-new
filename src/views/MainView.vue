@@ -183,7 +183,12 @@
                             </div>
                         </div>
 
-                        <el-form :model="currentForm" label-width="80px" class="upload-form">
+                        <el-form
+                            :model="currentForm"
+                            :label-width="language === 'en-US' ? '140px' : '80px'"
+                            class="upload-form"
+                            :class="{ 'english-form': language === 'en-US' }"
+                        >
                             <!-- 基本信息 -->
                             <el-card
                                 class="form-section"
@@ -1092,7 +1097,7 @@ const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
 const uploadStore = useUploadStore()
 const utilsStore = useUtilsStore()
-const { t } = useI18nState()
+const { t, language } = useI18nState()
 
 // 计算属性
 const loginUsers = computed(() => authStore.loginUsers)
@@ -4362,6 +4367,15 @@ const checkUpdate = async () => {
 
 .form-section {
     margin-bottom: 20px;
+}
+
+.upload-form.english-form :deep(.el-form-item__label) {
+    height: auto;
+    min-height: var(--el-component-size);
+    align-self: flex-start;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    line-height: 20px;
 }
 
 .form-section.drag-target {
