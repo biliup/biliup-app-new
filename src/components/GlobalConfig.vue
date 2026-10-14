@@ -110,10 +110,21 @@
                         >
                             <el-option :label="t('globalConfig.line.auto')" value="auto" />
                             <el-option label="BDA2" value="bda2" />
+                            <el-option label="CNBD" value="cnbd" />
+                            <el-option label="ANBD" value="anbd" />
+                            <el-option label="ATBD" value="atbd" />
                             <el-option label="BLDSA" value="bldsa" />
+                            <el-option label="CNBLDSA" value="cnbldsa" />
+                            <el-option label="ANDSA" value="andsa" />
+                            <el-option label="ATDSA" value="atdsa" />
                             <el-option label="TX" value="tx" />
+                            <el-option label="CNTX" value="cntx" />
+                            <el-option label="ANTX" value="antx" />
+                            <el-option label="ATTX" value="attx" />
                             <el-option label="TXA" value="txa" />
                             <el-option label="ALIA" value="alia" />
+                            <el-option label="ESTX" value="estx" />
+                            <el-option label="AKBD" value="akbd" />
                         </el-select>
                         <div class="form-tip">{{ t('globalConfig.line.tip') }}</div>
                     </el-form-item>

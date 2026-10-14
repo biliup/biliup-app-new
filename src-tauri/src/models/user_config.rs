@@ -370,7 +370,25 @@ impl ConfigRoot {
         anyhow::ensure!(
             matches!(
                 line.as_deref(),
-                None | Some("auto" | "bda2" | "bldsa" | "tx" | "txa" | "alia")
+                None | Some(
+                    "auto"
+                        | "bda2"
+                        | "bldsa"
+                        | "tx"
+                        | "txa"
+                        | "alia"
+                        | "cnbd"
+                        | "anbd"
+                        | "atbd"
+                        | "cnbldsa"
+                        | "andsa"
+                        | "atdsa"
+                        | "cntx"
+                        | "antx"
+                        | "attx"
+                        | "estx"
+                        | "akbd"
+                )
             ),
             crate::i18n::text("upload.unsupported_route")
         );

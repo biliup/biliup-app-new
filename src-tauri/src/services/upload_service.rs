@@ -408,7 +408,10 @@ async fn upload_impl(
     wait_for_account_verification(&task_mutex, &risk).await?;
 
     // 定义可用的上传线路列表
-    let available_lines = ["auto", "bda2", "bldsa", "tx", "txa", "alia"];
+    let available_lines = [
+        "auto", "bda2", "bldsa", "tx", "txa", "alia", "cnbd", "anbd", "atbd", "cnbldsa", "andsa",
+        "atdsa", "cntx", "antx", "attx", "estx", "akbd",
+    ];
 
     // 根据重试次数自动选择线路
     let selected_line = if let Some(config_line) = &line {
@@ -441,6 +444,17 @@ async fn upload_impl(
         "tx" => line::tx(),
         "txa" => line::txa(),
         "alia" => line::alia(),
+        "cnbd" => line::cnbd(),
+        "anbd" => line::anbd(),
+        "atbd" => line::atbd(),
+        "cnbldsa" => line::cnbldsa(),
+        "andsa" => line::andsa(),
+        "atdsa" => line::atdsa(),
+        "cntx" => line::cntx(),
+        "antx" => line::antx(),
+        "attx" => line::attx(),
+        "estx" => line::estx(),
+        "akbd" => line::akbd(),
         _ => line::Probe::probe(&client.client).await?,
     };
 
