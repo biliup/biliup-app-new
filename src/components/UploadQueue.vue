@@ -1,8 +1,7 @@
 <template>
     <el-dropdown trigger="click" class="upload-queue-dropdown">
         <el-button link class="queue-button">
-            <el-icon><list /></el-icon>
-            上传队列
+            <el-icon><list /></el-icon> {{ t('上传队列') }}
             <el-badge
                 :value="uploadQueue.filter(task => task.status !== 'Completed').length"
                 :hidden="uploadQueue.length === 0"
@@ -19,13 +18,13 @@
                         class="header-button clear-btn"
                         @click="clearCompleted"
                     >
-                        清空已完成
+                        {{ t('清空已完成') }}
                     </el-button>
                     <el-button link size="small" class="header-button start-btn" @click="startAll">
-                        开始全部
+                        {{ t('开始全部') }}
                     </el-button>
                     <el-button link size="small" class="header-button pause-btn" @click="pauseAll">
-                        暂停全部
+                        {{ t('暂停全部') }}
                     </el-button>
                     <el-button
                         link
@@ -33,11 +32,13 @@
                         class="header-button cancel-btn"
                         @click="cancelAll"
                     >
-                        取消全部
+                        {{ t('取消全部') }}
                     </el-button>
                 </div>
                 <div class="queue-content">
-                    <div v-if="uploadQueue.length === 0" class="empty-queue">暂无上传任务</div>
+                    <div v-if="uploadQueue.length === 0" class="empty-queue">
+                        {{ t('暂无上传任务') }}
+                    </div>
                     <template v-for="task in uploadQueue" :key="task.id">
                         <!-- 已完成任务分割线 -->
                         <div
@@ -47,7 +48,7 @@
                             "
                             class="completed-divider"
                         >
-                            <span>已完成任务</span>
+                            <span>{{ t('已完成任务') }}</span>
                         </div>
                         <div
                             class="queue-item"
@@ -143,6 +144,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { computed } from 'vue'
 import { useUploadStore } from '../stores/upload'
 import { useUtilsStore } from '../stores/utils'
@@ -189,7 +191,7 @@ const uploadQueue = computed(() => {
 
 const getTaskFileNameById = (taskId: string) => {
     const task = uploadStore.uploadQueue.find(item => item.id === taskId)
-    return task?.video?.filename || task?.video?.title || '未知文件'
+    return task?.video?.filename || task?.video?.title || t('未知文件')
 }
 
 const formatFailedFiles = (taskIds: string[]) => {
@@ -197,20 +199,30 @@ const formatFailedFiles = (taskIds: string[]) => {
     if (names.length <= 5) {
         return names.join('、')
     }
-    return `${names.slice(0, 5).join('、')} 等 ${names.length} 个文件`
+    return t('{0} 等 {1} 个文件', {
+        0: String(names.slice(0, 5).join('、')),
+        1: String(names.length)
+    })
 }
 
 const showBatchResultMessage = (actionText: string, result: BatchActionResult) => {
     const { successCount, noopTaskIds, failedTaskIds } = result
 
     if (failedTaskIds.length === 0 && noopTaskIds.length === 0) {
-        utilsStore.showMessage(`已${actionText} ${successCount} 个任务`, 'success')
+        utilsStore.showMessage(
+            t('已{0} {1} 个任务', { 0: String(actionText), 1: String(successCount) }),
+            'success'
+        )
         return
     }
 
     if (failedTaskIds.length === 0 && noopTaskIds.length > 0) {
         utilsStore.showMessage(
-            `已${actionText} ${successCount} 个任务，${noopTaskIds.length} 个任务状态未变化`,
+            t('已{0} {1} 个任务，{2} 个任务状态未变化', {
+                0: String(actionText),
+                1: String(successCount),
+                2: String(noopTaskIds.length)
+            }),
             'info'
         )
         return
@@ -220,24 +232,34 @@ const showBatchResultMessage = (actionText: string, result: BatchActionResult) =
         if (successCount > 0) {
             const failedFiles = formatFailedFiles(failedTaskIds)
             utilsStore.showMessage(
-                `已${actionText} ${successCount} 个任务，以下文件操作失败：${failedFiles}`,
+                t('已{0} {1} 个任务，以下文件操作失败：{2}', {
+                    0: String(actionText),
+                    1: String(successCount),
+                    2: String(failedFiles)
+                }),
                 'warning'
             )
             return
         }
 
         const failedFiles = formatFailedFiles(failedTaskIds)
-        utilsStore.showMessage(`以下文件操作失败：${failedFiles}`, 'warning')
+        utilsStore.showMessage(t('以下文件操作失败：{0}', { 0: String(failedFiles) }), 'warning')
         return
     }
 
     if (failedTaskIds.length > 0 && noopTaskIds.length > 0) {
         const failedFiles = formatFailedFiles(failedTaskIds)
         if (successCount > 0) {
-            utilsStore.showMessage(`已${actionText} ${successCount} 个任务`, 'success')
+            utilsStore.showMessage(
+                t('已{0} {1} 个任务', { 0: String(actionText), 1: String(successCount) }),
+                'success'
+            )
         }
         utilsStore.showMessage(
-            `以下文件操作失败：${failedFiles}；另有 ${noopTaskIds.length} 个任务状态未变化`,
+            t('以下文件操作失败：{0}；另有 {1} 个任务状态未变化', {
+                0: String(failedFiles),
+                1: String(noopTaskIds.length)
+            }),
             'warning'
         )
         return
@@ -249,15 +271,15 @@ const clearCompleted = async () => {
     try {
         const completedTasks = uploadStore.uploadQueue.filter(task => task.status === 'Completed')
         if (completedTasks.length === 0) {
-            utilsStore.showMessage('没有已完成的任务', 'info')
+            utilsStore.showMessage(t('没有已完成的任务'), 'info')
             return
         }
 
         const result = await uploadStore.cancelUpload(completedTasks.map(task => task.id))
-        showBatchResultMessage('清空', result)
+        showBatchResultMessage(t('清空'), result)
     } catch (error) {
-        console.error('清空已完成任务失败:', error)
-        utilsStore.showMessage(`清空已完成任务失败: ${error}`, 'error')
+        console.error(t('清空已完成任务失败:'), error)
+        utilsStore.showMessage(t('清空已完成任务失败: {0}', { 0: String(error) }), 'error')
     }
 }
 
@@ -281,15 +303,15 @@ const startAll = async () => {
     try {
         const canBeStarted = uploadStore.uploadQueue.filter(task => canStart(task.status))
         if (canBeStarted.length === 0) {
-            utilsStore.showMessage('没有可开始的任务', 'info')
+            utilsStore.showMessage(t('没有可开始的任务'), 'info')
             return
         }
 
         const result = await uploadStore.startUpload(canBeStarted.map(task => task.id))
-        showBatchResultMessage('开始', result)
+        showBatchResultMessage(t('开始'), result)
     } catch (error) {
-        console.error('开始所有任务失败:', error)
-        utilsStore.showMessage(`开始所有任务失败: ${error}`, 'error')
+        console.error(t('开始所有任务失败:'), error)
+        utilsStore.showMessage(t('开始所有任务失败: {0}', { 0: String(error) }), 'error')
     }
 }
 
@@ -297,20 +319,20 @@ const startUpload = async (taskId: string) => {
     try {
         const result = await uploadStore.startUpload(taskId)
         if (result.successCount > 0) {
-            utilsStore.showMessage('任务已开始', 'success')
+            utilsStore.showMessage(t('任务已开始'), 'success')
             return
         }
 
         if (result.noopTaskIds.length > 0 && result.failedTaskIds.length === 0) {
-            utilsStore.showMessage('任务状态未变化', 'info')
+            utilsStore.showMessage(t('任务状态未变化'), 'info')
             return
         }
 
         const failedName = formatFailedFiles(result.failedTaskIds)
-        utilsStore.showMessage(`开始失败：${failedName}`, 'warning')
+        utilsStore.showMessage(t('开始失败：{0}', { 0: String(failedName) }), 'warning')
     } catch (error) {
-        console.error('开始上传失败:', error)
-        utilsStore.showMessage(`开始上传失败: ${error}`, 'error')
+        console.error(t('开始上传失败:'), error)
+        utilsStore.showMessage(t('开始上传失败: {0}', { 0: String(error) }), 'error')
     }
 }
 
@@ -318,15 +340,15 @@ const pauseAll = async () => {
     try {
         const activeTasks = uploadStore.uploadQueue.filter(task => canPause(task.status))
         if (activeTasks.length === 0) {
-            utilsStore.showMessage('没有可暂停的任务', 'info')
+            utilsStore.showMessage(t('没有可暂停的任务'), 'info')
             return
         }
 
         const result = await uploadStore.pauseUpload(activeTasks.map(task => task.id))
-        showBatchResultMessage('暂停', result)
+        showBatchResultMessage(t('暂停'), result)
     } catch (error) {
-        console.error('暂停所有任务失败:', error)
-        utilsStore.showMessage(`暂停所有任务失败: ${error}`, 'error')
+        console.error(t('暂停所有任务失败:'), error)
+        utilsStore.showMessage(t('暂停所有任务失败: {0}', { 0: String(error) }), 'error')
     }
 }
 
@@ -334,20 +356,20 @@ const pauseUpload = async (taskId: string) => {
     try {
         const result = await uploadStore.pauseUpload(taskId)
         if (result.successCount > 0) {
-            utilsStore.showMessage('任务已暂停', 'success')
+            utilsStore.showMessage(t('任务已暂停'), 'success')
             return
         }
 
         if (result.noopTaskIds.length > 0 && result.failedTaskIds.length === 0) {
-            utilsStore.showMessage('任务状态未变化', 'info')
+            utilsStore.showMessage(t('任务状态未变化'), 'info')
             return
         }
 
         const failedName = formatFailedFiles(result.failedTaskIds)
-        utilsStore.showMessage(`暂停失败：${failedName}`, 'warning')
+        utilsStore.showMessage(t('暂停失败：{0}', { 0: String(failedName) }), 'warning')
     } catch (error) {
-        console.error('暂停上传失败:', error)
-        utilsStore.showMessage(`暂停上传失败: ${error}`, 'error')
+        console.error(t('暂停上传失败:'), error)
+        utilsStore.showMessage(t('暂停上传失败: {0}', { 0: String(error) }), 'error')
     }
 }
 
@@ -355,28 +377,28 @@ const cancelAll = async () => {
     try {
         const activeTasks = uploadStore.uploadQueue.filter(task => canCancel(task.status))
         if (activeTasks.length === 0) {
-            utilsStore.showMessage('没有可取消的任务', 'info')
+            utilsStore.showMessage(t('没有可取消的任务'), 'info')
             return
         }
 
         // 添加确认弹窗
         await ElMessageBox.confirm(
-            `确定要取消所有 ${activeTasks.length} 个任务吗？此操作不可撤销。`,
-            '确认取消所有任务',
+            t('确定要取消所有 {0} 个任务吗？此操作不可撤销。', { 0: String(activeTasks.length) }),
+            t('确认取消所有任务'),
             {
-                confirmButtonText: '确定取消',
-                cancelButtonText: '取消',
+                confirmButtonText: t('确定取消'),
+                cancelButtonText: t('取消'),
                 type: 'warning'
             }
         )
 
         const result = await uploadStore.cancelUpload(activeTasks.map(task => task.id))
-        showBatchResultMessage('取消', result)
+        showBatchResultMessage(t('取消'), result)
     } catch (error) {
         // 如果用户取消了确认框，不显示错误消息
         if (error !== 'cancel') {
-            console.error('取消所有上传失败:', error)
-            utilsStore.showMessage(`取消所有上传失败: ${error}`, 'error')
+            console.error(t('取消所有上传失败:'), error)
+            utilsStore.showMessage(t('取消所有上传失败: {0}', { 0: String(error) }), 'error')
         }
     }
 }
@@ -385,37 +407,37 @@ const cancelUpload = async (taskId: string) => {
     try {
         // 获取任务信息用于确认提示
         const task = uploadStore.uploadQueue.find(t => t.id === taskId)
-        const taskTitle = task?.video?.title || '未知任务'
+        const taskTitle = task?.video?.title || t('未知任务')
 
         // 添加确认弹窗
         await ElMessageBox.confirm(
-            `确定要取消上传任务"${taskTitle}"吗？此操作不可撤销。`,
-            '确认取消任务',
+            t('确定要取消上传任务"{0}"吗？此操作不可撤销。', { 0: String(taskTitle) }),
+            t('确认取消任务'),
             {
-                confirmButtonText: '确定取消',
-                cancelButtonText: '取消',
+                confirmButtonText: t('确定取消'),
+                cancelButtonText: t('取消'),
                 type: 'warning'
             }
         )
 
         const result = await uploadStore.cancelUpload(taskId)
         if (result.successCount > 0) {
-            utilsStore.showMessage('任务已取消', 'success')
+            utilsStore.showMessage(t('任务已取消'), 'success')
             return
         }
 
         if (result.noopTaskIds.length > 0 && result.failedTaskIds.length === 0) {
-            utilsStore.showMessage('任务状态未变化', 'info')
+            utilsStore.showMessage(t('任务状态未变化'), 'info')
             return
         }
 
         const failedName = formatFailedFiles(result.failedTaskIds)
-        utilsStore.showMessage(`取消失败：${failedName}`, 'warning')
+        utilsStore.showMessage(t('取消失败：{0}', { 0: String(failedName) }), 'warning')
     } catch (error) {
         // 如果用户取消了确认框，不显示错误消息
         if (error !== 'cancel') {
-            console.error('取消上传失败:', error)
-            utilsStore.showMessage(`取消上传失败: ${error}`, 'error')
+            console.error(t('取消上传失败:'), error)
+            utilsStore.showMessage(t('取消上传失败: {0}', { 0: String(error) }), 'error')
         }
     }
 }
@@ -424,20 +446,20 @@ const retryUpload = async (taskId: string) => {
     try {
         const result = await uploadStore.retryUpload(taskId)
         if (result.successCount > 0) {
-            utilsStore.showMessage('任务已重试', 'success')
+            utilsStore.showMessage(t('任务已重试'), 'success')
             return
         }
 
         if (result.noopTaskIds.length > 0 && result.failedTaskIds.length === 0) {
-            utilsStore.showMessage('任务状态未变化', 'info')
+            utilsStore.showMessage(t('任务状态未变化'), 'info')
             return
         }
 
         const failedName = formatFailedFiles(result.failedTaskIds)
-        utilsStore.showMessage(`重试失败：${failedName}`, 'warning')
+        utilsStore.showMessage(t('重试失败：{0}', { 0: String(failedName) }), 'warning')
     } catch (error) {
-        console.error('重试上传失败:', error)
-        utilsStore.showMessage(`重试上传失败: ${error}`, 'error')
+        console.error(t('重试上传失败:'), error)
+        utilsStore.showMessage(t('重试上传失败: {0}', { 0: String(error) }), 'error')
     }
 }
 
@@ -451,18 +473,18 @@ const getTaskStatusClass = (status: string) => {
 }
 
 const getTaskDisplayName = (task: any) => {
-    return task.video?.title || '未知任务'
+    return task.video?.title || t('未知任务')
 }
 
 const getStatusText = (status: string) => {
     const statusMap = {
-        Waiting: '待开始',
-        Pending: '等待中',
-        Running: '上传中',
-        Completed: '已完成',
-        Cancelled: '已取消',
-        Paused: '已暂停',
-        Failed: '失败'
+        Waiting: t('待开始'),
+        Pending: t('等待中'),
+        Running: t('上传中'),
+        Completed: t('已完成'),
+        Cancelled: t('已取消'),
+        Paused: t('已暂停'),
+        Failed: t('失败')
     }
     return statusMap[status as keyof typeof statusMap] || status
 }
@@ -510,10 +532,10 @@ const formatFinishedTime = (timestamp: number | string): string => {
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-        if (diffMins < 1) return '刚刚完成'
-        if (diffMins < 60) return `${diffMins}分钟前`
-        if (diffHours < 24) return `${diffHours}小时前`
-        if (diffDays < 7) return `${diffDays}天前`
+        if (diffMins < 1) return t('刚刚完成')
+        if (diffMins < 60) return t('{0}分钟前', { 0: String(diffMins) })
+        if (diffHours < 24) return t('{0}小时前', { 0: String(diffHours) })
+        if (diffDays < 7) return t('{0}天前', { 0: String(diffDays) })
 
         // 超过7天显示具体日期
         return date.toLocaleDateString('zh-CN', {
@@ -523,7 +545,7 @@ const formatFinishedTime = (timestamp: number | string): string => {
             minute: '2-digit'
         })
     } catch {
-        return '未知时间'
+        return t('未知时间')
     }
 }
 
@@ -566,7 +588,7 @@ const getTaskWarningClass = (task: any): string => {
 const getTaskWarningTooltip = (task: any): string => {
     // 优先显示失败任务的错误信息
     if (task.status === 'Failed') {
-        return '上传失败：' + task.error_message
+        return t('上传失败：') + task.error_message
     }
 
     // 其次显示已完成但超时的警告信息
@@ -579,12 +601,14 @@ const getTaskWarningTooltip = (task: any): string => {
             )
 
             if (diffHours >= 10) {
-                return '此任务完成超过10小时，服务器可能已删除相关文件'
+                return t('此任务完成超过10小时，服务器可能已删除相关文件')
             } else {
-                return `此任务完成已${diffHours}小时，服务器将在10小时后删除相关文件`
+                return t('此任务完成已{0}小时，服务器将在10小时后删除相关文件', {
+                    0: String(diffHours)
+                })
             }
         } catch {
-            return '任务完成时间较长，可能无法上传'
+            return t('任务完成时间较长，可能无法上传')
         }
     }
     return ''

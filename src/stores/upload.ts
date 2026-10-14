@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
@@ -53,7 +54,7 @@ export const useUploadStore = defineStore('upload', () => {
     const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
     const createSubmitCancelledError = () => {
-        const error = new Error('提交已取消') as Error & { code?: string }
+        const error = new Error(t('提交已取消')) as Error & { code?: string }
         error.code = submitCancelCode
         return error
     }
@@ -119,7 +120,7 @@ export const useUploadStore = defineStore('upload', () => {
                     const result = await invoke('submit', { uid, form: upload })
                     resolve(result)
                 } catch (error) {
-                    console.error('提交视频失败:', error)
+                    console.error(t('提交视频失败:'), error)
                     reject(error)
                 } finally {
                     lastSubmitInvokeAt = Date.now()
@@ -187,7 +188,7 @@ export const useUploadStore = defineStore('upload', () => {
             await getUploadQueue() // 刷新队列
             return createdCount
         } catch (error) {
-            console.error('创建上传任务失败:', error)
+            console.error(t('创建上传任务失败:'), error)
             throw error
         }
     }
@@ -206,7 +207,7 @@ export const useUploadStore = defineStore('upload', () => {
 
             return startedResult
         } catch (error) {
-            console.error('开始上传失败:', error)
+            console.error(t('开始上传失败:'), error)
             throw error
         }
     }
@@ -221,7 +222,7 @@ export const useUploadStore = defineStore('upload', () => {
 
             return pausedResult
         } catch (error) {
-            console.error('暂停上传失败:', error)
+            console.error(t('暂停上传失败:'), error)
             throw error
         }
     }
@@ -236,7 +237,7 @@ export const useUploadStore = defineStore('upload', () => {
 
             return cancelledResult
         } catch (error) {
-            console.error('取消上传失败:', error)
+            console.error(t('取消上传失败:'), error)
             throw error
         }
     }
@@ -264,7 +265,7 @@ export const useUploadStore = defineStore('upload', () => {
             uploadQueue.value = queue
             return queue
         } catch (error) {
-            console.error('获取上传队列失败:', error)
+            console.error(t('获取上传队列失败:'), error)
             throw error
         }
     }
@@ -280,7 +281,7 @@ export const useUploadStore = defineStore('upload', () => {
             }
             return retriedResult
         } catch (error) {
-            console.error('重试上传失败:', error)
+            console.error(t('重试上传失败:'), error)
             throw error
         }
     }

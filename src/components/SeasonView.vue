@@ -3,7 +3,7 @@
         <div class="season-select-row">
             <el-select
                 v-model="selectedSeasonId"
-                placeholder="请选择合集"
+                :placeholder="t('请选择合集')"
                 clearable
                 filterable
                 :loading="isSearching"
@@ -29,7 +29,7 @@
             <el-select
                 v-if="showSectionSelect"
                 v-model="selectedSectionId"
-                placeholder="请选择小节"
+                :placeholder="t('请选择小节')"
                 filterable
                 :disabled="disabled"
                 class="season-select season-section-select"
@@ -53,6 +53,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { computed, ref, watch } from 'vue'
 import { useUtilsStore } from '../stores/utils'
 
@@ -115,7 +116,7 @@ const normalizeSeason = (season: any): SeasonOption | null => {
         return null
     }
 
-    const seasonTitle = String(season?.title || `合集 ${seasonId}`)
+    const seasonTitle = String(season?.title || t('合集 {0}', { 0: String(seasonId) }))
 
     let sections: SeasonSection[] = []
     if (Array.isArray(season?.sections)) {
@@ -128,7 +129,7 @@ const normalizeSeason = (season: any): SeasonOption | null => {
 
                 return {
                     section_id: sectionId,
-                    title: String(section?.title || `小节 ${sectionId}`)
+                    title: String(section?.title || t('小节 {0}', { 0: String(sectionId) }))
                 }
             })
             .filter(Boolean) as SeasonSection[]
@@ -139,7 +140,7 @@ const normalizeSeason = (season: any): SeasonOption | null => {
         sections = [
             {
                 section_id: defaultSectionId,
-                title: '默认小节'
+                title: t('默认小节')
             }
         ]
     }
@@ -238,8 +239,8 @@ const loadSeasons = async () => {
         syncSelectionWithCurrentSeason()
     } catch (error) {
         if (requestId !== seasonRequestId || props.userUid !== uid) return
-        console.error('加载合集列表失败:', error)
-        utilsStore.showMessage(`加载合集列表失败: ${error}`, 'error')
+        console.error(t('加载合集列表失败:'), error)
+        utilsStore.showMessage(t('加载合集列表失败: {0}', { 0: String(error) }), 'error')
     } finally {
         if (requestId === seasonRequestId) isSearching.value = false
     }

@@ -90,7 +90,7 @@ impl CompatibilityConverter {
     /// 如果需要兼容模式，自动转换YAML到JSON
     pub async fn startup_with_compatibility() -> Result<bool> {
         if Self::should_convert_old_config()? {
-            info!("检测到旧版配置文件，开始兼容性转换...");
+            info!("{}", crate::tr!("config.legacy_conversion_started"));
 
             let yaml_path = get_config_yaml_path()?;
             let json_path = get_config_json_path()?;
@@ -197,7 +197,7 @@ impl CompatibilityConverter {
         let (bilibili, user) = validate_cookie_in_old_config(&cookie_path)
             .await
             .map_err(|e| {
-                warn!("登录状态验证失败: {}", e);
+                warn!("{}", crate::tr!("auth.login_verify_failed", error = e));
                 e
             })?;
         let user_uid = user.uid;

@@ -1,16 +1,16 @@
 <template>
     <el-dialog
         v-model="visible"
-        :title="`${user?.username} 的配置`"
+        :title="t('{0} 的配置', { 0: String(user?.username) })"
         width="500px"
         :before-close="handleClose"
         @close="handleDialogClose"
     >
         <el-form :model="configForm" label-width="120px" v-loading="loading">
             <!-- 线路选择 -->
-            <el-form-item label="上传线路">
-                <el-select v-model="configForm.line" placeholder="请选择上传线路">
-                    <el-option label="自动选择" value="auto" />
+            <el-form-item :label="t('上传线路')">
+                <el-select v-model="configForm.line" :placeholder="t('请选择上传线路')">
+                    <el-option :label="t('自动选择')" value="auto" />
                     <el-option label="BDA2" value="bda2" />
                     <el-option label="BLDSA" value="bldsa" />
                     <el-option label="TX" value="tx" />
@@ -18,20 +18,20 @@
                     <el-option label="BDA" value="bda" />
                     <el-option label="ALIA" value="alia" />
                 </el-select>
-                <div class="form-tip">自动选择将根据网络环境自动选择最优线路</div>
+                <div class="form-tip">{{ t('自动选择将根据网络环境自动选择最优线路') }}</div>
             </el-form-item>
 
             <!-- 代理设置 -->
-            <el-form-item label="代理设置">
+            <el-form-item :label="t('代理设置')">
                 <el-checkbox v-model="proxyForm.enabled" class="proxy-checkbox">
-                    启用代理
+                    {{ t('启用代理') }}
                 </el-checkbox>
 
                 <div v-show="proxyForm.enabled" class="proxy-config">
-                    <el-form-item label="代理类型" style="margin-top: 10px">
+                    <el-form-item :label="t('代理类型')" style="margin-top: 10px">
                         <el-select
                             v-model="proxyForm.type"
-                            placeholder="选择代理类型"
+                            :placeholder="t('选择代理类型')"
                             class="proxy-type-select"
                         >
                             <el-option label="HTTP" value="http" />
@@ -40,7 +40,7 @@
                         </el-select>
                     </el-form-item>
 
-                    <el-form-item label="服务器地址">
+                    <el-form-item :label="t('服务器地址')">
                         <el-input
                             v-model="proxyForm.host"
                             placeholder="127.0.0.1"
@@ -48,7 +48,7 @@
                         />
                     </el-form-item>
 
-                    <el-form-item label="端口">
+                    <el-form-item :label="t('端口')">
                         <el-input
                             v-model="proxyForm.port"
                             type="number"
@@ -59,24 +59,24 @@
 
                     <el-form-item>
                         <el-checkbox v-model="proxyForm.needAuth" class="proxy-auth-checkbox">
-                            需要身份验证
+                            {{ t('需要身份验证') }}
                         </el-checkbox>
                     </el-form-item>
 
                     <div v-show="proxyForm.needAuth" class="proxy-auth">
-                        <el-form-item label="用户名">
+                        <el-form-item :label="t('用户名')">
                             <el-input
                                 v-model="proxyForm.username"
-                                placeholder="用户名"
+                                :placeholder="t('用户名')"
                                 class="proxy-input"
                             />
                         </el-form-item>
 
-                        <el-form-item label="密码">
+                        <el-form-item :label="t('密码')">
                             <el-input
                                 v-model="proxyForm.password"
                                 type="password"
-                                placeholder="密码"
+                                :placeholder="t('密码')"
                                 show-password
                                 class="proxy-input"
                             />
@@ -84,11 +84,11 @@
                     </div>
                 </div>
 
-                <div class="form-tip">修改代理设置需要重启应用后生效</div>
+                <div class="form-tip">{{ t('修改代理设置需要重启应用后生效') }}</div>
             </el-form-item>
 
             <!-- 并发数设置 -->
-            <el-form-item label="单视频并发数">
+            <el-form-item :label="t('单视频并发数')">
                 <div class="slider-container">
                     <el-slider
                         v-model="configForm.limit"
@@ -102,31 +102,36 @@
                 </div>
             </el-form-item>
 
-            <el-form-item label="默认开启水印">
+            <el-form-item :label="t('默认开启水印')">
                 <el-checkbox v-model="configForm.watermark" :true-value="1" :false-value="0">
-                    开启
+                    {{ t('开启') }}
                 </el-checkbox>
             </el-form-item>
             <el-form-item>
                 <template #label>
-                    <span class="multi-line-label"> 上传完成<br />自动编辑 </span>
+                    <span class="multi-line-label">
+                        {{ t('上传完成') }}<br />{{ t('自动编辑') }}
+                    </span>
                 </template>
                 <el-checkbox v-model="configForm.auto_edit" :true-value="1" :false-value="0">
-                    开启
+                    {{ t('开启') }}
                 </el-checkbox>
             </el-form-item>
         </el-form>
 
         <template #footer>
             <span class="dialog-footer">
-                <el-button @click="handleCancel">取消</el-button>
-                <el-button type="primary" @click="handleSave" :loading="saving"> 保存 </el-button>
+                <el-button @click="handleCancel">{{ t('取消') }}</el-button>
+                <el-button type="primary" @click="handleSave" :loading="saving">
+                    {{ t('保存') }}
+                </el-button>
             </span>
         </template>
     </el-dialog>
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { ref, watch, nextTick } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { useUserConfigStore } from '../stores/user_config'
@@ -318,8 +323,8 @@ const loadUserConfig = async () => {
             parseProxyUrl('')
         }
     } catch (error) {
-        console.error('加载用户配置失败:', error)
-        utilsStore.showMessage(`加载用户配置失败: ${error}`, 'error')
+        console.error(t('加载用户配置失败:'), error)
+        utilsStore.showMessage(t('加载用户配置失败: {0}', { 0: String(error) }), 'error')
     } finally {
         loading.value = false
     }
@@ -343,13 +348,13 @@ const handleSave = async () => {
         }
 
         if (!userConfigStore.configRoot) {
-            throw new Error('无法加载配置')
+            throw new Error(t('无法加载配置'))
         }
 
         // 更新用户配置
         const userConfig = userConfigStore.configRoot.config[props.user.uid]
         if (!userConfig) {
-            throw new Error('用户配置不存在')
+            throw new Error(t('用户配置不存在'))
         }
 
         userConfig.line = configForm.value.line === 'auto' ? undefined : configForm.value.line
@@ -361,13 +366,13 @@ const handleSave = async () => {
         // 保存配置
         await userConfigStore.updateUserConfig(props.user.uid, userConfig)
 
-        utilsStore.showMessage('配置保存成功', 'success')
+        utilsStore.showMessage(t('配置保存成功'), 'success')
 
         // 如果代理设置有变化，提示重启
         if (proxyChanged) {
             await nextTick()
-            ElMessageBox.alert('代理设置已更改，需要重启应用后生效', '重启提示', {
-                confirmButtonText: '知道了',
+            ElMessageBox.alert(t('代理设置已更改，需要重启应用后生效'), t('重启提示'), {
+                confirmButtonText: t('知道了'),
                 type: 'info'
             })
         }
@@ -375,8 +380,8 @@ const handleSave = async () => {
         emit('config-updated')
         visible.value = false
     } catch (error) {
-        console.error('保存配置失败:', error)
-        utilsStore.showMessage(`保存配置失败: ${error}`, 'error')
+        console.error(t('保存配置失败:'), error)
+        utilsStore.showMessage(t('保存配置失败: {0}', { 0: String(error) }), 'error')
     } finally {
         saving.value = false
     }
@@ -391,9 +396,9 @@ const handleCancel = () => {
 const handleClose = (done: () => void) => {
     // 检查是否有未保存的更改
     if (hasUnsavedChanges()) {
-        ElMessageBox.confirm('有未保存的更改，确定要关闭吗？', '确认', {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
+        ElMessageBox.confirm(t('有未保存的更改，确定要关闭吗？'), t('确认'), {
+            confirmButtonText: t('确定'),
+            cancelButtonText: t('取消'),
             type: 'warning'
         })
             .then(() => {

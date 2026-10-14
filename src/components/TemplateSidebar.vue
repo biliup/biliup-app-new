@@ -8,7 +8,9 @@
                     size="small"
                     class="highlight-checkbox"
                 >
-                    <span class="highlight-checkbox-text"> 高亮显示<br />自动提交 </span>
+                    <span class="highlight-checkbox-text">
+                        {{ t('高亮显示') }}<br />{{ t('自动提交') }}
+                    </span>
                 </el-checkbox>
                 <el-button
                     type="success"
@@ -16,8 +18,7 @@
                     @click="emit('show-login')"
                     :disabled="templateLoading"
                 >
-                    <el-icon><User /></el-icon>
-                    登录用户
+                    <el-icon><User /></el-icon> {{ t('登录用户') }}
                 </el-button>
                 <el-button
                     type="primary"
@@ -25,8 +26,7 @@
                     @click="emit('show-new-template')"
                     :disabled="!loginUserCount || templateLoading"
                 >
-                    <el-icon><Plus /></el-icon>
-                    新建模板
+                    <el-icon><Plus /></el-icon> {{ t('新建模板') }}
                 </el-button>
             </div>
         </div>
@@ -46,7 +46,7 @@
                             'user-header-expired': userTemplate.user.expired
                         }"
                     >
-                        <div class="user-drag-handle" title="拖动用户排序" @click.stop>
+                        <div class="user-drag-handle" :title="t('拖动用户排序')" @click.stop>
                             <span></span>
                             <span></span>
                         </div>
@@ -67,7 +67,7 @@
                             class="config-icon"
                             :class="{ disabled: userTemplate.user.expired }"
                             @click.stop="emit('open-user-config', userTemplate.user)"
-                            title="用户配置"
+                            :title="t('用户配置')"
                         >
                             <Setting />
                         </el-icon>
@@ -97,22 +97,22 @@
                                 "
                             >
                                 <el-button link size="small" class="template-sort-btn">
-                                    排序
+                                    {{ t('排序') }}
                                 </el-button>
                                 <template #dropdown>
                                     <el-dropdown-menu>
-                                        <el-dropdown-item command="name-asc"
-                                            >模板名正序</el-dropdown-item
-                                        >
-                                        <el-dropdown-item command="name-desc"
-                                            >模板名倒序</el-dropdown-item
-                                        >
-                                        <el-dropdown-item command="recent-saved"
-                                            >最近保存正序</el-dropdown-item
-                                        >
-                                        <el-dropdown-item command="recent-saved-desc"
-                                            >最近保存倒序</el-dropdown-item
-                                        >
+                                        <el-dropdown-item command="name-asc">{{
+                                            t('模板名正序')
+                                        }}</el-dropdown-item>
+                                        <el-dropdown-item command="name-desc">{{
+                                            t('模板名倒序')
+                                        }}</el-dropdown-item>
+                                        <el-dropdown-item command="recent-saved">{{
+                                            t('最近保存正序')
+                                        }}</el-dropdown-item>
+                                        <el-dropdown-item command="recent-saved-desc">{{
+                                            t('最近保存倒序')
+                                        }}</el-dropdown-item>
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
@@ -151,11 +151,11 @@
                                             hasUnsavedChanges(userTemplate.user.uid, template.name)
                                         "
                                         class="unsaved-indicator"
-                                        title="有未保存的修改"
+                                        :title="t('有未保存的修改')"
                                     ></span>
                                 </div>
                                 <div class="template-desc">
-                                    {{ template.config.title || '无标题' }}
+                                    {{ template.config.title || t('无标题') }}
                                 </div>
                             </div>
                             <el-dropdown
@@ -177,13 +177,15 @@
                                 </el-button>
                                 <template #dropdown>
                                     <el-dropdown-menu>
-                                        <el-dropdown-item command="duplicate"
-                                            >复制</el-dropdown-item
-                                        >
-                                        <el-dropdown-item command="rename">重命名</el-dropdown-item>
-                                        <el-dropdown-item command="delete" divided
-                                            >删除</el-dropdown-item
-                                        >
+                                        <el-dropdown-item command="duplicate">{{
+                                            t('复制')
+                                        }}</el-dropdown-item>
+                                        <el-dropdown-item command="rename">{{
+                                            t('重命名')
+                                        }}</el-dropdown-item>
+                                        <el-dropdown-item command="delete" divided>{{
+                                            t('删除')
+                                        }}</el-dropdown-item>
                                     </el-dropdown-menu>
                                 </template>
                             </el-dropdown>
@@ -191,14 +193,16 @@
 
                         <div v-if="userTemplate.user.expired" class="expired-mask">
                             <div class="expired-mask-content">
-                                <div class="expired-mask-title">账号登录状态已失效</div>
-                                <div class="expired-mask-desc">请重新登录后再编辑或选择模板</div>
+                                <div class="expired-mask-title">{{ t('账号登录状态已失效') }}</div>
+                                <div class="expired-mask-desc">
+                                    {{ t('请重新登录后再编辑或选择模板') }}
+                                </div>
                                 <el-button
                                     type="primary"
                                     size="small"
                                     @click.stop="emit('show-login')"
                                 >
-                                    重新登录
+                                    {{ t('重新登录') }}
                                 </el-button>
                             </div>
                         </div>
@@ -206,8 +210,10 @@
                 </div>
 
                 <div v-if="userTemplates.length === 0" class="empty-users">
-                    <el-empty description="暂无登录用户">
-                        <el-button type="primary" @click="emit('show-login')">去登录</el-button>
+                    <el-empty :description="t('暂无登录用户')">
+                        <el-button type="primary" @click="emit('show-login')">{{
+                            t('去登录')
+                        }}</el-button>
                     </el-empty>
                 </div>
             </div>
@@ -216,6 +222,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ArrowDown, MoreFilled, Plus, Setting, User } from '@element-plus/icons-vue'
@@ -305,7 +312,7 @@ const handleUserExpansion = (userUid: number) => {
     const targetUser = userTemplates.value.find(user => user.user.uid === userUid)?.user
     if (targetUser?.expired) {
         emit('show-login')
-        ElMessage.warning('该用户登录状态已过期，请重新登录')
+        ElMessage.warning(t('该用户登录状态已过期，请重新登录'))
         return
     }
 
@@ -326,7 +333,7 @@ const handleTemplateSelection = (user: TemplateUser, templateName: string) => {
 
     if (user.expired) {
         emit('show-login')
-        ElMessage.warning('该用户登录状态已过期，请重新登录')
+        ElMessage.warning(t('该用户登录状态已过期，请重新登录'))
         return
     }
 
@@ -366,10 +373,10 @@ const { syncSortable: syncUserSectionSortable, destroySortable: destroyUserSecti
         onOrderChange: async nextOrder => {
             try {
                 await authStore.reorderLoginUsers(nextOrder)
-                ElMessage.success('用户顺序已保存')
+                ElMessage.success(t('用户顺序已保存'))
             } catch (error) {
-                console.error('用户排序失败:', error)
-                ElMessage.error(`用户排序失败: ${error}`)
+                console.error(t('用户排序失败:'), error)
+                ElMessage.error(t('用户排序失败: {0}', { 0: String(error) }))
                 await syncUserSectionSortable()
             }
         },
@@ -436,10 +443,10 @@ const createTemplateSortable = (userTemplate: UserTemplateGroup, container: HTML
             try {
                 skipNextTemplateSelection.value = true
                 await userConfigStore.reorderUserTemplates(userUid, nextOrder)
-                ElMessage.success('模板顺序已保存')
+                ElMessage.success(t('模板顺序已保存'))
             } catch (error) {
-                console.error('拖动排序失败:', error)
-                ElMessage.error(`拖动排序失败: ${error}`)
+                console.error(t('拖动排序失败:'), error)
+                ElMessage.error(t('拖动排序失败: {0}', { 0: String(error) }))
                 void syncTemplateSortables()
             } finally {
                 window.setTimeout(() => {
@@ -490,11 +497,11 @@ const handleTemplateSortCommand = async (userUid: number, command: string) => {
                 userUid,
                 command as 'name-asc' | 'name-desc' | 'recent-saved' | 'recent-saved-desc'
             )
-            ElMessage.success('模板顺序已更新')
+            ElMessage.success(t('模板顺序已更新'))
         }
     } catch (error) {
-        console.error('模板排序失败:', error)
-        ElMessage.error(`模板排序失败: ${error}`)
+        console.error(t('模板排序失败:'), error)
+        ElMessage.error(t('模板排序失败: {0}', { 0: String(error) }))
     }
 }
 

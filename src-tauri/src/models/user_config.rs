@@ -187,6 +187,8 @@ pub struct ConfigRoot {
     pub auto_start: bool,
     #[serde(default = "default_log_level")]
     pub log_level: String,
+    #[serde(default = "default_language")]
+    pub language: String,
     #[serde(default)]
     pub user_order: Vec<u64>,
     #[serde(default)]
@@ -201,6 +203,14 @@ fn default_log_level() -> String {
     "info".to_string()
 }
 
+fn default_language() -> String {
+    "zh-CN".to_string()
+}
+
+fn normalize_language(value: &str) -> String {
+    crate::i18n::normalize_language(value).to_string()
+}
+
 impl ConfigRoot {
     pub fn from_file(path: &PathBuf) -> Result<Self> {
         let load = |path: &PathBuf| -> Result<Self> {
@@ -213,7 +223,10 @@ impl ConfigRoot {
                 let backup = path.with_extension("json.bak");
                 match load(&backup) {
                     Ok(config) => {
-                        warn!("主配置无法加载，已从备份恢复: {}", original_error);
+                        warn!(
+                            "{}",
+                            crate::tr!("config.backup_restored", error = original_error)
+                        );
                         config
                     }
                     Err(_) => return Err(original_error),
@@ -227,7 +240,7 @@ impl ConfigRoot {
     pub fn save_to_file(&mut self, path: &PathBuf) -> Result<()> {
         anyhow::ensure!(
             !self.read_only,
-            "配置恢复模式禁止保存，请修复原配置后重启应用"
+            crate::i18n::text("config.recovery_read_only")
         );
         self.normalize_template_metadata();
         let parent = path
@@ -247,7 +260,7 @@ impl ConfigRoot {
     pub fn save_logout_to_file(&mut self, path: &PathBuf) -> Result<()> {
         anyhow::ensure!(
             !self.read_only,
-            "配置恢复模式禁止保存，请修复原配置后重启应用"
+            crate::i18n::text("config.recovery_read_only")
         );
         self.normalize_template_metadata();
         let content = serde_json::to_vec_pretty(self)?;
@@ -258,6 +271,7 @@ impl ConfigRoot {
 
     pub fn normalize_template_metadata(&mut self) {
         self.normalize_user_order();
+        self.language = normalize_language(&self.language);
         for user_config in self.config.values_mut() {
             if matches!(user_config.line.as_deref(), Some("ws" | "qn")) {
                 user_config.line = None;
@@ -332,7 +346,7 @@ impl ConfigRoot {
             self.user_order.retain(|id| *id != uid);
             Ok(self)
         } else {
-            Err(anyhow::anyhow!("用户配置不存在"))
+            Err(anyhow::anyhow!("{}", crate::tr!("config.user_missing")))
         }
     }
 
@@ -351,23 +365,29 @@ impl ConfigRoot {
         watermark: u8,
         auto_edit: u8,
     ) -> Result<&Self> {
-        anyhow::ensure!((1..=12).contains(&limit), "上传并发数必须在 1 到 12 之间");
+        anyhow::ensure!(
+            (1..=12).contains(&limit),
+            crate::i18n::text("upload.invalid_concurrency")
+        );
         anyhow::ensure!(
             matches!(
                 line.as_deref(),
                 None | Some("auto" | "bda2" | "bldsa" | "tx" | "txa" | "bda" | "alia")
             ),
-            "不支持的上传线路，请重新选择"
+            crate::i18n::text("upload.unsupported_route")
         );
         if let Some(user_config) = self.config.get_mut(&uid) {
             info!(
-                "UID {} 用户配置更新: line={:?}, proxy_enabled={}, limit={}, watermark={}, auto_edit={}",
-                uid,
-                line,
-                proxy.is_some(),
-                limit,
-                watermark,
-                auto_edit
+                "{}",
+                crate::tr!(
+                    "config.user_updated",
+                    uid = uid,
+                    line = format!("{:?}", line),
+                    proxy_enabled = proxy.is_some(),
+                    limit = limit,
+                    watermark = watermark,
+                    auto_edit = auto_edit
+                )
             );
             user_config.line = line;
             user_config.proxy = proxy;
@@ -376,7 +396,7 @@ impl ConfigRoot {
             user_config.auto_edit = auto_edit;
             Ok(self)
         } else {
-            Err(anyhow::anyhow!("用户配置不存在"))
+            Err(anyhow::anyhow!("{}", crate::tr!("config.user_missing")))
         }
     }
 
@@ -386,15 +406,24 @@ impl ConfigRoot {
         auto_start: bool,
         auto_upload: bool,
         log_level: String,
+        language: String,
     ) -> &Self {
         info!(
-            "更新全局配置: max_curr={}, auto_start={}, auto_upload={}, log_level={}",
-            max_curr, auto_start, auto_upload, log_level
+            "{}",
+            crate::tr!(
+                "config.global_updating",
+                max_curr = max_curr,
+                auto_start = auto_start,
+                auto_upload = auto_upload,
+                log_level = log_level,
+                language = language
+            )
         );
         self.max_curr = max_curr;
         self.auto_start = auto_start;
         self.auto_upload = auto_upload;
         self.log_level = log_level;
+        self.language = normalize_language(&language);
 
         self
     }
@@ -462,7 +491,7 @@ impl ConfigRoot {
             user_config.normalize_template_metadata();
             Ok(self)
         } else {
-            Err(anyhow::anyhow!("用户配置不存在"))
+            Err(anyhow::anyhow!("{}", crate::tr!("config.user_missing")))
         }
     }
 
@@ -474,17 +503,20 @@ impl ConfigRoot {
     ) -> Result<&Self> {
         if let Some(user_config) = self.config.get_mut(&uid) {
             if !user_config.templates.contains_key(old_name) {
-                return Err(anyhow::anyhow!("原模板不存在"));
+                return Err(anyhow::anyhow!(
+                    "{}",
+                    crate::tr!("template.original_missing")
+                ));
             }
 
             if user_config.templates.contains_key(new_name) {
-                return Err(anyhow::anyhow!("该名称的模板已存在"));
+                return Err(anyhow::anyhow!("{}", crate::tr!("template.name_exists")));
             }
 
             let template = user_config
                 .templates
                 .remove(old_name)
-                .ok_or_else(|| anyhow::anyhow!("原模板不存在"))?;
+                .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("template.original_missing")))?;
 
             user_config.templates.insert(new_name.to_string(), template);
 
@@ -503,7 +535,7 @@ impl ConfigRoot {
             user_config.normalize_template_metadata();
             Ok(self)
         } else {
-            Err(anyhow::anyhow!("用户配置不存在"))
+            Err(anyhow::anyhow!("{}", crate::tr!("config.user_missing")))
         }
     }
 }
@@ -516,6 +548,7 @@ impl Default for ConfigRoot {
             auto_start: true,
             auto_upload: true,
             log_level: default_log_level(),
+            language: default_language(),
             user_order: Vec::new(),
             config: HashMap::new(),
         }
@@ -547,13 +580,19 @@ impl ConfigRoot {
             // 打印新增的 VideoInfo
             for new_video in new {
                 if !old.contains(new_video) {
-                    debug!("添加视频信息: {:?}", new_video);
+                    debug!(
+                        "{}",
+                        crate::tr!("video.adding", video = format!("{:?}", new_video))
+                    );
                 }
             }
             // 打印被删除的 VideoInfo
             for old_video in old {
                 if !new.contains(old_video) {
-                    debug!("删除视频信息: {:?}", old_video);
+                    debug!(
+                        "{}",
+                        crate::tr!("video.removing", video = format!("{:?}", old_video))
+                    );
                 }
             }
         }
@@ -684,6 +723,52 @@ fn atomic_write(path: &std::path::Path, content: &[u8]) -> Result<()> {
 #[cfg(test)]
 mod persistence_tests {
     use super::*;
+
+    #[test]
+    fn language_persists_and_old_configs_remain_compatible() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!(
+            "biliup-language-test-{}-{nonce}",
+            std::process::id()
+        ));
+        let path = dir.join("config.json");
+        let mut config = ConfigRoot::default();
+        let cookie: LoginInfo = serde_json::from_value(serde_json::json!({
+            "cookie_info": {"cookies": [{"name": "SESSDATA", "value": "test-secret"}]},
+            "sso": [],
+            "token_info": {"access_token": "", "expires_in": 0, "mid": 1, "refresh_token": ""},
+            "platform": null
+        }))
+        .unwrap();
+        config.new_user_config(1, "中文用户名".to_string(), cookie, None);
+        let mut template = TemplateConfig::default();
+        template.title = "中文投稿标题".to_string();
+        template.desc = "原始简介".to_string();
+        config.add_user_template(1, "中文模板", template);
+        // 使用真实持久化路径验证语言字段，账号及模板数据不参与翻译。
+        config.save_global_config(2, true, true, "info".to_string(), "en-US".to_string());
+        let original_users = serde_json::to_value(&config.config).unwrap();
+        config.save_to_file(&path).unwrap();
+        let restored = ConfigRoot::from_file(&path).unwrap();
+        assert_eq!(restored.language, "en-US");
+        assert_eq!(
+            serde_json::to_value(&restored.config).unwrap(),
+            original_users
+        );
+
+        let mut old_config = serde_json::to_value(&restored).unwrap();
+        old_config.as_object_mut().unwrap().remove("language");
+        fs::write(&path, serde_json::to_vec(&old_config).unwrap()).unwrap();
+        assert_eq!(ConfigRoot::from_file(&path).unwrap().language, "zh-CN");
+
+        old_config["language"] = serde_json::json!("unsupported");
+        fs::write(&path, serde_json::to_vec(&old_config).unwrap()).unwrap();
+        assert_eq!(ConfigRoot::from_file(&path).unwrap().language, "zh-CN");
+        fs::remove_dir_all(dir).unwrap();
+    }
 
     #[test]
     fn recover_previous_config_after_corrupt_primary() {

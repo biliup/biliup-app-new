@@ -86,7 +86,7 @@ impl AuthService {
         let credential = self
             .credential
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("AuthService 未初始化"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("auth.service_uninitialized")))?;
 
         match credential.send_sms(phone, country_code).await {
             Ok(payload) => {
@@ -111,19 +111,19 @@ impl AuthService {
         let credential = self
             .credential
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("AuthService 未初始化"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("auth.service_uninitialized")))?;
 
         let context = self
             .sms_recaptcha_context
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("请先请求短信验证码"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("auth.sms_request_required")))?;
 
         let recaptcha_token = Url::parse(&context.recaptcha_url)
-            .map_err(|_| anyhow::anyhow!("滑块验证链接解析失败"))?
+            .map_err(|_| anyhow::anyhow!("{}", crate::tr!("auth.slider_url_invalid")))?
             .query_pairs()
             .find(|(key, _)| key == "recaptcha_token")
             .map(|(_, value)| value.to_string())
-            .ok_or_else(|| anyhow::anyhow!("滑块验证链接缺少 recaptcha_token"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("auth.slider_token_missing")))?;
 
         let payload = credential
             .send_sms_with_recaptcha(
@@ -149,12 +149,12 @@ impl AuthService {
         let credential = self
             .credential
             .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("AuthService 未初始化"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("auth.service_uninitialized")))?;
 
         let mut payload = self
             .sms_payload
             .clone()
-            .ok_or_else(|| anyhow::anyhow!("请先发送短信验证码"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("auth.sms_send_required")))?;
 
         if let (Some(phone), Some(country_code)) = (phone, country_code) {
             payload["tel"] = Value::from(phone);
@@ -226,16 +226,16 @@ impl AuthService {
         qr_response: Value,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            info!("开始后台轮询二维码登录状态");
+            info!("{}", crate::tr!("auth.qr_polling_started"));
 
             let next_status = match credential.login_by_qrcode(qr_response).await {
                 Ok(login_info) => QrLoginStatus::Success(login_info),
                 Err(error) => {
                     let message = error.to_string();
                     if message.contains("86038") {
-                        QrLoginStatus::Expired("二维码已过期，请刷新后重试".to_string())
+                        QrLoginStatus::Expired(crate::i18n::text("auth.qr_expired").to_string())
                     } else {
-                        QrLoginStatus::Error(format!("二维码登录失败: {message}"))
+                        QrLoginStatus::Error(crate::tr!("auth.qr_login_failed", message = message))
                     }
                 }
             };
@@ -262,30 +262,30 @@ impl AuthService {
         login_info: &LoginInfo,
         proxy: Option<&str>,
     ) -> Result<(BiliBili, User)> {
-        info!("登录完成，开始获取用户信息");
+        info!("{}", crate::tr!("auth.user_fetch_started"));
         let bilibili = biliup::credential::bilibili_from_info(login_info.clone(), proxy)?;
 
         let myinfo = bilibili.my_info().await?;
         let data = myinfo
             .get("data")
             .and_then(|v| v.as_object())
-            .ok_or_else(|| anyhow::anyhow!("用户信息响应缺少 data 字段"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("auth.user_data_missing")))?;
         let username = data
             .get("name")
             .and_then(|v| v.as_str())
             .filter(|v| !v.is_empty())
-            .ok_or_else(|| anyhow::anyhow!("用户信息缺少 name 字段"))?
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("auth.user_name_missing")))?
             .to_owned();
         let uid = data
             .get("mid")
             .and_then(|v| v.as_u64())
-            .ok_or_else(|| anyhow::anyhow!("用户信息缺少 mid 字段"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("auth.user_id_missing")))?;
         let avatar_url = data
             .get("face")
             .and_then(|v| v.as_str())
             .unwrap_or("")
             .to_string();
-        debug!("头像 URL: {}", avatar_url);
+        debug!("{}", crate::tr!("avatar.url", url = avatar_url));
 
         let avatar = if avatar_url.is_empty() {
             String::new()
@@ -295,7 +295,7 @@ impl AuthService {
                 .get(&avatar_url)
                 .send()
                 .await
-                .map_err(|e| anyhow::anyhow!("获取用户头像失败: {}", e))?
+                .map_err(|e| anyhow::anyhow!("{}", crate::tr!("avatar.fetch_failed", error = e)))?
                 .bytes()
                 .await?;
             encode_base64(&avatar)
@@ -319,18 +319,23 @@ pub async fn validate_cookie_in_old_config(cookie: &PathBuf) -> Result<(BiliBili
             .get(avatar_url)
             .send()
             .await
-            .map_err(|e| anyhow::anyhow!("获取用户头像失败: {}", e))?
+            .map_err(|e| anyhow::anyhow!("{}", crate::tr!("avatar.fetch_failed", error = e)))?
             .bytes()
             .await?;
         let avatar = encode_base64(&avatar);
 
-        info!("验证用户: {}", username);
+        info!("{}", crate::tr!("auth.verifying_user", username = username));
         Ok((bilibili, User::new(uid, username, avatar, false)))
     } else {
-        info!("旧配置中的用户登录状态已失效");
+        info!("{}", crate::tr!("auth.legacy_login_expired"));
         Ok((
             bilibili,
-            User::new(uid, "未知过期用户".to_owned(), String::new(), true),
+            User::new(
+                uid,
+                crate::i18n::text("auth.unknown_expired_user").to_owned(),
+                String::new(),
+                true,
+            ),
         ))
     }
 }

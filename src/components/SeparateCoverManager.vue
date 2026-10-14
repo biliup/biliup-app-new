@@ -1,13 +1,13 @@
 <template>
     <el-drawer
         :model-value="modelValue"
-        title="独立封面管理"
+        :title="t('独立封面管理')"
         size="560px"
         @update:model-value="emit('update:modelValue', $event)"
     >
-        <div class="cover-manager-tip">未单独设置时，将沿用基本信息中的公共封面。</div>
+        <div class="cover-manager-tip">{{ t('未单独设置时，将沿用基本信息中的公共封面。') }}</div>
 
-        <el-empty v-if="!videos.length" description="请先添加视频" />
+        <el-empty v-if="!videos.length" :description="t('请先添加视频')" />
 
         <div v-else class="cover-list">
             <div v-for="video in videos" :key="video.id" class="cover-item">
@@ -15,7 +15,7 @@
                     class="cover-preview"
                     type="button"
                     :disabled="Boolean(loading[video.id]) || disabled"
-                    title="上传或更换独立封面"
+                    :title="t('上传或更换独立封面')"
                     @click="selectCover(video)"
                 >
                     <img
@@ -25,7 +25,7 @@
                     />
                     <el-icon v-else><Plus /></el-icon>
                     <span class="cover-preview-mask">
-                        {{ loading[video.id] ? '上传中' : video.cover ? '更换' : '上传' }}
+                        {{ loading[video.id] ? t('上传中') : video.cover ? t('更换') : t('上传') }}
                     </span>
                 </button>
 
@@ -33,8 +33,10 @@
                     <div class="cover-title" :title="getVideoTitle(video)">
                         {{ getVideoTitle(video) }}
                     </div>
-                    <el-tag v-if="video.cover" type="success" size="small">独立封面</el-tag>
-                    <el-tag v-else type="info" size="small">沿用公共封面</el-tag>
+                    <el-tag v-if="video.cover" type="success" size="small">{{
+                        t('独立封面')
+                    }}</el-tag>
+                    <el-tag v-else type="info" size="small">{{ t('沿用公共封面') }}</el-tag>
                 </div>
 
                 <div class="cover-actions">
@@ -44,7 +46,7 @@
                         :disabled="disabled"
                         @click="selectCover(video)"
                     >
-                        {{ video.cover ? '更换' : '上传' }}
+                        {{ video.cover ? t('更换') : t('上传') }}
                     </el-button>
                     <el-button
                         v-if="video.cover"
@@ -54,7 +56,7 @@
                         :disabled="Boolean(loading[video.id]) || disabled"
                         @click="clearCover(video.id)"
                     >
-                        恢复公共封面
+                        {{ t('恢复公共封面') }}
                     </el-button>
                 </div>
             </div>
@@ -63,6 +65,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { reactive, watch } from 'vue'
 import { Plus } from '@element-plus/icons-vue'
 import { useUtilsStore } from '../stores/utils'
@@ -93,7 +96,7 @@ const previews = reactive<Record<string, string>>({})
 const loading = reactive<Record<string, boolean>>({})
 
 const getVideoTitle = (video: any) =>
-    video.title || video.videoname || video.filename || '未命名视频'
+    video.title || video.videoname || video.filename || t('未命名视频')
 const getPreview = (video: any) =>
     video.cover ? previews[video.id] || '' : props.defaultCoverPreview
 
@@ -144,10 +147,10 @@ const selectCover = async (video: any) => {
 
         previews[video.id] = (await utilsStore.downloadCover(props.uid, url)) || ''
         updateVideoCover(video.id, url)
-        utilsStore.showMessage('独立封面已更新', 'success')
+        utilsStore.showMessage(t('独立封面已更新'), 'success')
     } catch (error) {
-        console.error('独立封面选择失败:', error)
-        utilsStore.showMessage(`独立封面选择失败: ${error}`, 'error')
+        console.error(t('独立封面选择失败:'), error)
+        utilsStore.showMessage(t('独立封面选择失败: {0}', { 0: String(error) }), 'error')
     } finally {
         loading[video.id] = false
     }
@@ -156,7 +159,7 @@ const selectCover = async (video: any) => {
 const clearCover = (id: string) => {
     delete previews[id]
     updateVideoCover(id)
-    utilsStore.showMessage('已恢复使用公共封面', 'success')
+    utilsStore.showMessage(t('已恢复使用公共封面'), 'success')
 }
 </script>
 

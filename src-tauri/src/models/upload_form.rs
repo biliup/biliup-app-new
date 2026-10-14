@@ -223,8 +223,11 @@ impl BilibiliForm {
         let studio: biliup::bilibili::Studio = serde_json::from_str(&self_str)?;
 
         trace!(
-            "转换为B站提交表单: \n{}",
-            serde_json::to_string_pretty(&studio)?
+            "{}",
+            crate::tr!(
+                "submission.form_converting",
+                form = serde_json::to_string_pretty(&studio)?
+            )
         );
         Ok(studio)
     }

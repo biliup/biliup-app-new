@@ -1,7 +1,9 @@
+import { t } from '../i18n'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useAuthStore } from './auth'
+import { normalizeLanguage, setLanguage } from '../i18n'
 
 // 用户信息接口
 interface User {
@@ -78,6 +80,7 @@ interface ConfigRoot {
     auto_upload: boolean
     auto_start: boolean
     log_level: string
+    language: string
     config: Record<number, UserConfig> // uid -> 用户配置
 }
 
@@ -136,7 +139,13 @@ export const useUserConfigStore = defineStore('userConfig', () => {
     }
 
     const normalizeConfigRoot = (configData: ConfigRoot | null) => {
-        if (!configData?.config) {
+        if (!configData) {
+            return
+        }
+
+        configData.language = normalizeLanguage(configData.language)
+
+        if (!configData.config) {
             return
         }
 
@@ -164,7 +173,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
     const updateTemplateOrderLocally = (userUid: number, templateOrder: string[]) => {
         const userConfig = configRoot.value?.config[userUid]
         if (!userConfig) {
-            throw new Error('用户配置不存在')
+            throw new Error(t('用户配置不存在'))
         }
 
         ensureUserConfigTemplateMetadata(userConfig)
@@ -177,7 +186,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
         const userConfig = configRoot.value?.config[userUid]
         if (!userConfig) {
-            throw new Error('用户配置不存在')
+            throw new Error(t('用户配置不存在'))
         }
 
         try {
@@ -190,7 +199,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             ensureUserConfigTemplateMetadata(userConfig)
             return true
         } catch (err: any) {
-            throw new Error(err || '保存模板顺序失败')
+            throw new Error(err || t('保存模板顺序失败'))
         }
     }
 
@@ -281,10 +290,11 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             normalizeConfigRoot(configData)
             configRoot.value = configData
             configBase.value = JSON.parse(JSON.stringify(configData))
+            setLanguage(configData.language)
             return configData
         } catch (err) {
-            error.value = `加载配置失败: ${err}`
-            console.error('加载配置失败:', err)
+            error.value = t('加载配置失败: {0}', { 0: String(err) })
+            console.error(t('加载配置失败:'), err)
             throw err
         } finally {
             loading.value = false
@@ -298,10 +308,11 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             const configData: ConfigRoot = await invoke('load_config')
             normalizeConfigRoot(configData)
             configBase.value = JSON.parse(JSON.stringify(configData))
+            setLanguage(configData.language)
             return configData
         } catch (err) {
-            error.value = `加载配置失败: ${err}`
-            console.error('加载配置失败:', err)
+            error.value = t('加载配置失败: {0}', { 0: String(err) })
+            console.error(t('加载配置失败:'), err)
             throw err
         } finally {
             loading.value = false
@@ -316,8 +327,8 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             await loadBaseConfig()
             return true
         } catch (err) {
-            error.value = `保存配置失败: ${err}`
-            console.error('保存配置失败:', err)
+            error.value = t('保存配置失败: {0}', { 0: String(err) })
+            console.error(t('保存配置失败:'), err)
             throw err
         } finally {
             loading.value = false
@@ -371,6 +382,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
                 auto_start: true,
                 auto_upload: true,
                 log_level: 'info',
+                language: 'zh-CN',
                 config: {}
             }
         }
@@ -378,19 +390,19 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         // 找到对应的用户
         const user = userTemplates.value.find(ut => ut.user.uid === userUid)?.user
         if (!user) {
-            throw new Error('用户不存在')
+            throw new Error(t('用户不存在'))
         }
 
         // 查找或创建用户配置
         let userConfig = configRoot.value.config[userUid]
         if (!userConfig) {
-            throw new Error('用户配置不存在')
+            throw new Error(t('用户配置不存在'))
         }
         ensureUserConfigTemplateMetadata(userConfig)
 
         // 检查模板名是否已存在
         if (userConfig.templates[templateName]) {
-            throw new Error('模板名已存在')
+            throw new Error(t('模板名已存在'))
         }
 
         const to_add = templateConfig || createDefaultTemplate()
@@ -413,24 +425,24 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
             return true
         } catch (err: any) {
-            throw new Error('添加模板失败: ' + err)
+            throw new Error(t('添加模板失败: ') + err)
         }
     }
 
     // 删除指定用户的模板
     const removeUserTemplate = async (userUid: number, templateName: string) => {
         if (!configRoot.value) {
-            throw new Error('配置未加载')
+            throw new Error(t('配置未加载'))
         }
 
         const user = userTemplates.value.find(ut => ut.user.uid === userUid)?.user
         if (!user) {
-            throw new Error('用户不存在')
+            throw new Error(t('用户不存在'))
         }
 
         const userConfig = configRoot.value.config[userUid]
         if (!userConfig || !userConfig.templates[templateName]) {
-            throw new Error('模板不存在')
+            throw new Error(t('模板不存在'))
         }
         ensureUserConfigTemplateMetadata(userConfig)
 
@@ -451,7 +463,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
             return true
         } catch (err: any) {
-            throw new Error('删除模板失败: ' + err)
+            throw new Error(t('删除模板失败: ') + err)
         }
     }
 
@@ -462,17 +474,17 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         templateConfig: TemplateConfig
     ) => {
         if (!configRoot.value) {
-            throw new Error('配置未加载')
+            throw new Error(t('配置未加载'))
         }
 
         const user = userTemplates.value.find(ut => ut.user.uid === userUid)?.user
         if (!user) {
-            throw new Error('用户不存在')
+            throw new Error(t('用户不存在'))
         }
 
         const userConfig = configRoot.value.config[userUid]
         if (!userConfig || !userConfig.templates[templateName]) {
-            throw new Error('模板不存在')
+            throw new Error(t('模板不存在'))
         }
         ensureUserConfigTemplateMetadata(userConfig)
 
@@ -493,7 +505,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
             return true
         } catch (err: any) {
-            throw new Error('更新模板失败: ' + err)
+            throw new Error(t('更新模板失败: ') + err)
         }
     }
 
@@ -505,7 +517,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
     ) => {
         const templateConfig = getUserTemplate(userUid, templateName)
         if (!templateConfig) {
-            throw new Error('源模板不存在')
+            throw new Error(t('源模板不存在'))
         }
 
         return await addUserTemplate(userUid, newTemplateName, {
@@ -517,15 +529,15 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
     const renameUserTemplate = async (userUid: number, oldName: string, newName: string) => {
         if (!configRoot.value) {
-            throw new Error('配置未加载')
+            throw new Error(t('配置未加载'))
         }
 
         const userConfig = configRoot.value.config[userUid]
         if (!userConfig || !userConfig.templates[oldName]) {
-            throw new Error('原模板不存在')
+            throw new Error(t('原模板不存在'))
         }
         if (userConfig.templates[newName]) {
-            throw new Error('该名称的模板已存在')
+            throw new Error(t('该名称的模板已存在'))
         }
 
         ensureUserConfigTemplateMetadata(userConfig)
@@ -554,7 +566,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
 
             return true
         } catch (err: any) {
-            throw new Error(err || '模板重命名失败')
+            throw new Error(err || t('模板重命名失败'))
         }
     }
 
@@ -567,12 +579,12 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         mode: 'name-asc' | 'name-desc' | 'recent-saved' | 'recent-saved-desc'
     ) => {
         if (!configRoot.value) {
-            throw new Error('配置未加载')
+            throw new Error(t('配置未加载'))
         }
 
         const userConfig = configRoot.value.config[userUid]
         if (!userConfig) {
-            throw new Error('用户配置不存在')
+            throw new Error(t('用户配置不存在'))
         }
 
         const templateEntries = getOrderedTemplateEntries(userConfig)
@@ -611,12 +623,12 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         updates: Partial<Pick<UserConfig, 'line' | 'proxy' | 'limit' | 'watermark' | 'auto_edit'>>
     ) => {
         if (!configRoot.value) {
-            throw new Error('配置未加载')
+            throw new Error(t('配置未加载'))
         }
 
         const userConfig = configRoot.value.config[userUid]
         if (!userConfig) {
-            throw new Error('用户配置不存在')
+            throw new Error(t('用户配置不存在'))
         }
 
         // 更新配置
@@ -650,33 +662,41 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             // 保存配置
             await saveConfig()
         } catch (err) {
-            throw new Error('保存配置失败: ' + err)
+            throw new Error(t('保存配置失败: ') + err)
         }
 
         return true
     }
 
     const updateGlobalConfig = async (
-        updates: Partial<Pick<ConfigRoot, 'max_curr' | 'auto_upload' | 'auto_start' | 'log_level'>>
+        updates: Partial<
+            Pick<ConfigRoot, 'max_curr' | 'auto_upload' | 'auto_start' | 'log_level' | 'language'>
+        >
     ) => {
         if (!configRoot.value) {
-            throw new Error('配置未加载')
+            throw new Error(t('配置未加载'))
         }
 
         // 更新全局配置
-        Object.assign(configRoot.value, updates)
+        const updated = {
+            ...configRoot.value,
+            ...updates,
+            language: normalizeLanguage(updates.language ?? configRoot.value.language)
+        }
 
         try {
             await invoke('save_global_config', {
-                maxCurr: configRoot.value.max_curr,
-                autoStart: configRoot.value.auto_start,
-                autoUpload: configRoot.value.auto_upload,
-                logLevel: configRoot.value.log_level
+                maxCurr: updated.max_curr,
+                autoStart: updated.auto_start,
+                autoUpload: updated.auto_upload,
+                logLevel: updated.log_level,
+                language: updated.language
             })
-            // 保存配置
-            await saveConfig()
+            await loadBaseConfig()
+            Object.assign(configRoot.value, updated)
+            setLanguage(updated.language)
         } catch (err) {
-            throw new Error('保存配置失败: ' + err)
+            throw new Error(t('保存配置失败: ') + err)
         }
 
         return true

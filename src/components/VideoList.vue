@@ -3,12 +3,10 @@
         <!-- 视频操作按钮组 -->
         <div class="video-buttons-group">
             <el-button type="primary" @click="$emit('selectVideo')" size="small">
-                <el-icon><upload-filled /></el-icon>
-                选择视频文件
+                <el-icon><upload-filled /></el-icon> {{ t('选择视频文件') }}
             </el-button>
             <el-button type="info" @click="showFolderWatchDialog = true" size="small">
-                <el-icon><folder-opened /></el-icon>
-                文件夹监控
+                <el-icon><folder-opened /></el-icon> {{ t('文件夹监控') }}
             </el-button>
             <el-button
                 type="success"
@@ -17,8 +15,7 @@
                 @click="$emit('createUpload')"
                 :disabled="!videos || videos.length === 0"
             >
-                <el-icon><upload-filled /></el-icon>
-                加入上传队列
+                <el-icon><upload-filled /></el-icon> {{ t('加入上传队列') }}
             </el-button>
             <el-button
                 type="danger"
@@ -27,13 +24,17 @@
                 size="small"
                 :disabled="!videos || videos.length === 0"
             >
-                <el-icon><delete /></el-icon>
-                清空{{ videos && videos.length > 0 ? `(${videos.length})` : '' }}
+                <el-icon><delete /></el-icon> {{ t('清空')
+                }}{{ videos && videos.length > 0 ? `(${videos.length})` : '' }}
             </el-button>
         </div>
         <div class="upload-tip">
-            <span v-if="!isDragOver"> 支持 MP4、AVI、MOV、MKV、WMV、FLV、M4V、WEBM 等格式 </span>
-            <span v-else class="drag-active-tip"> 💡 松开鼠标即可添加文件到当前模板 </span>
+            <span v-if="!isDragOver">
+                {{ t('支持 MP4、AVI、MOV、MKV、WMV、FLV、M4V、WEBM 等格式') }}
+            </span>
+            <span v-else class="drag-active-tip">
+                {{ t('💡 松开鼠标即可添加文件到当前模板') }}
+            </span>
         </div>
 
         <!-- 已上传文件列表 -->
@@ -119,7 +120,7 @@
                                         size="small"
                                         effect="plain"
                                     >
-                                        独立封面
+                                        {{ t('独立封面') }}
                                     </el-tag>
                                     <el-icon class="edit-icon"><edit /></el-icon>
                                 </div>
@@ -163,7 +164,7 @@
                                 >
                             </div>
                             <div v-if="video.status === 'Failed'" class="error-message">
-                                {{ video.errorMessage || '上传失败' }}
+                                {{ video.errorMessage || t('上传失败') }}
                             </div>
                             <div
                                 class="upload-speed"
@@ -197,24 +198,24 @@
 
             <div class="batch-rename-tools">
                 <div class="batch-rename-item">
-                    <el-checkbox v-model="useUnifiedPrefix">添加前缀</el-checkbox>
+                    <el-checkbox v-model="useUnifiedPrefix">{{ t('添加前缀') }}</el-checkbox>
                     <el-input
                         v-if="useUnifiedPrefix"
                         v-model="unifiedPrefixValue"
                         size="small"
                         class="batch-rename-input"
-                        placeholder="输入前缀"
+                        :placeholder="t('输入前缀')"
                         maxlength="80"
                     />
                 </div>
                 <div class="batch-rename-item">
-                    <el-checkbox v-model="useUnifiedSuffix">添加后缀</el-checkbox>
+                    <el-checkbox v-model="useUnifiedSuffix">{{ t('添加后缀') }}</el-checkbox>
                     <el-input
                         v-if="useUnifiedSuffix"
                         v-model="unifiedSuffixValue"
                         size="small"
                         class="batch-rename-input"
-                        placeholder="输入后缀"
+                        :placeholder="t('输入后缀')"
                         maxlength="80"
                     />
                 </div>
@@ -224,14 +225,14 @@
                         @click="sortVideosByTitle('asc')"
                         :disabled="!videos || videos.length < 2"
                     >
-                        标题正序
+                        {{ t('标题正序') }}
                     </el-button>
                     <el-button
                         size="small"
                         @click="sortVideosByTitle('desc')"
                         :disabled="!videos || videos.length < 2"
                     >
-                        标题倒序
+                        {{ t('标题倒序') }}
                     </el-button>
                 </div>
             </div>
@@ -249,6 +250,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { ref, nextTick, computed, onMounted, onUnmounted, watch } from 'vue'
 import {
     CircleCheck,
@@ -640,27 +642,27 @@ const formatFinishedTime = (timestamp: number | string): string => {
         const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
         const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
 
-        if (diffMins < 1) return '刚刚完成'
-        if (diffMins < 60) return `${diffMins}分钟前`
-        if (diffHours < 24) return `${diffHours}小时前`
-        if (diffDays < 7) return `${diffDays}天前`
+        if (diffMins < 1) return t('刚刚完成')
+        if (diffMins < 60) return t('{0}分钟前', { 0: String(diffMins) })
+        if (diffHours < 24) return t('{0}小时前', { 0: String(diffHours) })
+        if (diffDays < 7) return t('{0}天前', { 0: String(diffDays) })
 
         return ''
     } catch {
-        return '未知时间'
+        return t('未知时间')
     }
 }
 
 // 获取状态文本，与UploadQueue保持一致
 const getStatusText = (status: string) => {
     const statusMap = {
-        Waiting: '待开始',
-        Pending: '等待中',
-        Running: '上传中',
-        Completed: '已完成',
-        Cancelled: '已取消',
-        Paused: '已暂停',
-        Failed: '失败'
+        Waiting: t('待开始'),
+        Pending: t('等待中'),
+        Running: t('上传中'),
+        Completed: t('已完成'),
+        Cancelled: t('已取消'),
+        Paused: t('已暂停'),
+        Failed: t('失败')
     }
     return statusMap[status as keyof typeof statusMap] || status
 }
@@ -727,12 +729,14 @@ const getVideoWarningTooltip = (video: any): string => {
             )
 
             if (diffHours >= 10) {
-                return '此视频完成超过10小时，服务器可能已删除相关文件'
+                return t('此视频完成超过10小时，服务器可能已删除相关文件')
             } else {
-                return `此视频完成已${diffHours}小时，服务器将在10小时后删除相关文件`
+                return t('此视频完成已{0}小时，服务器将在10小时后删除相关文件', {
+                    0: String(diffHours)
+                })
             }
         } catch {
-            return '视频完成时间较长，可能无法上传'
+            return t('视频完成时间较长，可能无法上传')
         }
     }
     return ''

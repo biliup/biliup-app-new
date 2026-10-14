@@ -14,7 +14,7 @@ fn persist_update<T>(
     let result = update(&mut updated).map_err(AppError::Internal)?;
     updated
         .save_to_file(&get_config_json_path().map_err(AppError::Internal)?)
-        .map_err(|e| AppError::Config(format!("保存配置失败: {e}")))?;
+        .map_err(|e| AppError::Config(crate::tr!("config.save_failed", error = e)))?;
     *config = updated;
     Ok(result)
 }
@@ -42,7 +42,7 @@ pub async fn save_config(app: AppHandle) -> Result<bool, AppError> {
         .lock()
         .await
         .save_to_file(&get_config_json_path().map_err(AppError::Internal)?)
-        .map_err(|e| AppError::Config(format!("保存配置失败: {e}")))?;
+        .map_err(|e| AppError::Config(crate::tr!("config.save_failed", error = e)))?;
     Ok(true)
 }
 
@@ -57,7 +57,7 @@ pub async fn save_user_config(
     auto_edit: u8,
 ) -> Result<bool, AppError> {
     let app_data = app.state::<AppData>();
-    info!("用户({uid})配置已保存");
+    info!("{}", crate::tr!("config.user_saved", uid = uid));
 
     persist_update(&mut *app_data.config.lock().await, |config| {
         config.save_user_config(uid, line, proxy, limit, watermark, auto_edit)?;
@@ -73,16 +73,20 @@ pub async fn save_global_config(
     auto_start: bool,
     auto_upload: bool,
     log_level: String,
+    language: Option<String>,
 ) -> Result<bool, AppError> {
     let app_data = app.state::<AppData>();
 
-    info!("全局配置已保存");
-
-    persist_update(&mut *app_data.config.lock().await, |config| {
-        config.save_global_config(max_curr, auto_start, auto_upload, log_level);
+    let mut config = app_data.config.lock().await;
+    persist_update(&mut config, |config| {
+        let language = language.unwrap_or_else(|| config.language.clone());
+        config.save_global_config(max_curr, auto_start, auto_upload, log_level, language);
         Ok(())
     })?;
 
+    crate::i18n::set_language(&config.language);
+    drop(config);
+    info!("{}", crate::tr!("config.global_saved"));
     app_data.upload_service.set_max_concurrent(max_curr).await;
     Ok(true)
 }
@@ -99,7 +103,7 @@ pub async fn delete_user_template(
         config.delete_user_template(uid, &template_name);
         Ok(())
     })?;
-    info!("删除模板: {}", template_name);
+    info!("{}", crate::tr!("template.deleting", name = template_name));
 
     Ok(true)
 }
@@ -114,10 +118,13 @@ pub async fn update_user_template(
     let app_data = app.state::<AppData>();
 
     let updated = persist_update(&mut *app_data.config.lock().await, |config| {
-        anyhow::ensure!(config.config.contains_key(&uid), "用户配置不存在");
+        anyhow::ensure!(
+            config.config.contains_key(&uid),
+            crate::i18n::text("config.user_missing")
+        );
         Ok(config.add_user_template(uid, &template_name, template))
     })?;
-    info!("更新模板: {}", template_name);
+    info!("{}", crate::tr!("template.updating", name = template_name));
 
     Ok(updated)
 }
@@ -132,10 +139,13 @@ pub async fn add_user_template(
     let app_data = app.state::<AppData>();
 
     let added = persist_update(&mut *app_data.config.lock().await, |config| {
-        anyhow::ensure!(config.config.contains_key(&uid), "用户配置不存在");
+        anyhow::ensure!(
+            config.config.contains_key(&uid),
+            crate::i18n::text("config.user_missing")
+        );
         Ok(config.add_user_template(uid, &template_name, template))
     })?;
-    info!("添加模板: {}", template_name);
+    info!("{}", crate::tr!("template.adding", name = template_name));
 
     Ok(added)
 }

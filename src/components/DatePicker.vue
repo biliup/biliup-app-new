@@ -56,7 +56,7 @@
             </div>
 
             <div class="panel-time">
-                <div v-if="!hasAnyTime" class="time-empty">该日期无可选时间</div>
+                <div v-if="!hasAnyTime" class="time-empty">{{ t('该日期无可选时间') }}</div>
                 <div v-else class="time-columns">
                     <div class="time-col">
                         <div class="time-col-list">
@@ -107,10 +107,10 @@
 
             <div class="panel-footer">
                 <button type="button" class="footer-btn btn-clear" @click="handleClear">
-                    清空
+                    {{ t('清空') }}
                 </button>
                 <button type="button" class="footer-btn btn-cancel" @click="handleCancel">
-                    取消
+                    {{ t('取消') }}
                 </button>
                 <button
                     type="button"
@@ -118,7 +118,7 @@
                     :disabled="!canConfirm"
                     @click="handleConfirm"
                 >
-                    确定
+                    {{ t('确定') }}
                 </button>
             </div>
         </div>
@@ -126,6 +126,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 
 const props = withDefaults(
@@ -136,7 +137,7 @@ const props = withDefaults(
     }>(),
     {
         disabled: false,
-        placeholder: '选择发布时间'
+        placeholder: ''
     }
 )
 
@@ -157,10 +158,10 @@ const selectedHour = ref<number | null>(null)
 const selectedMinute = ref<number | null>(null)
 const selectedSecond = ref<number | null>(null)
 
-const weekDays = ['一', '二', '三', '四', '五', '六', '日']
+const weekDays = computed(() => [t('一'), t('二'), t('三'), t('四'), t('五'), t('六'), t('日')])
 
 const displayText = computed(() => {
-    if (!props.modelValue) return props.placeholder
+    if (!props.modelValue) return props.placeholder || t('选择发布时间')
     return formatDateTime(props.modelValue)
 })
 

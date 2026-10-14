@@ -1,7 +1,7 @@
 <template>
     <el-dialog
         v-model="visible"
-        title="全局设置"
+        :title="t('globalConfig.title')"
         width="500px"
         :before-close="handleClose"
         @close="handleDialogClose"
@@ -9,11 +9,21 @@
         <el-form :model="configForm" label-width="140px" v-loading="loading">
             <!-- 配置分类标签 -->
             <el-divider content-position="left">
-                <el-text type="primary" size="large">全局设置</el-text>
+                <el-text type="primary" size="large">{{
+                    t('globalConfig.section.global')
+                }}</el-text>
             </el-divider>
 
+            <el-form-item :label="t('globalConfig.language.label')">
+                <el-select v-model="configForm.language" class="user-select">
+                    <el-option :label="t('globalConfig.language.zh')" value="zh-CN" />
+                    <el-option :label="t('globalConfig.language.en')" value="en-US" />
+                </el-select>
+                <div class="form-tip">{{ t('globalConfig.language.tip') }}</div>
+            </el-form-item>
+
             <!-- 最大并发任务数 -->
-            <el-form-item label="最大并发任务数">
+            <el-form-item :label="t('globalConfig.maxCurr.label')">
                 <div class="slider-container">
                     <el-slider
                         v-model="configForm.max_curr"
@@ -25,33 +35,36 @@
                         :input-size="'small'"
                     />
                 </div>
-                <div class="form-tip">控制同时进行的上传任务数量，建议根据网络状况调整</div>
-                <div class="form-tip">已经开始的任务，即使暂停或失败同样占用一条并发数</div>
+                <div class="form-tip">{{ t('globalConfig.maxCurr.tip1') }}</div>
+                <div class="form-tip">{{ t('globalConfig.maxCurr.tip2') }}</div>
             </el-form-item>
 
             <!-- 自动添加到上传队列 -->
-            <el-form-item label="自动添加到上传队列">
+            <el-form-item :label="t('globalConfig.autoUpload.label')">
                 <el-switch
                     v-model="configForm.auto_upload"
-                    active-text="开启"
-                    inactive-text="关闭"
+                    :active-text="t('globalConfig.switch.on')"
+                    :inactive-text="t('globalConfig.switch.off')"
                 />
-                <div class="form-tip">开启后，创建上传任务时会自动添加到上传队列</div>
+                <div class="form-tip">{{ t('globalConfig.autoUpload.tip') }}</div>
             </el-form-item>
 
             <!-- 自动开始任务 -->
-            <el-form-item label="自动开始任务">
+            <el-form-item :label="t('globalConfig.autoStart.label')">
                 <el-switch
                     v-model="configForm.auto_start"
-                    active-text="开启"
-                    inactive-text="关闭"
+                    :active-text="t('globalConfig.switch.on')"
+                    :inactive-text="t('globalConfig.switch.off')"
                 />
-                <div class="form-tip">开启后，任务添加到队列后会自动开始上传</div>
+                <div class="form-tip">{{ t('globalConfig.autoStart.tip') }}</div>
             </el-form-item>
 
             <!-- 日志级别 -->
-            <el-form-item label="日志级别">
-                <el-select v-model="configForm.log_level" placeholder="请选择日志级别">
+            <el-form-item :label="t('globalConfig.logLevel.label')">
+                <el-select
+                    v-model="configForm.log_level"
+                    :placeholder="t('globalConfig.logLevel.placeholder')"
+                >
                     <el-option label="Trace" value="trace" />
                     <el-option label="Debug" value="debug" />
                     <el-option label="Info" value="info" />
@@ -59,20 +72,20 @@
                     <el-option label="Error" value="error" />
                 </el-select>
                 <div class="form-tip">
-                    <el-text type="warning">该配置程序重启后生效</el-text>
+                    <el-text type="warning">{{ t('globalConfig.logLevel.tip') }}</el-text>
                 </div>
             </el-form-item>
 
             <!-- 用户配置分类标签 -->
             <el-divider content-position="left">
-                <el-text type="primary" size="large">用户配置</el-text>
+                <el-text type="primary" size="large">{{ t('globalConfig.section.user') }}</el-text>
             </el-divider>
 
             <!-- 用户选择下拉框 -->
-            <el-form-item label="选择用户">
+            <el-form-item :label="t('globalConfig.userSelect.label')">
                 <el-select
                     v-model="selectedUserUid"
-                    placeholder="请选择要配置的用户"
+                    :placeholder="t('globalConfig.userSelect.placeholder')"
                     @change="handleUserChange"
                     class="user-select"
                 >
@@ -91,16 +104,19 @@
                         </div>
                     </el-option>
                 </el-select>
-                <div class="form-tip">选择要修改配置的用户</div>
+                <div class="form-tip">{{ t('globalConfig.userSelect.tip') }}</div>
             </el-form-item>
 
             <!-- 用户配置内容 -->
             <div v-if="selectedUser" class="user-config-section">
                 <el-form :model="userConfigForm" label-width="140px" v-loading="userConfigLoading">
                     <!-- 线路选择 -->
-                    <el-form-item label="上传线路">
-                        <el-select v-model="userConfigForm.line" placeholder="请选择上传线路">
-                            <el-option label="自动选择" value="auto" />
+                    <el-form-item :label="t('globalConfig.line.label')">
+                        <el-select
+                            v-model="userConfigForm.line"
+                            :placeholder="t('globalConfig.line.placeholder')"
+                        >
+                            <el-option :label="t('globalConfig.line.auto')" value="auto" />
                             <el-option label="BDA2" value="bda2" />
                             <el-option label="BLDSA" value="bldsa" />
                             <el-option label="TX" value="tx" />
@@ -108,20 +124,23 @@
                             <el-option label="BDA" value="bda" />
                             <el-option label="ALIA" value="alia" />
                         </el-select>
-                        <div class="form-tip">自动选择将根据网络环境自动选择最优线路</div>
+                        <div class="form-tip">{{ t('globalConfig.line.tip') }}</div>
                     </el-form-item>
 
                     <!-- 代理设置 -->
-                    <el-form-item label="代理设置">
+                    <el-form-item :label="t('globalConfig.proxy.label')">
                         <el-checkbox v-model="userProxyForm.enabled" class="proxy-checkbox">
-                            启用代理
+                            {{ t('globalConfig.proxy.enabled') }}
                         </el-checkbox>
 
                         <div v-show="userProxyForm.enabled" class="proxy-config">
-                            <el-form-item label="代理类型" style="margin-top: 10px">
+                            <el-form-item
+                                :label="t('globalConfig.proxy.type')"
+                                style="margin-top: 10px"
+                            >
                                 <el-select
                                     v-model="userProxyForm.type"
-                                    placeholder="选择代理类型"
+                                    :placeholder="t('globalConfig.proxy.type.placeholder')"
                                     class="proxy-type-select"
                                 >
                                     <el-option label="HTTP" value="http" />
@@ -130,15 +149,15 @@
                                 </el-select>
                             </el-form-item>
 
-                            <el-form-item label="服务器地址">
+                            <el-form-item :label="t('globalConfig.proxy.host')">
                                 <el-input
                                     v-model="userProxyForm.host"
-                                    placeholder="127.0.0.1"
+                                    :placeholder="t('globalConfig.proxy.host.placeholder')"
                                     class="proxy-input"
                                 />
                             </el-form-item>
 
-                            <el-form-item label="端口">
+                            <el-form-item :label="t('globalConfig.proxy.port')">
                                 <el-input-number
                                     v-model="userProxyForm.port"
                                     :min="1"
@@ -148,29 +167,29 @@
                                 />
                             </el-form-item>
 
-                            <el-form-item label="用户名">
+                            <el-form-item :label="t('globalConfig.proxy.username')">
                                 <el-input
                                     v-model="userProxyForm.username"
-                                    placeholder="用户名（可选）"
+                                    :placeholder="t('globalConfig.proxy.username.placeholder')"
                                     class="proxy-input"
                                 />
                             </el-form-item>
 
-                            <el-form-item label="密码">
+                            <el-form-item :label="t('globalConfig.proxy.password')">
                                 <el-input
                                     v-model="userProxyForm.password"
                                     type="password"
-                                    placeholder="密码（可选）"
+                                    :placeholder="t('globalConfig.proxy.password.placeholder')"
                                     class="proxy-input"
                                     show-password
                                 />
                             </el-form-item>
                         </div>
-                        <div class="form-tip">配置代理服务器用于网络访问</div>
+                        <div class="form-tip">{{ t('globalConfig.proxy.tip') }}</div>
                     </el-form-item>
 
                     <!-- 限流设置 -->
-                    <el-form-item label="单视频并发数">
+                    <el-form-item :label="t('globalConfig.limit.label')">
                         <div class="rate-limit-container">
                             <el-slider
                                 v-model="userConfigForm.limit"
@@ -185,23 +204,23 @@
                     </el-form-item>
 
                     <!-- 水印设置 -->
-                    <el-form-item label="默认开启水印">
+                    <el-form-item :label="t('globalConfig.watermark.label')">
                         <el-checkbox
                             v-model="userConfigForm.watermark"
                             :true-value="1"
                             :false-value="0"
                         >
-                            开启
+                            {{ t('globalConfig.switch.on') }}
                         </el-checkbox>
                     </el-form-item>
 
-                    <el-form-item label="上传完成自动编辑">
+                    <el-form-item :label="t('globalConfig.autoEdit.label')">
                         <el-checkbox
                             v-model="userConfigForm.auto_edit"
                             :true-value="1"
                             :false-value="0"
                         >
-                            开启
+                            {{ t('globalConfig.switch.on') }}
                         </el-checkbox>
                     </el-form-item>
                 </el-form>
@@ -210,8 +229,10 @@
 
         <template #footer>
             <span class="dialog-footer">
-                <el-button @click="handleCancel">取消</el-button>
-                <el-button type="primary" @click="handleSave" :loading="saving"> 保存 </el-button>
+                <el-button @click="handleCancel">{{ t('common.cancel') }}</el-button>
+                <el-button type="primary" @click="handleSave" :loading="saving">
+                    {{ t('common.save') }}
+                </el-button>
             </span>
         </template>
     </el-dialog>
@@ -223,6 +244,7 @@ import { ElMessageBox } from 'element-plus'
 import { useUserConfigStore } from '../stores/user_config'
 import { useAuthStore } from '../stores/auth'
 import { useUtilsStore } from '../stores/utils'
+import { normalizeLanguage, useI18nState } from '../i18n'
 
 // 全局配置表单接口
 interface GlobalConfigForm {
@@ -230,6 +252,7 @@ interface GlobalConfigForm {
     auto_upload: boolean
     auto_start: boolean
     log_level: string
+    language: string
 }
 
 // Props
@@ -247,6 +270,7 @@ const emit = defineEmits<{
 const userConfigStore = useUserConfigStore()
 const authStore = useAuthStore()
 const utilsStore = useUtilsStore()
+const { t } = useI18nState()
 
 // 响应式数据
 const visible = ref(false)
@@ -283,7 +307,8 @@ const configForm = ref<GlobalConfigForm>({
     max_curr: 1,
     auto_upload: true,
     auto_start: true,
-    log_level: 'info'
+    log_level: 'info',
+    language: 'zh-CN'
 })
 
 // 保存原始配置用于检查变化
@@ -291,7 +316,8 @@ const originalConfig = ref<GlobalConfigForm>({
     max_curr: 1,
     auto_upload: true,
     auto_start: true,
-    log_level: 'info'
+    log_level: 'info',
+    language: 'zh-CN'
 })
 
 // 监听 modelValue 变化
@@ -350,15 +376,16 @@ const loadGlobalConfig = async () => {
                 max_curr: config.max_curr || 2,
                 auto_upload: config.auto_upload ?? true,
                 auto_start: config.auto_start ?? true,
-                log_level: config.log_level || 'info'
+                log_level: config.log_level || 'info',
+                language: normalizeLanguage(config.language)
             }
 
             // 保存原始配置
             originalConfig.value = { ...configForm.value }
         }
     } catch (error) {
-        console.error('加载全局配置失败:', error)
-        utilsStore.showMessage(`加载全局配置失败: ${error}`, 'error')
+        console.error(t('加载全局配置失败:'), error)
+        utilsStore.showMessage(t('globalConfig.load.failed', { error: String(error) }), 'error')
     } finally {
         loading.value = false
     }
@@ -374,7 +401,7 @@ const handleSave = async () => {
         }
 
         if (!userConfigStore.configRoot) {
-            throw new Error('无法加载配置')
+            throw new Error(t('无法加载配置'))
         }
 
         // 更新全局配置
@@ -382,7 +409,8 @@ const handleSave = async () => {
             max_curr: configForm.value.max_curr,
             auto_upload: configForm.value.auto_upload,
             auto_start: configForm.value.auto_start,
-            log_level: configForm.value.log_level
+            log_level: configForm.value.log_level,
+            language: normalizeLanguage(configForm.value.language)
         })
 
         // 如果选择了用户，保存用户配置
@@ -400,7 +428,7 @@ const handleSave = async () => {
             // 更新用户配置
             const userConfig = userConfigStore.configRoot.config[selectedUserUid.value]
             if (!userConfig) {
-                throw new Error('用户配置不存在')
+                throw new Error(t('用户配置不存在'))
             }
 
             userConfig.line =
@@ -414,12 +442,12 @@ const handleSave = async () => {
             await userConfigStore.updateUserConfig(selectedUserUid.value, userConfig)
         }
 
-        utilsStore.showMessage('配置保存成功', 'success')
+        utilsStore.showMessage(t('globalConfig.save.success'), 'success')
         emit('config-updated')
         visible.value = false
     } catch (error) {
-        console.error('保存配置失败:', error)
-        utilsStore.showMessage(`保存配置失败: ${error}`, 'error')
+        console.error(t('保存配置失败:'), error)
+        utilsStore.showMessage(t('globalConfig.save.failed', { error: String(error) }), 'error')
     } finally {
         saving.value = false
     }
@@ -507,8 +535,8 @@ const loadUserConfig = async (uid: number) => {
             }
         }
     } catch (error) {
-        console.error('加载用户配置失败:', error)
-        utilsStore.showMessage(`加载用户配置失败: ${error}`, 'error')
+        console.error(t('加载用户配置失败:'), error)
+        utilsStore.showMessage(t('globalConfig.userLoad.failed', { error: String(error) }), 'error')
     } finally {
         userConfigLoading.value = false
     }
@@ -518,9 +546,9 @@ const loadUserConfig = async (uid: number) => {
 const handleClose = (done: () => void) => {
     // 检查是否有未保存的更改
     if (hasUnsavedChanges()) {
-        ElMessageBox.confirm('有未保存的更改，确定要关闭吗？', '确认', {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
+        ElMessageBox.confirm(t('globalConfig.unsaved.message'), t('common.confirm'), {
+            confirmButtonText: t('common.confirm'),
+            cancelButtonText: t('common.cancel'),
             type: 'warning'
         })
             .then(() => {
@@ -541,7 +569,8 @@ const handleDialogClose = () => {
         max_curr: 1,
         auto_upload: true,
         auto_start: true,
-        log_level: 'info'
+        log_level: 'info',
+        language: 'zh-CN'
     }
     originalConfig.value = { ...configForm.value }
 }
@@ -551,7 +580,9 @@ const hasUnsavedChanges = (): boolean => {
     return (
         configForm.value.max_curr !== originalConfig.value.max_curr ||
         configForm.value.auto_upload !== originalConfig.value.auto_upload ||
-        configForm.value.auto_start !== originalConfig.value.auto_start
+        configForm.value.auto_start !== originalConfig.value.auto_start ||
+        configForm.value.log_level !== originalConfig.value.log_level ||
+        configForm.value.language !== originalConfig.value.language
     )
 }
 </script>

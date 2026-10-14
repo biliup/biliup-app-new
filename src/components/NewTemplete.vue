@@ -1,10 +1,10 @@
 <template>
     <div>
         <!-- 创建模板对话框 -->
-        <el-dialog v-model="showDialog" title="新建模板" width="500px">
+        <el-dialog v-model="showDialog" :title="t('新建模板')" width="500px">
             <el-form :model="newTemplateForm" label-width="80px">
-                <el-form-item label="选择用户">
-                    <el-select v-model="newTemplateForm.userUid" placeholder="请选择用户">
+                <el-form-item :label="t('选择用户')">
+                    <el-select v-model="newTemplateForm.userUid" :placeholder="t('请选择用户')">
                         <el-option
                             v-for="user in loginUsers"
                             :key="user.uid"
@@ -24,45 +24,49 @@
                     </el-select>
                 </el-form-item>
 
-                <el-form-item label="模板类型">
+                <el-form-item :label="t('模板类型')">
                     <el-radio-group v-model="newTemplateForm.templateType">
-                        <el-radio value="blank">空白模板</el-radio>
-                        <el-radio value="bv">BV/AV号</el-radio>
+                        <el-radio value="blank">{{ t('空白模板') }}</el-radio>
+                        <el-radio value="bv">{{ t('BV/AV号') }}</el-radio>
                     </el-radio-group>
                 </el-form-item>
 
                 <el-form-item
-                    label="模板名称"
+                    :label="t('模板名称')"
                     required
                     v-if="newTemplateForm.templateType === 'blank'"
                 >
                     <el-input
                         v-model="newTemplateForm.name"
-                        placeholder="请输入模板名称"
+                        :placeholder="t('请输入模板名称')"
                         maxlength="50"
                     />
                 </el-form-item>
 
-                <el-form-item label="BV/AV号" required v-if="newTemplateForm.templateType === 'bv'">
+                <el-form-item
+                    :label="t('BV/AV号')"
+                    required
+                    v-if="newTemplateForm.templateType === 'bv'"
+                >
                     <el-input
                         v-model="newTemplateForm.bvNumber"
-                        placeholder="请输入BV号或AV号，如: BV1xx4y1z7xx 或 av12345"
+                        :placeholder="t('请输入BV号或AV号，如: BV1xx4y1z7xx 或 av12345')"
                         maxlength="20"
                     />
                 </el-form-item>
 
-                <el-form-item label="操作类型" v-if="newTemplateForm.templateType === 'bv'">
+                <el-form-item :label="t('操作类型')" v-if="newTemplateForm.templateType === 'bv'">
                     <el-radio-group v-model="newTemplateForm.actionType">
-                        <el-radio value="edit">编辑</el-radio>
-                        <el-radio value="copy">复制</el-radio>
+                        <el-radio value="edit">{{ t('编辑') }}</el-radio>
+                        <el-radio value="copy">{{ t('复制') }}</el-radio>
                     </el-radio-group>
                     <div class="form-tip">
-                        <div>编辑：直接修改现有稿件</div>
-                        <div>复制：基于现有稿件创建新模板</div>
+                        <div>{{ t('编辑：直接修改现有稿件') }}</div>
+                        <div>{{ t('复制：基于现有稿件创建新模板') }}</div>
                     </div>
                 </el-form-item>
                 <el-form-item
-                    label="模板名称"
+                    :label="t('模板名称')"
                     required
                     v-if="
                         newTemplateForm.templateType === 'bv' &&
@@ -71,15 +75,15 @@
                 >
                     <el-input
                         v-model="newTemplateForm.name"
-                        placeholder="请输入模板名称"
+                        :placeholder="t('请输入模板名称')"
                         maxlength="50"
                     />
                 </el-form-item>
             </el-form>
             <template #footer>
                 <span class="dialog-footer">
-                    <el-button @click="closeDialog">取消</el-button>
-                    <el-button type="primary" @click="createNewTemplate">确定</el-button>
+                    <el-button @click="closeDialog">{{ t('取消') }}</el-button>
+                    <el-button type="primary" @click="createNewTemplate">{{ t('确定') }}</el-button>
                 </span>
             </template>
         </el-dialog>
@@ -87,6 +91,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { ref, computed, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useUserConfigStore } from '../stores/user_config'
@@ -150,7 +155,7 @@ const loadUserPreferences = () => {
             }
         }
     } catch (error) {
-        console.error('加载用户偏好设置失败:', error)
+        console.error(t('加载用户偏好设置失败:'), error)
     }
 }
 
@@ -164,7 +169,7 @@ const saveUserPreferences = () => {
         }
         localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences))
     } catch (error) {
-        console.error('保存用户偏好设置失败:', error)
+        console.error(t('保存用户偏好设置失败:'), error)
     }
 }
 
@@ -200,7 +205,7 @@ const resetForm = () => {
 const createNewTemplate = async () => {
     const targetUserUid = newTemplateForm.value.userUid
     if (!targetUserUid) {
-        utilsStore.showMessage('请选择用户', 'error')
+        utilsStore.showMessage(t('请选择用户'), 'error')
         return
     }
 
@@ -208,19 +213,19 @@ const createNewTemplate = async () => {
         if (newTemplateForm.value.templateType === 'blank') {
             // 空白模板
             if (!newTemplateForm.value.name.trim()) {
-                utilsStore.showMessage('请输入模板名称', 'error')
+                utilsStore.showMessage(t('请输入模板名称'), 'error')
                 return
             }
 
             const templateName = newTemplateForm.value.name.trim()
             await userConfigStore.addUserTemplate(targetUserUid, templateName)
 
-            utilsStore.showMessage('空白模板创建成功', 'success')
+            utilsStore.showMessage(t('空白模板创建成功'), 'success')
             emit('template-created', targetUserUid, templateName)
         } else if (newTemplateForm.value.templateType === 'bv') {
             // BV/AV号模板
             if (!newTemplateForm.value.bvNumber.trim()) {
-                utilsStore.showMessage('请输入BV号或AV号', 'error')
+                utilsStore.showMessage(t('请输入BV号或AV号'), 'error')
                 return
             }
 
@@ -231,19 +236,19 @@ const createNewTemplate = async () => {
             const isEdit = actionType === 'edit'
             await createTemplateFromBV(targetUserUid, bvNumber, templateName, isEdit)
 
-            utilsStore.showMessage('基于稿件创建模板成功', 'success')
+            utilsStore.showMessage(t('基于稿件创建模板成功'), 'success')
             emit('template-created', targetUserUid, templateName)
         }
 
         closeDialog()
     } catch (error) {
-        console.error('创建模板失败:', error)
+        console.error(t('创建模板失败:'), error)
         // 提供更详细的错误信息
-        let errorMessage = '创建模板失败'
+        let errorMessage = t('创建模板失败')
         if (error instanceof Error) {
-            errorMessage = `创建模板失败: ${error.message}`
+            errorMessage = t('创建模板失败: {0}', { 0: String(error.message) })
         } else if (typeof error === 'string') {
-            errorMessage = `创建模板失败: ${error}`
+            errorMessage = t('创建模板失败: {0}', { 0: String(error) })
         }
         utilsStore.showMessage(errorMessage, 'error')
     }
@@ -257,7 +262,7 @@ const createTemplateFromBV = async (
     isEdit: boolean
 ) => {
     try {
-        console.log(`从BV号 ${bvNumber} 创建模板: ${templateName}`)
+        console.log(t('从BV号 {0} 创建模板: {1}', { 0: String(bvNumber), 1: String(templateName) }))
 
         const newTemplate = (await utilsStore.getVideoDetail(userUid, bvNumber)) as any
 
@@ -287,8 +292,8 @@ const createTemplateFromBV = async (
 
         await userConfigStore.addUserTemplate(userUid, templateName, newTemplate)
     } catch (error) {
-        console.error('从BV号创建模板失败: ', error)
-        utilsStore.showMessage(`从BV号创建模板失败: ${error}`, 'error')
+        console.error(t('从BV号创建模板失败: '), error)
+        utilsStore.showMessage(t('从BV号创建模板失败: {0}', { 0: String(error) }), 'error')
         throw error
     }
 }

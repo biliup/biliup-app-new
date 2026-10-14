@@ -1,6 +1,6 @@
 <template>
     <div class="desc-view">
-        <el-form-item label="简介">
+        <el-form-item :label="t('简介')">
             <div class="desc-editor-block">
                 <div class="tiptap-shell" :class="{ disabled: disabled }">
                     <EditorContent v-if="editor" :editor="editor" class="tiptap-editor" />
@@ -16,10 +16,12 @@
                     class="mention-inline-popup"
                     :style="mentionPopupStyle"
                 >
-                    <div class="mention-inline-header">选择或输入你想@的人</div>
-                    <div v-if="mentionLoading" class="mention-inline-empty">搜索中...</div>
+                    <div class="mention-inline-header">{{ t('选择或输入你想@的人') }}</div>
+                    <div v-if="mentionLoading" class="mention-inline-empty">
+                        {{ t('搜索中...') }}
+                    </div>
                     <div v-else-if="mentionOptions.length === 0" class="mention-inline-empty">
-                        暂无匹配用户
+                        {{ t('暂无匹配用户') }}
                     </div>
                     <div v-else class="mention-inline-list">
                         <div
@@ -35,7 +37,9 @@
                                 <el-avatar :size="32" :src="item.avatarSrc" />
                                 <div class="mention-inline-main">
                                     <div class="mention-inline-name">{{ item.name }}</div>
-                                    <div class="mention-inline-fans">{{ item.fans }}粉丝</div>
+                                    <div class="mention-inline-fans">
+                                        {{ item.fans }}{{ t('粉丝') }}
+                                    </div>
                                 </div>
                                 <div class="mention-inline-meta">UID: {{ item.uid }}</div>
                             </div>
@@ -45,10 +49,10 @@
             </div>
         </el-form-item>
 
-        <el-form-item label="粉丝动态">
+        <el-form-item :label="t('粉丝动态')">
             <el-input
                 v-model="dynamicModel"
-                placeholder="发布时的动态内容"
+                :placeholder="t('发布时的动态内容')"
                 maxlength="233"
                 show-word-limit
                 :disabled="disabled"
@@ -58,6 +62,7 @@
 </template>
 
 <script setup lang="ts">
+import { t, useI18nState } from '../i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { EditorContent, useEditor } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
@@ -469,11 +474,13 @@ const buildDescV2FromEditorDoc = (doc: any): DescV2Token[] => {
     return result
 }
 
+const { language } = useI18nState()
+
 const editor = useEditor({
     extensions: [
         StarterKit,
         Placeholder.configure({
-            placeholder: '请输入视频简介'
+            placeholder: () => t('请输入视频简介')
         }),
         Mention.configure({
             HTMLAttributes: {
@@ -567,6 +574,11 @@ watch(
     },
     { immediate: true }
 )
+
+watch(language, () => {
+    const instance = editor.value
+    if (instance) instance.view.dispatch(instance.state.tr)
+})
 
 onBeforeUnmount(() => {
     hideMentionPicker()

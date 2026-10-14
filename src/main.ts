@@ -1,25 +1,39 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import ElementPlus from 'element-plus'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import { invoke } from '@tauri-apps/api/core'
 import App from './App.vue'
 import router from './router'
 import type { Component } from 'vue'
+import { setLanguage } from './i18n'
 
-const app = createApp(App)
-const pinia = createPinia()
-
-// 注册所有图标
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
-    app.component(key, component as Component)
+const initLanguage = async () => {
+    try {
+        const config = await invoke<{ language?: string }>('load_config')
+        setLanguage(config?.language)
+    } catch {
+        setLanguage('zh-CN')
+    }
 }
 
-app.use(pinia)
-app.use(router)
-app.use(ElementPlus, {
-    locale: zhCn
-})
+const mountApp = async () => {
+    await initLanguage()
 
-app.mount('#app')
+    const app = createApp(App)
+    const pinia = createPinia()
+
+    // 注册所有图标
+    for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+        app.component(key, component as Component)
+    }
+
+    app.use(pinia)
+    app.use(router)
+    app.use(ElementPlus)
+
+    app.mount('#app')
+}
+
+void mountApp()

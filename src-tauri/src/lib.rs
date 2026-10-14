@@ -1,5 +1,6 @@
 mod commands;
 pub(crate) mod error;
+mod i18n;
 mod models;
 mod services;
 mod utils;
@@ -36,14 +37,16 @@ impl MyClient {
             .cookie_info
             .get("cookies")
             .and_then(|c| c.as_array())
-            .ok_or_else(|| AppError::Custom("登录状态数据错误".to_string()))?
+            .ok_or_else(|| {
+                AppError::Custom(crate::i18n::text("auth.invalid_login_data").to_string())
+            })?
             .iter()
             .filter_map(|c| c.as_object())
             .find(|c| c["name"] == "bili_jct")
-            .ok_or_else(|| AppError::Custom("JCT错误".to_string()))?
+            .ok_or_else(|| AppError::Custom(crate::i18n::text("auth.invalid_jct").to_string()))?
             .get("value")
             .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::Custom("CSRF错误".to_string()))?;
+            .ok_or_else(|| AppError::Custom(crate::i18n::text("auth.invalid_csrf").to_string()))?;
         Ok(csrf.to_string())
     }
 }
@@ -84,6 +87,7 @@ async fn startup() -> Result<AppData> {
         } else {
             ConfigRoot::default()
         };
+    i18n::set_language(&config.language);
     let mut clients = HashMap::new();
 
     for user_config in config.config.values() {
@@ -94,8 +98,12 @@ async fn startup() -> Result<AppData> {
             Ok(client) => client,
             Err(e) => {
                 warn!(
-                    "无法初始化账号 {}，保留本地配置: {}",
-                    user_config.user.uid, e
+                    "{}",
+                    crate::tr!(
+                        "startup.account_init_failed",
+                        uid = user_config.user.uid,
+                        error = e
+                    )
                 );
                 continue;
             }
@@ -113,8 +121,12 @@ async fn startup() -> Result<AppData> {
             Ok(Ok(info)) => info,
             result => {
                 warn!(
-                    "账号 {} 暂时无法验证，保留本地配置: {:?}",
-                    fallback_uid, result
+                    "{}",
+                    crate::tr!(
+                        "startup.account_verify_failed",
+                        uid = fallback_uid,
+                        error = format!("{:?}", result)
+                    )
                 );
                 clients.insert(
                     fallback_uid,
@@ -151,10 +163,17 @@ async fn startup() -> Result<AppData> {
                 },
             );
         } else {
-            let msg = myinfo["message"].as_str().unwrap_or("未知原因");
+            let msg = myinfo["message"]
+                .as_str()
+                .unwrap_or(crate::i18n::text("common.unknown_reason"));
             info!(
-                "用户 {} 的登录状态无效 ({}: {}), 跳过自动登录",
-                fallback_name, code, msg
+                "{}",
+                crate::tr!(
+                    "startup.invalid_login",
+                    username = fallback_name,
+                    code = code,
+                    message = msg
+                )
             );
             clients.insert(
                 fallback_uid,
@@ -231,7 +250,14 @@ fn setup_logs(log_level: &str) -> Result<()> {
         .with(console_layer.with_filter(level))
         .init();
 
-    info!("日志已输出到: {:?} {}", get_log_path()?, log_file);
+    info!(
+        "{}",
+        crate::tr!(
+            "logging.output",
+            directory = format!("{:?}", get_log_path()?),
+            level = log_file
+        )
+    );
 
     Ok(())
 }
@@ -240,7 +266,7 @@ fn setup_logs(log_level: &str) -> Result<()> {
 pub async fn run() {
     // 启动时进行兼容性检查
     if let Err(e) = CompatibilityConverter::startup_with_compatibility().await {
-        info!("无旧biliup配置: {}", e);
+        info!("{}", crate::tr!("config.legacy_missing", error = e));
     }
 
     let appdata = match startup().await {
@@ -248,13 +274,13 @@ pub async fn run() {
         Err(e) => {
             let path = get_config_json_path()
                 .map(|path| path.display().to_string())
-                .unwrap_or_else(|error| format!("无法确定配置路径：{error}"));
+                .unwrap_or_else(|error| crate::tr!("config.path_unavailable", error = error));
             let config = ConfigRoot {
                 read_only: true,
                 ..ConfigRoot::default()
             };
             AppData {
-                startup_error: Some(format!("配置路径：{path}\n加载失败：{e}")),
+                startup_error: Some(crate::tr!("config.load_failed", path = path, error = e)),
                 config: Arc::new(Mutex::new(config)),
                 auth_service: Arc::new(Mutex::new(AuthService::new())),
                 upload_service: UploadService::new(0),
@@ -264,7 +290,7 @@ pub async fn run() {
     };
 
     if let Err(e) = setup_logs(&appdata.config.lock().await.log_level.clone()) {
-        eprintln!("日志初始化失败：{e}");
+        eprintln!("{}", crate::tr!("logging.init_failed", error = e));
     }
 
     tauri::Builder::default()
@@ -345,5 +371,5 @@ pub async fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("运行Tauri应用程序时出错");
+        .expect(crate::i18n::text("app.run_failed"));
 }

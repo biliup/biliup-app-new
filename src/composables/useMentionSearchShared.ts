@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { readFile } from '@tauri-apps/plugin-fs'
 import type { MentionOption, MentionUserGroup } from '../types/mention'
 
@@ -66,7 +67,7 @@ export const flattenMentionGroups = (
                 face: item.face || '',
                 avatarSrc: buildAvatarSrc(item.face || ''),
                 fans: Number(item.fans || 0),
-                groupName: group.group_name || '其他',
+                groupName: group.group_name || t('其他'),
                 showGroupLabel: first
             })
             first = false

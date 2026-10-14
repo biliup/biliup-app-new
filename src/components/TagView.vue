@@ -32,7 +32,7 @@
             ref="editingTagInputRef"
             v-model="editingTagValue"
             size="small"
-            placeholder="修改标签"
+            :placeholder="t('修改标签')"
             :disabled="
                 disabled || isLockedFirstTag(editingTagIndex, modelValue[editingTagIndex] || '')
             "
@@ -47,7 +47,7 @@
             ref="tagInputRef"
             v-model="newTag"
             size="small"
-            placeholder="按回车键添加"
+            :placeholder="t('按回车键添加')"
             :disabled="disabled"
             @keyup.enter="addTag(true)"
             @blur="addTag(false)"
@@ -63,13 +63,14 @@
             class="add-tag-btn"
             :disabled="disabled"
         >
-            + 添加标签
+            {{ t('+ 添加标签') }}
         </el-button>
         <span class="tag-count">{{ modelValue.length }}/12</span>
     </div>
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { ref, nextTick, watch } from 'vue'
 import { useUtilsStore } from '../stores/utils'
 
@@ -138,7 +139,7 @@ const addTag = (keepInput = false) => {
 
     // 检查标签数量上限
     if (props.modelValue.length >= 12) {
-        utilsStore.showMessage('最多只能添加12个标签', 'warning')
+        utilsStore.showMessage(t('最多只能添加12个标签'), 'warning')
         if (!keepInput) {
             inputVisible.value = false
         }
@@ -149,7 +150,7 @@ const addTag = (keepInput = false) => {
         // 标签已存在，显示错误提示
         // 只在还没显示过警告时显示
         if (!hasShownDuplicateWarning.value) {
-            utilsStore.showMessage(`标签 "${tag}" 已存在`, 'warning')
+            utilsStore.showMessage(t('标签 "{0}" 已存在', { 0: String(tag) }), 'warning')
             hasShownDuplicateWarning.value = true
         }
 
@@ -273,7 +274,7 @@ const finishEditTag = () => {
         if (existingIndex >= 0 && existingIndex !== editingTagIndex.value) {
             // 只在还没显示过警告时显示
             if (!hasShownDuplicateWarning.value) {
-                utilsStore.showMessage(`标签 "${newValue}" 已存在`, 'warning')
+                utilsStore.showMessage(t('标签 "{0}" 已存在', { 0: String(newValue) }), 'warning')
                 hasShownDuplicateWarning.value = true
             }
 

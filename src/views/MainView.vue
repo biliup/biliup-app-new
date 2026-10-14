@@ -4,10 +4,10 @@
         <div v-if="isDragOver" class="drag-overlay">
             <div class="drag-content">
                 <el-icon class="drag-icon"><upload-filled /></el-icon>
-                <h3>拖拽视频文件到此处</h3>
-                <p>支持 MP4、AVI、MOV、MKV、WMV、FLV、M4V、WEBM 格式</p>
+                <h3>{{ t('main.drag.title') }}</h3>
+                <p>{{ t('main.drag.formats') }}</p>
                 <p v-if="!selectedUser || !currentTemplateName" class="warning-text">
-                    请先选择用户和模板
+                    {{ t('main.drag.needSelection') }}
                 </p>
             </div>
         </div>
@@ -20,19 +20,29 @@
                     <div class="app-version">(v{{ currentVer }})</div>
                 </div>
                 <div class="header-center">
-                    <el-button type="info" size="small" @click="exportLogs" title="导出日志">
-                        导出日志
+                    <el-button
+                        type="info"
+                        size="small"
+                        @click="exportLogs"
+                        :title="t('main.exportLogs')"
+                    >
+                        {{ t('main.exportLogs') }}
                     </el-button>
-                    <el-button type="primary" size="small" @click="checkUpdate" title="检查更新">
-                        检查更新
+                    <el-button
+                        type="primary"
+                        size="small"
+                        @click="checkUpdate"
+                        :title="t('main.checkUpdate')"
+                    >
+                        {{ t('main.checkUpdate') }}
                     </el-button>
                     <el-button
                         type="success"
                         size="small"
                         @click="submitStatsDialogVisible = true"
-                        title="提交统计"
+                        :title="t('main.submitStats')"
                     >
-                        提交统计
+                        {{ t('main.submitStats') }}
                     </el-button>
                 </div>
                 <div class="header-right">
@@ -45,7 +55,7 @@
                         size="small"
                         circle
                         @click="showGlobalConfigDialog = true"
-                        title="全局设置"
+                        :title="t('main.globalConfig')"
                         class="global-config-btn"
                     >
                         <el-icon><setting /></el-icon>
@@ -80,13 +90,13 @@
             <el-main class="main-content" v-if="currentForm">
                 <div class="content-wrapper" ref="contentWrapperRef">
                     <div v-if="!selectedUser" class="no-selection">
-                        <el-empty description="请选择用户和模板开始使用" />
+                        <el-empty :description="t('请选择用户和模板开始使用')" />
                     </div>
 
                     <div v-else-if="!currentTemplateName" class="no-template">
-                        <el-empty description="请选择模板或创建新模板">
+                        <el-empty :description="t('请选择模板或创建新模板')">
                             <el-button type="primary" @click="showNewTemplateDialog = true">
-                                新建模板
+                                {{ t('新建模板') }}
                             </el-button>
                         </el-empty>
                     </div>
@@ -95,11 +105,11 @@
                         <div class="form-header">
                             <div class="template-name-container">
                                 <h3 class="edit-bv-template-disaplay" v-if="currentTemplate?.aid">
-                                    编辑稿件：
+                                    {{ t('编辑稿件：') }}
                                 </h3>
                                 <el-tooltip
                                     v-if="currentTemplate?.aid"
-                                    content="刷新稿件数据"
+                                    :content="t('刷新稿件数据')"
                                     placement="top"
                                 >
                                     <el-icon
@@ -128,8 +138,8 @@
                                     :class="{ disabled: templateLoading }"
                                     :title="
                                         templateLoading
-                                            ? '模板加载中，无法编辑'
-                                            : '点击编辑模板名称'
+                                            ? t('模板加载中，无法编辑')
+                                            : t('点击编辑模板名称')
                                     "
                                 >
                                     {{ currentTemplateName }}
@@ -148,14 +158,14 @@
                                 />
                             </div>
                             <div class="header-actions">
-                                <el-button @click="resetTemplate" :disabled="templateLoading"
-                                    >放弃更改</el-button
-                                >
+                                <el-button @click="resetTemplate" :disabled="templateLoading">{{
+                                    t('放弃更改')
+                                }}</el-button>
                                 <el-button
                                     type="primary"
                                     @click="saveTemplate"
                                     :disabled="templateLoading"
-                                    >保存</el-button
+                                    >{{ t('保存') }}</el-button
                                 >
                                 <el-button
                                     @click="
@@ -168,7 +178,7 @@
                                     trigger="click"
                                     type="danger"
                                     :disabled="templateLoading"
-                                    >删除</el-button
+                                    >{{ t('删除') }}</el-button
                                 >
                             </div>
                         </div>
@@ -181,14 +191,14 @@
                             >
                                 <template #header>
                                     <div class="card-header" @click="toggleCardCollapsed('basic')">
-                                        <span>基本信息</span>
+                                        <span>{{ t('基本信息') }}</span>
                                         <div class="header-actions">
                                             <el-button
                                                 type="danger"
                                                 text
                                                 size="small"
                                                 @click.stop="clearCardContent('basic')"
-                                                title="清空基本信息"
+                                                :title="t('清空基本信息')"
                                                 :disabled="templateLoading"
                                             >
                                                 <el-icon><delete /></el-icon>
@@ -205,17 +215,17 @@
 
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.basic" class="card-content">
-                                        <el-form-item label="视频标题" required>
+                                        <el-form-item :label="t('视频标题')" required>
                                             <el-input
                                                 v-model="currentForm.title"
-                                                placeholder="请输入视频标题"
+                                                :placeholder="t('请输入视频标题')"
                                                 maxlength="80"
                                                 show-word-limit
                                                 :disabled="templateLoading"
                                             />
                                         </el-form-item>
 
-                                        <el-form-item label="封面">
+                                        <el-form-item :label="t('封面')">
                                             <div class="cover-uploader-row">
                                                 <div
                                                     class="cover-uploader"
@@ -244,14 +254,14 @@
                                                     size="small"
                                                     @click.stop="clearCurrentCover"
                                                     :disabled="templateLoading"
-                                                    title="清除封面"
+                                                    :title="t('清除封面')"
                                                 >
                                                     <el-icon><Close /></el-icon>
                                                 </el-button>
                                             </div>
                                         </el-form-item>
 
-                                        <el-form-item label="视频分区">
+                                        <el-form-item :label="t('视频分区')">
                                             <el-popover
                                                 v-model:visible="categoryPopoverVisible"
                                                 placement="bottom-start"
@@ -275,9 +285,9 @@
                                                                 {{ selectedCategory?.name }} >
                                                                 {{ selectedSubCategory?.name }}
                                                             </span>
-                                                            <span v-else class="placeholder"
-                                                                >请选择分区</span
-                                                            >
+                                                            <span v-else class="placeholder">{{
+                                                                t('请选择分区')
+                                                            }}</span>
                                                         </span>
                                                         <el-icon class="arrow-icon">
                                                             <arrow-down />
@@ -355,7 +365,7 @@
                                                         </div>
                                                         <div v-else class="empty-subcategory">
                                                             <el-empty
-                                                                description="请选择左侧主分区"
+                                                                :description="t('请选择左侧主分区')"
                                                                 :image-size="60"
                                                             />
                                                         </div>
@@ -364,10 +374,10 @@
                                             </el-popover>
                                         </el-form-item>
 
-                                        <el-form-item label="新版分区">
+                                        <el-form-item :label="t('新版分区')">
                                             <el-select
                                                 v-model="tidV2SelectValue"
-                                                placeholder="请选择新版分区"
+                                                :placeholder="t('请选择新版分区')"
                                                 clearable
                                                 filterable
                                                 :disabled="
@@ -383,23 +393,23 @@
                                             </el-select>
                                         </el-form-item>
 
-                                        <el-form-item label="版权声明">
+                                        <el-form-item :label="t('版权声明')">
                                             <el-radio-group
                                                 v-model="currentForm.copyright"
                                                 :disabled="templateLoading"
                                             >
-                                                <el-radio :value="1">自制</el-radio>
-                                                <el-radio :value="2">转载</el-radio>
+                                                <el-radio :value="1">{{ t('自制') }}</el-radio>
+                                                <el-radio :value="2">{{ t('转载') }}</el-radio>
                                             </el-radio-group>
                                         </el-form-item>
 
                                         <el-form-item
-                                            label="转载来源"
+                                            :label="t('转载来源')"
                                             v-if="currentForm.copyright === 2"
                                         >
                                             <el-input
                                                 v-model="currentForm.source"
-                                                placeholder="请填写转载来源"
+                                                :placeholder="t('请填写转载来源')"
                                                 :disabled="templateLoading"
                                             />
                                         </el-form-item>
@@ -426,7 +436,7 @@
                                             "
                                             @click="toggleCardCollapsed('videos')"
                                         >
-                                            <span style="cursor: pointer">视频文件</span>
+                                            <span style="cursor: pointer">{{ t('视频文件') }}</span>
                                             <el-button
                                                 type="success"
                                                 size="small"
@@ -438,13 +448,13 @@
                                                 "
                                                 :disabled="templateLoading"
                                             >
-                                                视频转码状态
+                                                {{ t('视频转码状态') }}
                                             </el-button>
                                         </div>
                                         <div class="header-actions">
-                                            <span v-if="isDragOver" class="drag-hint"
-                                                >拖拽文件到此处添加</span
-                                            >
+                                            <span v-if="isDragOver" class="drag-hint">{{
+                                                t('拖拽文件到此处添加')
+                                            }}</span>
                                             <el-icon
                                                 class="collapse-icon"
                                                 :class="{ collapsed: cardCollapsed.videos }"
@@ -482,14 +492,14 @@
                             >
                                 <template #header>
                                     <div class="card-header" @click="toggleCardCollapsed('tags')">
-                                        <span>标签设置</span>
+                                        <span>{{ t('标签设置') }}</span>
                                         <div class="header-actions">
                                             <el-button
                                                 type="danger"
                                                 text
                                                 size="small"
                                                 @click.stop="clearCardContent('tags')"
-                                                title="清空标签设置"
+                                                :title="t('清空标签设置')"
                                                 :disabled="templateLoading"
                                             >
                                                 <el-icon><delete /></el-icon>
@@ -506,7 +516,7 @@
 
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.tags" class="card-content">
-                                        <el-form-item label="视频标签">
+                                        <el-form-item :label="t('视频标签')">
                                             <TagView
                                                 ref="tagViewRef"
                                                 v-model="tags"
@@ -515,7 +525,7 @@
                                             />
                                         </el-form-item>
 
-                                        <el-form-item label="参与活动">
+                                        <el-form-item :label="t('参与活动')">
                                             <TopicView
                                                 v-model="currentForm.mission_id"
                                                 v-model:topic-id="currentForm.topic_id"
@@ -528,7 +538,10 @@
                                             />
                                         </el-form-item>
 
-                                        <el-form-item v-if="!staffFieldDisabled" label="联合投稿">
+                                        <el-form-item
+                                            v-if="!staffFieldDisabled"
+                                            :label="t('联合投稿')"
+                                        >
                                             <StaffView
                                                 v-model="currentForm.staff"
                                                 :user-uid="selectedUser?.uid"
@@ -552,14 +565,14 @@
                                         class="card-header"
                                         @click="toggleCardCollapsed('description')"
                                     >
-                                        <span>视频描述</span>
+                                        <span>{{ t('视频描述') }}</span>
                                         <div class="header-actions">
                                             <el-button
                                                 type="danger"
                                                 text
                                                 size="small"
                                                 @click.stop="clearCardContent('description')"
-                                                title="清空视频描述"
+                                                :title="t('清空视频描述')"
                                                 :disabled="templateLoading"
                                             >
                                                 <el-icon><delete /></el-icon>
@@ -597,14 +610,14 @@
                                         class="card-header"
                                         @click="toggleCardCollapsed('advanced')"
                                     >
-                                        <span>高级选项</span>
+                                        <span>{{ t('高级选项') }}</span>
                                         <div class="header-actions">
                                             <el-button
                                                 type="danger"
                                                 text
                                                 size="small"
                                                 @click.stop="clearCardContent('advanced')"
-                                                title="清空高级选项"
+                                                :title="t('清空高级选项')"
                                                 :disabled="templateLoading"
                                             >
                                                 <el-icon><delete /></el-icon>
@@ -621,7 +634,7 @@
 
                                 <el-collapse-transition>
                                     <div v-show="!cardCollapsed.advanced" class="card-content">
-                                        <el-form-item label="开启水印">
+                                        <el-form-item :label="t('开启水印')">
                                             <div div class="checkbox-group">
                                                 <el-checkbox
                                                     v-model="currentForm.watermark"
@@ -629,28 +642,31 @@
                                                     :false-value="0"
                                                     :disabled="templateLoading"
                                                 >
-                                                    开启 (本功能只对本次上传的视频生效)
+                                                    {{ t('开启 (本功能只对本次上传的视频生效)') }}
                                                 </el-checkbox>
                                             </div>
                                         </el-form-item>
-                                        <el-form-item v-if="!currentForm.aid" label="定时发布">
+                                        <el-form-item
+                                            v-if="!currentForm.aid"
+                                            :label="t('定时发布')"
+                                        >
                                             <DatePicker
                                                 v-model="dtimeDate"
-                                                placeholder="选择发布时间"
+                                                :placeholder="t('选择发布时间')"
                                                 :disabled="templateLoading"
                                             />
                                         </el-form-item>
 
-                                        <el-form-item label="字幕设置">
+                                        <el-form-item :label="t('字幕设置')">
                                             <el-checkbox
                                                 v-model="currentForm.open_subtitle"
                                                 :disabled="templateLoading"
                                             >
-                                                开启字幕功能
+                                                {{ t('开启字幕功能') }}
                                             </el-checkbox>
                                         </el-form-item>
 
-                                        <el-form-item label="互动功能">
+                                        <el-form-item :label="t('互动功能')">
                                             <div class="interactive-setting-row">
                                                 <el-checkbox
                                                     v-model="currentForm.interactive"
@@ -658,11 +674,15 @@
                                                     :false-value="0"
                                                     :disabled="templateLoading"
                                                 >
-                                                    开启
+                                                    {{ t('开启') }}
                                                 </el-checkbox>
 
                                                 <el-tooltip
-                                                    content="勾选后本视频将被投稿为互动视频，需在规定时间内完成剧情树配置，否则系统可能回收稿件。"
+                                                    :content="
+                                                        t(
+                                                            '勾选后本视频将被投稿为互动视频，需在规定时间内完成剧情树配置，否则系统可能回收稿件。'
+                                                        )
+                                                    "
                                                     placement="top"
                                                 >
                                                     <el-icon
@@ -675,7 +695,7 @@
                                             </div>
                                         </el-form-item>
 
-                                        <el-form-item label="加入合集">
+                                        <el-form-item :label="t('加入合集')">
                                             <div class="season-refresh-row">
                                                 <SeasonView
                                                     ref="seasonViewRef"
@@ -684,7 +704,10 @@
                                                     :user-uid="selectedUser?.uid"
                                                     :disabled="templateLoading"
                                                 />
-                                                <el-tooltip content="刷新合集列表" placement="top">
+                                                <el-tooltip
+                                                    :content="t('刷新合集列表')"
+                                                    placement="top"
+                                                >
                                                     <el-button
                                                         type="info"
                                                         size="small"
@@ -711,11 +734,11 @@
                                                 :false-value="0"
                                                 :disabled="templateLoading"
                                             >
-                                                此稿件不产生更新推送
+                                                {{ t('此稿件不产生更新推送') }}
                                             </el-checkbox>
                                         </el-form-item>
 
-                                        <el-form-item label="音质设置">
+                                        <el-form-item :label="t('音质设置')">
                                             <div class="checkbox-group">
                                                 <el-checkbox
                                                     v-model="currentForm.dolby"
@@ -723,7 +746,7 @@
                                                     :false-value="0"
                                                     :disabled="templateLoading"
                                                 >
-                                                    杜比音效
+                                                    {{ t('杜比音效') }}
                                                 </el-checkbox>
                                                 <el-checkbox
                                                     v-model="currentForm.lossless_music"
@@ -731,12 +754,12 @@
                                                     :false-value="0"
                                                     :disabled="templateLoading"
                                                 >
-                                                    无损音乐
+                                                    {{ t('无损音乐') }}
                                                 </el-checkbox>
                                             </div>
                                         </el-form-item>
 
-                                        <el-form-item label="内容设置">
+                                        <el-form-item :label="t('内容设置')">
                                             <div class="checkbox-group">
                                                 <el-checkbox
                                                     v-model="currentForm.no_reprint"
@@ -744,7 +767,7 @@
                                                     :false-value="0"
                                                     :disabled="templateLoading"
                                                 >
-                                                    禁止转载
+                                                    {{ t('禁止转载') }}
                                                 </el-checkbox>
                                                 <el-checkbox
                                                     v-model="currentForm.open_elec"
@@ -752,12 +775,12 @@
                                                     :false-value="0"
                                                     :disabled="templateLoading"
                                                 >
-                                                    开启充电
+                                                    {{ t('开启充电') }}
                                                 </el-checkbox>
                                             </div>
                                         </el-form-item>
 
-                                        <el-form-item label="互动管理">
+                                        <el-form-item :label="t('互动管理')">
                                             <div class="checkbox-group">
                                                 <el-checkbox
                                                     v-model="currentForm.up_selection_reply"
@@ -765,7 +788,7 @@
                                                     :false-value="0"
                                                     :disabled="templateLoading"
                                                 >
-                                                    UP主精选评论
+                                                    {{ t('UP主精选评论') }}
                                                 </el-checkbox>
                                                 <el-checkbox
                                                     v-model="currentForm.up_close_reply"
@@ -773,7 +796,7 @@
                                                     :false-value="0"
                                                     :disabled="templateLoading"
                                                 >
-                                                    关闭评论
+                                                    {{ t('关闭评论') }}
                                                 </el-checkbox>
                                                 <el-checkbox
                                                     v-model="currentForm.up_close_danmu"
@@ -781,34 +804,34 @@
                                                     :false-value="0"
                                                     :disabled="templateLoading"
                                                 >
-                                                    关闭弹幕
+                                                    {{ t('关闭弹幕') }}
                                                 </el-checkbox>
                                             </div>
                                         </el-form-item>
 
-                                        <el-form-item label="可见性">
+                                        <el-form-item :label="t('可见性')">
                                             <el-checkbox
                                                 v-model="currentForm.is_only_self"
                                                 :true-value="1"
                                                 :false-value="0"
                                                 :disabled="templateLoading"
                                             >
-                                                仅自己可见
+                                                {{ t('仅自己可见') }}
                                             </el-checkbox>
                                         </el-form-item>
-                                        <el-form-item v-if="!currentForm.aid" label="编辑">
+                                        <el-form-item v-if="!currentForm.aid" :label="t('编辑')">
                                             <el-checkbox
                                                 v-model="currentForm.auto_edit_after_submit"
                                                 :true-value="1"
                                                 :false-value="0"
                                                 :disabled="templateLoading"
                                             >
-                                                提交后自动打开编辑
+                                                {{ t('提交后自动打开编辑') }}
                                             </el-checkbox>
                                         </el-form-item>
                                         <el-form-item
                                             v-if="Boolean(currentForm.aid)"
-                                            label="全景视频"
+                                            :label="t('全景视频')"
                                         >
                                             <el-checkbox
                                                 v-model="currentForm.is_360"
@@ -834,7 +857,9 @@
                                         class="submit-mode-column"
                                     >
                                         <div class="submit-mode-toggle">
-                                            <span class="submit-mode-label">多稿件模式</span>
+                                            <span class="submit-mode-label">{{
+                                                t('多稿件模式')
+                                            }}</span>
                                             <el-switch
                                                 v-model="isMultiSubmitMode"
                                                 :disabled="
@@ -874,14 +899,14 @@
                                             <el-icon v-else-if="!submitting"><check /></el-icon>
                                             {{
                                                 separateSubmitting
-                                                    ? '停止多稿件提交'
+                                                    ? t('停止多稿件提交')
                                                     : !getCurrentAutoSubmitting
                                                       ? isMultiSubmitMode && !currentTemplate?.aid
-                                                          ? '以多稿件模式提交'
+                                                          ? t('以多稿件模式提交')
                                                           : currentTemplate?.aid
-                                                            ? '编辑稿件'
-                                                            : '新增单个稿件'
-                                                      : '上传完成后自动提交'
+                                                            ? t('编辑稿件')
+                                                            : t('新增单个稿件')
+                                                      : t('上传完成后自动提交')
                                             }}
                                         </el-button>
 
@@ -907,12 +932,16 @@
                                                 "
                                                 @click="separateCoverManagerVisible = true"
                                             >
-                                                独立封面 {{ separateCoverCount }}/{{
+                                                {{ t('独立封面') }} {{ separateCoverCount }}/{{
                                                     currentForm.videos.length
                                                 }}
                                             </el-button>
                                             <el-tooltip
-                                                content="使用此功能时，将不再以分p模式提交视频，而是针对每一个视频单独提交一份稿件，稿件名即为当前的‘分p’名，其他内容完全复用当前模板内容，无法进行自定义。每条视频提交成功后会自动从当前视频列表移除。"
+                                                :content="
+                                                    t(
+                                                        '使用此功能时，将不再以分p模式提交视频，而是针对每一个视频单独提交一份稿件，稿件名即为当前的‘分p’名，其他内容完全复用当前模板内容，无法进行自定义。每条视频提交成功后会自动从当前视频列表移除。'
+                                                    )
+                                                "
                                                 placement="top"
                                                 popper-class="multi-submit-help-tooltip"
                                             >
@@ -924,12 +953,16 @@
                                     </div>
                                 </div>
                                 <div class="form-tip" v-if="separateSubmitting">
-                                    <div>上传完成数量: {{ separateSubmitUploadedCount }}</div>
-                                    <div>提交完成数量: {{ separateSubmitCompletedCount }}</div>
-                                    <div>总数量: {{ separateSubmitTotalCount }}</div>
+                                    <div>
+                                        {{ t('上传完成数量:') }} {{ separateSubmitUploadedCount }}
+                                    </div>
+                                    <div>
+                                        {{ t('提交完成数量:') }} {{ separateSubmitCompletedCount }}
+                                    </div>
+                                    <div>{{ t('总数量:') }} {{ separateSubmitTotalCount }}</div>
                                 </div>
                                 <div class="form-tip" v-if="lastSubmit">
-                                    <div>最后提交时间</div>
+                                    <div>{{ t('最后提交时间') }}</div>
                                     <div>{{ lastSubmit }}</div>
                                 </div>
                             </div>
@@ -1039,6 +1072,7 @@ import DescView from '../components/DescView.vue'
 import SubmitStatsPage from '../components/SubmitStatsPage.vue'
 import SeparateCoverManager from '../components/SeparateCoverManager.vue'
 import { selectAndUploadCover } from '../utils/coverUpload'
+import { useI18nState } from '../i18n'
 
 type SubmitModeText = '单稿件' | '多稿件'
 
@@ -1058,6 +1092,7 @@ const authStore = useAuthStore()
 const userConfigStore = useUserConfigStore()
 const uploadStore = useUploadStore()
 const utilsStore = useUtilsStore()
+const { t } = useI18nState()
 
 // 计算属性
 const loginUsers = computed(() => authStore.loginUsers)
@@ -1165,7 +1200,7 @@ const clearSubmitStats = () => {
     submitStats.value.successCount = 0
     submitStats.value.failCount = 0
     submitStats.value.records = []
-    utilsStore.showMessage('提交统计内存已清空', 'success')
+    utilsStore.showMessage(t('提交统计内存已清空'), 'success')
 }
 
 const currentSeparateTemplateKey = computed(() => {
@@ -1356,7 +1391,7 @@ const isMultiSubmitMode = computed({
 const getSubmitUserLabel = (uid: number) => {
     const user = loginUsers.value.find(item => item.uid === uid)
     if (!user) {
-        return '未知用户: ' + uid
+        return t('未知用户: ') + uid
     }
     return user.username
 }
@@ -1439,7 +1474,7 @@ const checkAutoSubmitAll = async () => {
                 try {
                     await performTemplateSubmit(uid, templateName, template, { showLoading: false })
                 } catch (error) {
-                    console.error(`模板 ${templateKey} 自动提交失败:`, error)
+                    console.error(t('模板 {0} 自动提交失败:', { 0: String(templateKey) }), error)
                 } finally {
                     autoSubmitProcessingKeys.value.delete(templateKey)
                 }
@@ -1489,12 +1524,18 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
                     .getCachedSeasons(uid)
                     .find((s: any) => Number(s.season_id) === templateSeasonId)?.title ||
                 templateSeasonId
-            utilsStore.showMessage(`视频${resp.bvid}加入合集${season_title}`, 'success')
-            console.log(`视频${resp.bvid}加入合集${season_title}`, 'success')
+            utilsStore.showMessage(
+                t('视频{0}加入合集{1}', { 0: String(resp.bvid), 1: String(season_title) }),
+                'success'
+            )
+            console.log(
+                t('视频{0}加入合集{1}', { 0: String(resp.bvid), 1: String(season_title) }),
+                'success'
+            )
         }
     } catch (error) {
-        console.error('设置合集失败: ', error)
-        utilsStore.showMessage(`设置合集失败: ${error}`, 'error')
+        console.error(t('设置合集失败: '), error)
+        utilsStore.showMessage(t('设置合集失败: {0}', { 0: String(error) }), 'error')
     }
 }
 
@@ -1515,7 +1556,7 @@ const handleAutoEditAfterSubmit = async (
         if (shouldAutoEdit && newTemplateRef.value) {
             // 新增稿件且auto_edit开启，创建编辑模板
             await newTemplateRef.value.createTemplateFromBV(uid, resp.bvid, resp.bvid, true)
-            utilsStore.showMessage('从BV号创建模板成功', 'success')
+            utilsStore.showMessage(t('从BV号创建模板成功'), 'success')
         }
     } else {
         if (selectedUser.value?.uid === uid && currentTemplateName.value === templateName) {
@@ -1543,7 +1584,7 @@ const performTemplateSubmit = async (
 ) => {
     const snapshot = JSON.parse(JSON.stringify(template))
     const user = loginUsers.value.find(u => u.uid === uid)
-    if (!user) throw new Error('用户不存在')
+    if (!user) throw new Error(t('用户不存在'))
 
     const showLoading = options?.showLoading ?? true
     if (showLoading) {
@@ -1566,8 +1607,14 @@ const performTemplateSubmit = async (
             lastSubmit.value = new Date().toLocaleString()
         }
 
-        utilsStore.showMessage(`视频${resp.bvid}提交成功 (模板: ${templateName})`, 'success')
-        console.log(`视频${resp.bvid}提交成功 (模板: ${templateName})`, 'success')
+        utilsStore.showMessage(
+            t('视频{0}提交成功 (模板: {1})', { 0: String(resp.bvid), 1: String(templateName) }),
+            'success'
+        )
+        console.log(
+            t('视频{0}提交成功 (模板: {1})', { 0: String(resp.bvid), 1: String(templateName) }),
+            'success'
+        )
 
         await syncSeasonAfterSubmit(uid, resp, snapshot)
 
@@ -1591,8 +1638,8 @@ const performTemplateSubmit = async (
             })
         }
 
-        console.error('模板提交失败:', error)
-        utilsStore.showMessage(`模板提交失败: ${error}`, 'error')
+        console.error(t('模板提交失败:'), error)
+        utilsStore.showMessage(t('模板提交失败: {0}', { 0: String(error) }), 'error')
     } finally {
         if (showLoading) {
             submitting.value = false
@@ -1617,7 +1664,7 @@ const stopSeparateSubmit = (templateKey?: string) => {
 
     separateSubmitCancelledKeys.value.add(targetKey)
     delete separateSubmittingRecord.value[targetKey]
-    utilsStore.showMessage('已停止多稿件提交，当前进行中的提交结束后将退出', 'info')
+    utilsStore.showMessage(t('已停止多稿件提交，当前进行中的提交结束后将退出'), 'info')
 
     if (!separateSubmitProcessingKeys.value.has(targetKey)) {
         void finalizeSeparateSubmitMode(targetKey)
@@ -1637,7 +1684,10 @@ const finalizeSeparateSubmitMode = async (templateKey: string) => {
         const failCount = submitState.failCount
         if (successCount > 0 || failCount > 0) {
             utilsStore.showMessage(
-                `多稿件提交已停止，已成功 ${successCount} 个，失败 ${failCount} 个`,
+                t('多稿件提交已停止，已成功 {0} 个，失败 {1} 个', {
+                    0: String(successCount),
+                    1: String(failCount)
+                }),
                 'warning'
             )
         }
@@ -1659,10 +1709,16 @@ const finalizeSeparateSubmitMode = async (templateKey: string) => {
         const failCount = submitState.failCount
 
         if (failCount === 0) {
-            utilsStore.showMessage(`多稿件提交完成，共成功 ${successCount} 个`, 'success')
+            utilsStore.showMessage(
+                t('多稿件提交完成，共成功 {0} 个', { 0: String(successCount) }),
+                'success'
+            )
         } else {
             utilsStore.showMessage(
-                `多稿件提交完成，成功 ${successCount} 个，失败 ${failCount} 个`,
+                t('多稿件提交完成，成功 {0} 个，失败 {1} 个', {
+                    0: String(successCount),
+                    1: String(failCount)
+                }),
                 'warning'
             )
         }
@@ -1693,10 +1749,16 @@ const finalizeSeparateSubmitMode = async (templateKey: string) => {
     }
 
     if (failCount === 0) {
-        utilsStore.showMessage(`多稿件提交完成，共成功 ${successCount} 个`, 'success')
+        utilsStore.showMessage(
+            t('多稿件提交完成，共成功 {0} 个', { 0: String(successCount) }),
+            'success'
+        )
     } else {
         utilsStore.showMessage(
-            `多稿件提交完成，成功 ${successCount} 个，失败 ${failCount} 个`,
+            t('多稿件提交完成，成功 {0} 个，失败 {1} 个', {
+                0: String(successCount),
+                1: String(failCount)
+            }),
             'warning'
         )
     }
@@ -1731,7 +1793,7 @@ const processSeparateSubmitQueue = async (templateKey: string) => {
         const targetTemplate = userConfigStore.configRoot?.config?.[uid]?.templates?.[templateName]
         if (!targetTemplate) {
             clearSeparateSubmitStateByKey(templateKey)
-            utilsStore.showMessage('多稿件提交目标模板不存在，已停止提交', 'warning')
+            utilsStore.showMessage(t('多稿件提交目标模板不存在，已停止提交'), 'warning')
             return
         }
 
@@ -1780,8 +1842,8 @@ const processSeparateSubmitQueue = async (templateKey: string) => {
                 await syncSeasonAfterSubmit(uid, resp, singleTemplate)
                 await handleAutoEditAfterSubmit(uid, templateName, singleTemplate, resp)
             } catch (postError) {
-                console.error('提交后处理失败:', postError)
-                utilsStore.showMessage(`提交后处理失败: ${postError}`, 'error')
+                console.error(t('提交后处理失败:'), postError)
+                utilsStore.showMessage(t('提交后处理失败: {0}', { 0: String(postError) }), 'error')
             }
         } catch (error) {
             if (
@@ -1802,8 +1864,11 @@ const processSeparateSubmitQueue = async (templateKey: string) => {
                 videoName: videoTitle,
                 error
             })
-            utilsStore.showMessage(`多稿件提交失败（${videoTitle}）: ${error}`, 'error')
-            console.error('多稿件模式提交失败: ', error)
+            utilsStore.showMessage(
+                t('多稿件提交失败（{0}）: {1}', { 0: String(videoTitle), 1: String(error) }),
+                'error'
+            )
+            console.error(t('多稿件模式提交失败: '), error)
         }
     } finally {
         separateSubmitProcessingKeys.value.delete(templateKey)
@@ -1821,14 +1886,14 @@ const submitTemplateAsSeparatePosts = async (options?: {
     const submitTemplateName = options?.templateName ?? currentTemplateName.value
 
     if (!submitUid || !submitTemplateName) {
-        utilsStore.showMessage('请先选择模板', 'error')
+        utilsStore.showMessage(t('请先选择模板'), 'error')
         return
     }
 
     const targetTemplate =
         userConfigStore.configRoot?.config?.[submitUid]?.templates?.[submitTemplateName]
     if (!targetTemplate) {
-        utilsStore.showMessage('目标模板不存在', 'error')
+        utilsStore.showMessage(t('目标模板不存在'), 'error')
         return
     }
 
@@ -1841,13 +1906,13 @@ const submitTemplateAsSeparatePosts = async (options?: {
     }
 
     if (targetTemplate.aid) {
-        utilsStore.showMessage('仅新增稿件支持此功能', 'warning')
+        utilsStore.showMessage(t('仅新增稿件支持此功能'), 'warning')
         return
     }
 
     const sourceVideos = targetTemplate.videos || []
     if (sourceVideos.length === 0) {
-        utilsStore.showMessage('当前没有可提交的视频', 'warning')
+        utilsStore.showMessage(t('当前没有可提交的视频'), 'warning')
         return
     }
 
@@ -1856,11 +1921,18 @@ const submitTemplateAsSeparatePosts = async (options?: {
         const inheritedCoverCount = sourceVideos.length - customCoverCount
         try {
             await ElMessageBox.confirm(
-                `即将按多稿件模式提交 ${sourceVideos.length} 个视频。每个视频将单独提交为一份稿件；${customCoverCount} 个使用独立封面，${inheritedCoverCount} 个沿用公共封面。确认继续吗？`,
-                '确认多稿件提交',
+                t(
+                    '即将按多稿件模式提交 {0} 个视频。每个视频将单独提交为一份稿件；{1} 个使用独立封面，{2} 个沿用公共封面。确认继续吗？',
+                    {
+                        0: String(sourceVideos.length),
+                        1: String(customCoverCount),
+                        2: String(inheritedCoverCount)
+                    }
+                ),
+                t('确认多稿件提交'),
                 {
-                    confirmButtonText: '确认提交',
-                    cancelButtonText: '取消',
+                    confirmButtonText: t('确认提交'),
+                    cancelButtonText: t('取消'),
                     type: 'warning'
                 }
             )
@@ -1891,16 +1963,16 @@ const submitTemplateAsSeparatePosts = async (options?: {
                 try {
                     await autoStartWaitingTasks()
                 } catch (error) {
-                    console.error('自动开始任务失败:', error)
+                    console.error(t('自动开始任务失败:'), error)
                 }
             }, 500)
         }
 
-        utilsStore.showMessage('已开启多稿件提交，视频上传完成后将自动逐条提交', 'info')
+        utilsStore.showMessage(t('已开启多稿件提交，视频上传完成后将自动逐条提交'), 'info')
         await processSeparateSubmitQueue(templateKey)
     } catch (error) {
-        console.error('开启多稿件提交失败:', error)
-        utilsStore.showMessage(`开启多稿件提交失败: ${error}`, 'error')
+        console.error(t('开启多稿件提交失败:'), error)
+        utilsStore.showMessage(t('开启多稿件提交失败: {0}', { 0: String(error) }), 'error')
         clearSeparateSubmitStateByKey(templateKey)
     }
 }
@@ -2131,8 +2203,8 @@ watch(
             if (active) coverDisplayUrl.value = preview || ''
         } catch (error) {
             if (active) {
-                console.error('封面预览加载失败:', error)
-                utilsStore.showMessage('封面预览加载失败，已保留封面设置', 'warning')
+                console.error(t('封面预览加载失败:'), error)
+                utilsStore.showMessage(t('封面预览加载失败，已保留封面设置'), 'warning')
             }
         } finally {
             if (active) coverLoading.value = false
@@ -2240,10 +2312,10 @@ const getInteractiveConfirmKey = () => {
 
 const showInteractiveInfoDialog = async () => {
     await ElMessageBox.alert(
-        '勾选后本视频将被投稿为互动视频，需在规定时间内完成剧情树配置，否则系统可能回收稿件。',
-        '互动功能说明',
+        t('勾选后本视频将被投稿为互动视频，需在规定时间内完成剧情树配置，否则系统可能回收稿件。'),
+        t('互动功能说明'),
         {
-            confirmButtonText: '知道了',
+            confirmButtonText: t('知道了'),
             type: 'warning'
         }
     )
@@ -2254,16 +2326,18 @@ const confirmInteractiveEnable = async () => {
 
     await ElMessageBox.confirm(
         '<div class="interactive-confirm-dialog">' +
-            '<div class="interactive-confirm-dialog-text">互动视频需在规定时间内完成剧情树配置，否则系统可能回收稿件。</div>' +
+            t(
+                '<div class="interactive-confirm-dialog-text">互动视频需在规定时间内完成剧情树配置，否则系统可能回收稿件。</div>'
+            ) +
             '<label class="interactive-confirm-dialog-checkbox">' +
             '<input id="interactive-dont-show-again" type="checkbox" />' +
-            '<span>以后不再显示提示</span>' +
+            t('<span>以后不再显示提示</span>') +
             '</label>' +
             '</div>',
-        '确认',
+        t('确认'),
         {
-            confirmButtonText: '是，我已知晓',
-            cancelButtonText: '否',
+            confirmButtonText: t('是，我已知晓'),
+            cancelButtonText: t('否'),
             type: 'warning',
             dangerouslyUseHTMLString: true,
             beforeClose: (action, _instance, done) => {
@@ -2317,11 +2391,11 @@ watch(
         onlySelfDialogOpening.value = true
         try {
             await ElMessageBox.confirm(
-                '仅自己可见时无法进行联合投稿，如果继续，将清空联合投稿信息，是否继续。',
-                '提示',
+                t('仅自己可见时无法进行联合投稿，如果继续，将清空联合投稿信息，是否继续。'),
+                t('提示'),
                 {
-                    confirmButtonText: '继续',
-                    cancelButtonText: '取消',
+                    confirmButtonText: t('继续'),
+                    cancelButtonText: t('取消'),
                     type: 'warning'
                 }
             )
@@ -2412,7 +2486,7 @@ const startQueueUpdates = () => {
                     }
                 }
             } catch (error) {
-                console.error('刷新上传队列失败:', error)
+                console.error(t('刷新上传队列失败:'), error)
             } finally {
                 queueRefreshRunning = false
             }
@@ -2440,8 +2514,8 @@ const initializeData = async () => {
             restoreCardCollapsedState()
         }, 100)
     } catch (error) {
-        console.error('初始化数据失败: ', error)
-        utilsStore.showMessage(`'初始化数据失败: ${error}'`, 'error')
+        console.error(t('初始化数据失败: '), error)
+        utilsStore.showMessage(t("'初始化数据失败: {0}'", { 0: String(error) }), 'error')
     }
 }
 
@@ -2569,7 +2643,7 @@ const setupDragAndDrop = async () => {
             const videos = event.payload as string[]
             isDragOver.value = false
             if (templateLoading.value) {
-                utilsStore.showMessage('模板加载中', 'warning')
+                utilsStore.showMessage(t('模板加载中'), 'warning')
                 return
             }
             await handleDroppedFiles(videos)
@@ -2577,18 +2651,19 @@ const setupDragAndDrop = async () => {
 
         // 监听拖拽悬停事件
         await listen('tauri://drag-over', event => {
-            if (!isDragOver.value) console.log('文件拖拽悬停:', event.payload, '，忽略后续日志')
+            if (!isDragOver.value)
+                console.log(t('文件拖拽悬停:'), event.payload, t('，忽略后续日志'))
             isDragOver.value = true
         })
 
         // 监听拖拽取消事件
         await listen('tauri://drag-leave', () => {
-            console.log('文件拖拽取消')
+            console.log(t('文件拖拽取消'))
             isDragOver.value = false
         })
     } catch (error) {
-        console.error('设置拖拽功能失败: ', error)
-        utilsStore.showMessage(`'设置拖拽功能失败: ${error}'`, 'error')
+        console.error(t('设置拖拽功能失败: '), error)
+        utilsStore.showMessage(t("'设置拖拽功能失败: {0}'", { 0: String(error) }), 'error')
     }
 }
 
@@ -2660,7 +2735,7 @@ const saveTemplateSelection = (userUid: number, templateName: string) => {
         }
         localStorage.setItem(TEMPLATE_SELECTION_KEY, JSON.stringify(selection))
     } catch (error) {
-        console.error('保存模板选择失败:', error)
+        console.error(t('保存模板选择失败:'), error)
     }
 }
 
@@ -2669,7 +2744,7 @@ const saveCardCollapsedState = () => {
     try {
         localStorage.setItem(CARD_COLLAPSED_KEY, JSON.stringify(cardCollapsed.value))
     } catch (error) {
-        console.error('保存卡片折叠状态失败:', error)
+        console.error(t('保存卡片折叠状态失败:'), error)
     }
 }
 
@@ -2682,7 +2757,7 @@ const restoreCardCollapsedState = () => {
             Object.assign(cardCollapsed.value, savedState)
         }
     } catch (error) {
-        console.error('恢复卡片折叠状态失败:', error)
+        console.error(t('恢复卡片折叠状态失败:'), error)
     }
 }
 
@@ -2739,10 +2814,18 @@ const restoreTemplateSelection = async () => {
         // 恢复完成后重置标志
         isRestoringTemplate.value = false
 
-        console.log(`自动恢复模板选择: ${targetUser.username} - ${templateName}`)
-        utilsStore.showMessage(`已恢复上次选择的模板: ${templateName}`, 'success')
+        console.log(
+            t('自动恢复模板选择: {0} - {1}', {
+                0: String(targetUser.username),
+                1: String(templateName)
+            })
+        )
+        utilsStore.showMessage(
+            t('已恢复上次选择的模板: {0}', { 0: String(templateName) }),
+            'success'
+        )
     } catch (error) {
-        console.error('恢复模板选择失败:', error)
+        console.error(t('恢复模板选择失败:'), error)
         // 如果恢复失败，清除无效的存储数据
         localStorage.removeItem(TEMPLATE_SELECTION_KEY)
     } finally {
@@ -2754,24 +2837,24 @@ const restoreTemplateSelection = async () => {
 // 清空卡片内容
 const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'advanced') => {
     if (!currentForm.value) {
-        utilsStore.showMessage('请先选择模板', 'warning')
+        utilsStore.showMessage(t('请先选择模板'), 'warning')
         return
     }
 
     // 如果正在加载模板，禁止清空
     if (templateLoading.value) {
-        utilsStore.showMessage('模板正在加载中，请稍后再试', 'warning')
+        utilsStore.showMessage(t('模板正在加载中，请稍后再试'), 'warning')
         return
     }
 
     try {
         // 确认清空
         await ElMessageBox.confirm(
-            `确定要清空"${getCardDisplayName(cardType)}"的所有内容吗？`,
-            '确认清空',
+            t('确定要清空"{0}"的所有内容吗？', { 0: String(getCardDisplayName(cardType)) }),
+            t('确认清空'),
             {
-                confirmButtonText: '确定',
-                cancelButtonText: '取消',
+                confirmButtonText: t('确定'),
+                cancelButtonText: t('取消'),
                 type: 'warning'
             }
         )
@@ -2826,7 +2909,10 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
                 break
         }
 
-        utilsStore.showMessage(`已清空"${getCardDisplayName(cardType)}"的内容`, 'success')
+        utilsStore.showMessage(
+            t('已清空"{0}"的内容', { 0: String(getCardDisplayName(cardType)) }),
+            'success'
+        )
     } catch (error) {
         // 用户取消了操作
     }
@@ -2835,11 +2921,11 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
 // 获取卡片显示名称
 const getCardDisplayName = (cardType: string): string => {
     const cardNames: Record<string, string> = {
-        basic: '基本信息',
-        tags: '标签设置',
-        description: '视频描述',
-        videos: '视频文件',
-        advanced: '高级选项'
+        basic: t('基本信息'),
+        tags: t('标签设置'),
+        description: t('视频描述'),
+        videos: t('视频文件'),
+        advanced: t('高级选项')
     }
     return cardNames[cardType] || cardType
 }
@@ -2902,7 +2988,7 @@ const addVideoToCurrentForm = async (videoPath: string) => {
 
     // 检查是否超过100个视频的限制
     if (currentAddedVideos.length >= 100) {
-        utilsStore.showMessage('单次提交最大限制100个视频文件，无法添加更多视频', 'error')
+        utilsStore.showMessage(t('单次提交最大限制100个视频文件，无法添加更多视频'), 'error')
         return 0
     }
 
@@ -2929,7 +3015,7 @@ const addVideoToCurrentForm = async (videoPath: string) => {
                 currentTemplateName.value,
                 currentForm.value.videos
             )
-            console.log(`自动添加文件到上传队列: ${videoBaseName}`)
+            console.log(t('自动添加文件到上传队列: {0}', { 0: String(videoBaseName) }))
 
             // 如果同时启用自动开始，则自动开始任务
             if (userConfigStore.configRoot?.auto_start) {
@@ -2938,12 +3024,12 @@ const addVideoToCurrentForm = async (videoPath: string) => {
                     try {
                         await autoStartWaitingTasks()
                     } catch (error) {
-                        console.error('自动开始任务失败:', error)
+                        console.error(t('自动开始任务失败:'), error)
                     }
                 }, 500)
             }
         } catch (error) {
-            console.error('自动添加到上传队列失败:', error)
+            console.error(t('自动添加到上传队列失败:'), error)
         }
     }
     return 1
@@ -2953,7 +3039,7 @@ const addVideoToCurrentForm = async (videoPath: string) => {
 const handleDroppedFiles = async (videoFiles: any) => {
     // 检查是否有选中的用户和模板
     if (!selectedUser.value || !currentTemplateName.value) {
-        utilsStore.showMessage('请先选择用户和模板后再拖拽文件', 'warning')
+        utilsStore.showMessage(t('请先选择用户和模板后再拖拽文件'), 'warning')
         return
     }
 
@@ -2966,16 +3052,16 @@ const handleDroppedFiles = async (videoFiles: any) => {
     templateLoading.value = false
 
     if (addedCount > 0) {
-        utilsStore.showMessage(`成功添加 ${addedCount} 个视频文件`, 'success')
+        utilsStore.showMessage(t('成功添加 {0} 个视频文件', { 0: String(addedCount) }), 'success')
     } else {
-        utilsStore.showMessage('所有文件都已存在，未添加新文件', 'info')
+        utilsStore.showMessage(t('所有文件都已存在，未添加新文件'), 'info')
     }
 }
 
 // 处理登录成功
 const handleLoginSuccess = async () => {
     showLoginDialog.value = false
-    utilsStore.showMessage('登录成功', 'success')
+    utilsStore.showMessage(t('登录成功'), 'success')
 
     await userConfigStore.saveConfig()
     // 刷新所有数据
@@ -2985,14 +3071,14 @@ const handleLoginSuccess = async () => {
 // 处理登录对话框关闭
 const handleLoginDialogClose = async (done: () => void) => {
     if (loginLoading.value) {
-        utilsStore.showMessage('登录过程中无法取消', 'warning')
+        utilsStore.showMessage(t('登录过程中无法取消'), 'warning')
         return
     }
 
     try {
-        await ElMessageBox.confirm('确定要取消登录吗？', '提示', {
-            confirmButtonText: '确定',
-            cancelButtonText: '继续登录',
+        await ElMessageBox.confirm(t('确定要取消登录吗？'), t('提示'), {
+            confirmButtonText: t('确定'),
+            cancelButtonText: t('继续登录'),
             type: 'warning'
         })
         done()
@@ -3026,16 +3112,16 @@ const refreshSeasonList = async () => {
     }
 
     if (!selectedUser.value?.uid) {
-        utilsStore.showMessage('请先选择用户和模板', 'warning')
+        utilsStore.showMessage(t('请先选择用户和模板'), 'warning')
         return
     }
 
     try {
         await seasonViewRef.value?.refreshSeasons()
-        utilsStore.showMessage('合集列表已刷新', 'success')
+        utilsStore.showMessage(t('合集列表已刷新'), 'success')
     } catch (error) {
-        console.error('刷新合集列表失败:', error)
-        utilsStore.showMessage(`刷新合集列表失败: ${error}`, 'error')
+        console.error(t('刷新合集列表失败:'), error)
+        utilsStore.showMessage(t('刷新合集列表失败: {0}', { 0: String(error) }), 'error')
     }
 }
 
@@ -3091,11 +3177,13 @@ const selectTemplate = async (user: any, templateName: string) => {
                             hasUnsavedChanges(newTemplate, currentTemplateData)
                         ) {
                             await ElMessageBox.confirm(
-                                `检测到本地模板内容与bilibili不一致，是否刷新？（此操作会丢失所有未保存的更改）`,
+                                t(
+                                    '检测到本地模板内容与bilibili不一致，是否刷新？（此操作会丢失所有未保存的更改）'
+                                ),
                                 '',
                                 {
-                                    confirmButtonText: '刷新并继续',
-                                    cancelButtonText: '不刷新，仅显示当前',
+                                    confirmButtonText: t('刷新并继续'),
+                                    cancelButtonText: t('不刷新，仅显示当前'),
                                     type: 'info'
                                 }
                             )
@@ -3103,14 +3191,16 @@ const selectTemplate = async (user: any, templateName: string) => {
                         }
                     }
                 } catch (error) {
-                    console.error('自动刷新模板数据失败:', error)
+                    console.error(t('自动刷新模板数据失败:'), error)
                 }
             }
         }, 666)
-        console.log(`已切换到模板: ${user.username} - ${templateName}`)
+        console.log(
+            t('已切换到模板: {0} - {1}', { 0: String(user.username), 1: String(templateName) })
+        )
     } catch (error) {
-        console.error('切换模板失败:', error)
-        utilsStore.showMessage(`切换模板失败: ${error}`, 'error')
+        console.error(t('切换模板失败:'), error)
+        utilsStore.showMessage(t('切换模板失败: {0}', { 0: String(error) }), 'error')
     } finally {
         templateLoading.value = false
     }
@@ -3118,21 +3208,21 @@ const selectTemplate = async (user: any, templateName: string) => {
 
 const resetTemplate = async () => {
     if (!selectedUser.value || !currentTemplateName.value) {
-        utilsStore.showMessage('请先选择用户和模板', 'warning')
+        utilsStore.showMessage(t('请先选择用户和模板'), 'warning')
         return
     }
 
     // 如果正在加载模板，禁止重置
     if (templateLoading.value) {
-        utilsStore.showMessage('模板正在加载中，请稍后再试', 'warning')
+        utilsStore.showMessage(t('模板正在加载中，请稍后再试'), 'warning')
         return
     }
 
     // 确认重置
     try {
-        await ElMessageBox.confirm('确定要清除所有未保存的更改吗?', '', {
-            confirmButtonText: '确定',
-            cancelButtonText: '取消',
+        await ElMessageBox.confirm(t('确定要清除所有未保存的更改吗?'), '', {
+            confirmButtonText: t('确定'),
+            cancelButtonText: t('取消'),
             type: 'warning'
         })
 
@@ -3146,13 +3236,13 @@ const resetTemplate = async () => {
                         ]
                     )
                 ) || userConfigStore.createDefaultTemplate()
-            utilsStore.showMessage('模板已重置', 'success')
+            utilsStore.showMessage(t('模板已重置'), 'success')
         } finally {
             templateLoading.value = false
         }
     } catch (error) {
         // 用户取消了重置
-        console.log('重置操作已取消')
+        console.log(t('重置操作已取消'))
     }
 }
 
@@ -3183,7 +3273,7 @@ const getNewTemplateFromAv = async (userUid: number, aid: number) => {
         newTemplate.watermark = currentForm.value?.watermark
         return newTemplate
     } catch (error) {
-        console.error('获取新模板失败: ', error)
+        console.error(t('获取新模板失败: '), error)
         throw error
     }
 }
@@ -3206,11 +3296,11 @@ const reloadTemplateFromAV = async (userUid: number, aid: number) => {
     try {
         const newTemplate = await getNewTemplateFromAv(userUid, aid)
         currentForm.value = newTemplate
-        utilsStore.showMessage('模板数据已刷新', 'success')
+        utilsStore.showMessage(t('模板数据已刷新'), 'success')
         return true
     } catch (error) {
-        console.error('刷新失败: ', error)
-        utilsStore.showMessage(`刷新失败: ${error}`, 'error')
+        console.error(t('刷新失败: '), error)
+        utilsStore.showMessage(t('刷新失败: {0}', { 0: String(error) }), 'error')
         throw error
     } finally {
         templateLoading.value = false
@@ -3267,8 +3357,8 @@ const loadTemplate = async () => {
 
         // 模板数据已直接操作，无需保存基础状态
     } catch (error) {
-        console.error('加载模板失败:', error)
-        utilsStore.showMessage(`加载模板失败: ${error}`, 'error')
+        console.error(t('加载模板失败:'), error)
+        utilsStore.showMessage(t('加载模板失败: {0}', { 0: String(error) }), 'error')
     }
 }
 
@@ -3277,31 +3367,31 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
     switch (command) {
         case 'duplicate':
             try {
-                const newName = `${template.name}_副本`
+                const newName = t('{0}_副本', { 0: String(template.name) })
                 await userConfigStore.duplicateUserTemplate(user.uid, template.name, newName)
-                utilsStore.showMessage('模板复制成功', 'success')
+                utilsStore.showMessage(t('模板复制成功'), 'success')
             } catch (error) {
-                console.error('复制模板失败: ', error)
-                utilsStore.showMessage(`'复制模板失败: ${error}'`, 'error')
+                console.error(t('复制模板失败: '), error)
+                utilsStore.showMessage(t("'复制模板失败: {0}'", { 0: String(error) }), 'error')
             }
             break
 
         case 'rename':
             try {
                 const { value: newName } = await ElMessageBox.prompt(
-                    '请输入新的模板名称',
-                    '重命名模板',
+                    t('请输入新的模板名称'),
+                    t('重命名模板'),
                     {
-                        confirmButtonText: '确定',
-                        cancelButtonText: '取消',
-                        inputPlaceholder: '请输入模板名称',
+                        confirmButtonText: t('确定'),
+                        cancelButtonText: t('取消'),
+                        inputPlaceholder: t('请输入模板名称'),
                         inputValue: template.name,
                         inputValidator: (value: string) => {
                             if (!value || !value.trim()) {
-                                return '模板名称不能为空'
+                                return t('模板名称不能为空')
                             }
                             if (value.trim() === template.name) {
-                                return '新名称不能与原名称相同'
+                                return t('新名称不能与原名称相同')
                             }
                             return true
                         }
@@ -3313,7 +3403,7 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                 // 检查是否已存在同名模板
                 const existingTemplate = userConfigStore.getUserTemplate(user.uid, trimmedName)
                 if (existingTemplate) {
-                    utilsStore.showMessage('该名称的模板已存在，请使用其他名称', 'error')
+                    utilsStore.showMessage(t('该名称的模板已存在，请使用其他名称'), 'error')
                     return
                 }
 
@@ -3330,11 +3420,14 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                     saveTemplateSelection(user.uid, trimmedName)
                 }
 
-                utilsStore.showMessage('模板重命名成功', 'success')
+                utilsStore.showMessage(t('模板重命名成功'), 'success')
             } catch (error) {
                 if (error !== 'cancel') {
-                    console.error('重命名模板失败: ', error)
-                    utilsStore.showMessage(`'重命名模板失败: ${error}'`, 'error')
+                    console.error(t('重命名模板失败: '), error)
+                    utilsStore.showMessage(
+                        t("'重命名模板失败: {0}'", { 0: String(error) }),
+                        'error'
+                    )
                 }
             }
             break
@@ -3342,11 +3435,15 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
         case 'delete':
             try {
                 const template_name = template.name || currentTemplateName.value
-                await ElMessageBox.confirm(`确定要删除模板"${template_name}"吗？`, '确认删除', {
-                    confirmButtonText: '确定',
-                    cancelButtonText: '取消',
-                    type: 'warning'
-                })
+                await ElMessageBox.confirm(
+                    t('确定要删除模板"{0}"吗？', { 0: String(template_name) }),
+                    t('确认删除'),
+                    {
+                        confirmButtonText: t('确定'),
+                        cancelButtonText: t('取消'),
+                        type: 'warning'
+                    }
+                )
 
                 await userConfigStore.removeUserTemplate(user.uid, template_name)
                 clearMultiSubmitModeForTemplate(user.uid, template_name)
@@ -3362,11 +3459,11 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                     localStorage.removeItem(TEMPLATE_SELECTION_KEY)
                 }
 
-                utilsStore.showMessage('模板删除成功', 'success')
+                utilsStore.showMessage(t('模板删除成功'), 'success')
             } catch (error) {
                 if (error !== 'cancel') {
-                    console.error('删除模板失败: ', error)
-                    utilsStore.showMessage(`'删除模板失败: ${error}'`, 'error')
+                    console.error(t('删除模板失败: '), error)
+                    utilsStore.showMessage(t("'删除模板失败: {0}'", { 0: String(error) }), 'error')
                 }
             }
             break
@@ -3404,7 +3501,7 @@ const handleTemplateCreated = async (userUid: number, templateName: string) => {
 // 保存模板
 const saveTemplate = async () => {
     if (!selectedUser.value || !currentTemplateName.value || !currentTemplate.value) {
-        utilsStore.showMessage('请先选择模板', 'error')
+        utilsStore.showMessage(t('请先选择模板'), 'error')
         return
     }
 
@@ -3418,8 +3515,8 @@ const saveTemplate = async () => {
 
         // 模板数据已直接操作并保存，无需额外状态管理
     } catch (error) {
-        console.error('保存模板失败: ', error)
-        utilsStore.showMessage(`'保存模板失败: ${error}'`, 'error')
+        console.error(t('保存模板失败: '), error)
+        utilsStore.showMessage(t("'保存模板失败: {0}'", { 0: String(error) }), 'error')
     }
 }
 
@@ -3473,18 +3570,18 @@ const selectCoverWithTauri = async () => {
             templateLoading.value = true
             const url = await selectAndUploadCover(selectedUser.value.uid, utilsStore.uploadCover)
             if (!url) {
-                utilsStore.showMessage('未选择任何封面文件', 'warning')
+                utilsStore.showMessage(t('未选择任何封面文件'), 'warning')
                 return
             }
 
             currentTemplate.value.cover = url
             currentForm.value.cover = url
         } else {
-            utilsStore.showMessage('请先选择用户和模板', 'error')
+            utilsStore.showMessage(t('请先选择用户和模板'), 'error')
         }
     } catch (error) {
-        console.error('封面选择失败: ', error)
-        utilsStore.showMessage(`'封面选择失败: ${error}'`, 'error')
+        console.error(t('封面选择失败: '), error)
+        utilsStore.showMessage(t("'封面选择失败: {0}'", { 0: String(error) }), 'error')
         return
     } finally {
         coverLoading.value = false
@@ -3498,20 +3595,20 @@ const clearCurrentCover = () => {
     }
 
     if (!currentForm.value || !currentTemplate.value) {
-        utilsStore.showMessage('请先选择用户和模板', 'warning')
+        utilsStore.showMessage(t('请先选择用户和模板'), 'warning')
         return
     }
 
     currentTemplate.value.cover = ''
     currentForm.value.cover = ''
     coverDisplayUrl.value = ''
-    utilsStore.showMessage('已清除封面', 'success')
+    utilsStore.showMessage(t('已清除封面'), 'success')
 }
 
 // 使用 Tauri 文件对话框选择视频文件
 const selectVideoWithTauri = async () => {
     if (templateLoading.value) {
-        utilsStore.showMessage('模板加载中', 'warning')
+        utilsStore.showMessage(t('模板加载中'), 'warning')
         return
     }
 
@@ -3548,14 +3645,14 @@ const selectVideoWithTauri = async () => {
                 added += await addVideoToCurrentForm(videoPath)
             }
 
-            utilsStore.showMessage(`已选择 ${added} 个文件`, 'success')
+            utilsStore.showMessage(t('已选择 {0} 个文件', { 0: String(added) }), 'success')
         } else if (typeof selected === 'string') {
             added += await addVideoToCurrentForm(selected)
-            utilsStore.showMessage(`已选择 ${added} 个文件`, 'success')
+            utilsStore.showMessage(t('已选择 {0} 个文件', { 0: String(added) }), 'success')
         }
     } catch (error) {
-        console.error('文件选择失败: ', error)
-        utilsStore.showMessage(`'文件选择失败: ${error}'`, 'error')
+        console.error(t('文件选择失败: '), error)
+        utilsStore.showMessage(t("'文件选择失败: {0}'", { 0: String(error) }), 'error')
     } finally {
         templateLoading.value = false
     }
@@ -3568,16 +3665,20 @@ const clearAllVideos = async () => {
     }
 
     const videoCount = currentForm.value.videos.length
-    const videoText = videoCount === 1 ? '1 个文件' : `${videoCount} 个文件`
+    const videoText = videoCount === 1 ? t('1 个文件') : t('{0} 个文件', { 0: String(videoCount) })
 
     templateLoading.value = true
     try {
-        await ElMessageBox.confirm(`确定要清空所有已选择的 ${videoText} 吗？`, '确认清空文件', {
-            confirmButtonText: '确定清空',
-            cancelButtonText: '取消',
-            type: 'warning',
-            dangerouslyUseHTMLString: false
-        })
+        await ElMessageBox.confirm(
+            t('确定要清空所有已选择的 {0} 吗？', { 0: String(videoText) }),
+            t('确认清空文件'),
+            {
+                confirmButtonText: t('确定清空'),
+                cancelButtonText: t('取消'),
+                type: 'warning',
+                dangerouslyUseHTMLString: false
+            }
+        )
 
         // 取消所有对应的上传任务
         const videoIds = currentForm.value.videos.map(video => video.id)
@@ -3588,15 +3689,17 @@ const clearAllVideos = async () => {
         if (correspondingTasks.length > 0) {
             try {
                 await uploadStore.cancelUpload(correspondingTasks.map(task => task.id))
-                console.log(`已取消对应的上传任务: ${correspondingTasks.length} 个`)
+                console.log(
+                    t('已取消对应的上传任务: {0} 个', { 0: String(correspondingTasks.length) })
+                )
             } catch (error) {
-                console.error('取消上传任务失败:', error)
+                console.error(t('取消上传任务失败:'), error)
             }
         }
 
         // 清空视频文件列表
         currentForm.value.videos = []
-        utilsStore.showMessage(`已清空 ${videoText}`, 'success')
+        utilsStore.showMessage(t('已清空 {0}', { 0: String(videoText) }), 'success')
     } catch {
         // 用户取消了操作
     } finally {
@@ -3618,11 +3721,11 @@ const removeUploadedFile = async (videoId: string) => {
         try {
             // 添加确认弹窗
             await ElMessageBox.confirm(
-                `确定要删除视频文件"${video.title}"吗？此操作不可撤销。`,
-                '确认删除文件',
+                t('确定要删除视频文件"{0}"吗？此操作不可撤销。', { 0: String(video.title) }),
+                t('确认删除文件'),
                 {
-                    confirmButtonText: '确定删除',
-                    cancelButtonText: '取消',
+                    confirmButtonText: t('确定删除'),
+                    cancelButtonText: t('取消'),
                     type: 'warning'
                 }
             )
@@ -3634,9 +3737,9 @@ const removeUploadedFile = async (videoId: string) => {
             if (correspondingTask) {
                 try {
                     await uploadStore.cancelUpload([correspondingTask.id])
-                    console.log(`已取消对应的上传任务: ${correspondingTask.id}`)
+                    console.log(t('已取消对应的上传任务: {0}', { 0: String(correspondingTask.id) }))
                 } catch (error) {
-                    console.error('取消上传任务失败:', error)
+                    console.error(t('取消上传任务失败:'), error)
                     // 即使取消失败，仍然继续删除文件
                 }
             }
@@ -3644,12 +3747,12 @@ const removeUploadedFile = async (videoId: string) => {
             // 删除视频文件
             currentForm.value.videos.splice(videoIndex, 1)
 
-            utilsStore.showMessage('文件删除成功', 'success')
+            utilsStore.showMessage(t('文件删除成功'), 'success')
         } catch (error) {
             // 如果用户取消了确认框，不显示错误消息
             if (error !== 'cancel') {
-                console.error('删除文件失败:', error)
-                utilsStore.showMessage(`删除文件失败: ${error}`, 'error')
+                console.error(t('删除文件失败:'), error)
+                utilsStore.showMessage(t('删除文件失败: {0}', { 0: String(error) }), 'error')
             }
         }
     }
@@ -3662,26 +3765,29 @@ const createUpload = async () => {
     const hasUploadedFiles = currentForm.value?.videos && currentForm.value.videos.length > 0
 
     if (!hasUploadedFiles) {
-        utilsStore.showMessage('请先选择视频文件', 'error')
+        utilsStore.showMessage(t('请先选择视频文件'), 'error')
         return
     }
 
     if (!selectedUser.value) {
-        utilsStore.showMessage('请先选择用户', 'error')
+        utilsStore.showMessage(t('请先选择用户'), 'error')
         return
     }
 
     uploading.value = true
     try {
         if (currentForm.value) {
-            console.log('开始上传文件:', currentForm.value.videos)
+            console.log(t('开始上传文件:'), currentForm.value.videos)
             // 确保传递的是正确格式的数组
             const num_added = await uploadStore.createUploadTask(
                 selectedUser.value.uid,
                 currentTemplateName.value,
                 currentForm.value.videos
             )
-            utilsStore.showMessage(`添加 ${num_added} 个文件到上传队列`, 'success')
+            utilsStore.showMessage(
+                t('添加 {0} 个文件到上传队列', { 0: String(num_added) }),
+                'success'
+            )
         }
 
         // 如果启用自动开始，则自动开始任务
@@ -3690,13 +3796,13 @@ const createUpload = async () => {
                 try {
                     await autoStartWaitingTasks()
                 } catch (error) {
-                    console.error('自动开始任务失败:', error)
+                    console.error(t('自动开始任务失败:'), error)
                 }
             }, 500)
         }
     } catch (error) {
-        console.error('上传失败: ', error)
-        utilsStore.showMessage(`上传失败: ${error}`, 'error')
+        console.error(t('上传失败: '), error)
+        utilsStore.showMessage(t('上传失败: {0}', { 0: String(error) }), 'error')
     } finally {
         uploading.value = false
     }
@@ -3722,7 +3828,7 @@ const handleAddVideosToForm = async (
                 if (await addVideoToCurrentForm(videoPath)) accepted.push(videoPath)
             } catch (error) {
                 retry = true
-                console.error(`添加视频失败: ${videoPath}`, error)
+                console.error(t('添加视频失败: {0}', { 0: String(videoPath) }), error)
             }
         }
     } finally {
@@ -3762,9 +3868,9 @@ const autoStartWaitingTasks = async () => {
     if (pendingTasks.length > 0) {
         try {
             const startResult = await uploadStore.startUpload(pendingTasks.map(task => task.id))
-            console.log(`自动开始任务: ${startResult.successCount} 个`)
+            console.log(t('自动开始任务: {0} 个', { 0: String(startResult.successCount) }))
         } catch (error) {
-            console.error('自动开始任务失败:', error)
+            console.error(t('自动开始任务失败:'), error)
         }
     }
 }
@@ -3780,13 +3886,13 @@ const allFilesUploaded = computed(() => {
 // 提交视频
 const submitTemplate = async () => {
     if (!currentTemplateName.value || !selectedUser.value) {
-        utilsStore.showMessage('请选择模板', 'error')
+        utilsStore.showMessage(t('请选择模板'), 'error')
         return
     }
 
     const templateKey = getTemplateKey(selectedUser.value.uid, currentTemplateName.value)
     if (!allFilesUploaded.value && separateSubmittingRecord.value[templateKey]) {
-        utilsStore.showMessage('当前模板正在多稿件提交，请先停止后再开启自动提交', 'warning')
+        utilsStore.showMessage(t('当前模板正在多稿件提交，请先停止后再开启自动提交'), 'warning')
         return
     }
 
@@ -3807,21 +3913,21 @@ const submitTemplate = async () => {
                         try {
                             await autoStartWaitingTasks()
                         } catch (error) {
-                            console.error('自动开始任务失败:', error)
+                            console.error(t('自动开始任务失败:'), error)
                         }
                     }, 500)
                 }
             } catch (error) {
-                console.error('添加到上传队列失败:', error)
-                utilsStore.showMessage(`添加到上传队列失败: ${error}`, 'error')
+                console.error(t('添加到上传队列失败:'), error)
+                utilsStore.showMessage(t('添加到上传队列失败: {0}', { 0: String(error) }), 'error')
             }
             setAutoSubmitting(selectedUser.value.uid, currentTemplateName.value, true)
             void checkAutoSubmitAll()
-            utilsStore.showMessage('已启动自动提交，上传完成后将自动提交', 'info')
+            utilsStore.showMessage(t('已启动自动提交，上传完成后将自动提交'), 'info')
         } else {
             // 第二次点击，取消自动提交
             setAutoSubmitting(selectedUser.value.uid, currentTemplateName.value, false)
-            utilsStore.showMessage('已取消自动提交', 'info')
+            utilsStore.showMessage(t('已取消自动提交'), 'info')
         }
         return
     } else {
@@ -3842,7 +3948,7 @@ const saveTemplateName = async () => {
     const newName = editingTemplateName.value.trim()
 
     if (!newName) {
-        utilsStore.showMessage('模板名称不能为空', 'error')
+        utilsStore.showMessage(t('模板名称不能为空'), 'error')
         cancelEditTemplateName()
         return
     }
@@ -3853,7 +3959,7 @@ const saveTemplateName = async () => {
     }
 
     if (!selectedUser.value) {
-        utilsStore.showMessage('未选择用户', 'error')
+        utilsStore.showMessage(t('未选择用户'), 'error')
         cancelEditTemplateName()
         return
     }
@@ -3861,7 +3967,7 @@ const saveTemplateName = async () => {
     try {
         const existingTemplate = userConfigStore.getUserTemplate(selectedUser.value.uid, newName)
         if (existingTemplate) {
-            utilsStore.showMessage('该名称的模板已存在，请使用其他名称', 'error')
+            utilsStore.showMessage(t('该名称的模板已存在，请使用其他名称'), 'error')
             return
         }
 
@@ -3876,11 +3982,11 @@ const saveTemplateName = async () => {
         currentTemplateName.value = newName
         saveTemplateSelection(selectedUser.value.uid, newName)
 
-        utilsStore.showMessage('模板重命名成功', 'success')
+        utilsStore.showMessage(t('模板重命名成功'), 'success')
         isEditingTemplateName.value = false
     } catch (error) {
-        console.error('重命名模板失败: ', error)
-        utilsStore.showMessage(`重命名模板失败: ${error}`, 'error')
+        console.error(t('重命名模板失败: '), error)
+        utilsStore.showMessage(t('重命名模板失败: {0}', { 0: String(error) }), 'error')
         cancelEditTemplateName()
     }
 }
@@ -3894,7 +4000,7 @@ const cancelEditTemplateName = () => {
 const openUserConfig = (user: any) => {
     if (user?.expired) {
         showLoginDialog.value = true
-        utilsStore.showMessage('该用户登录状态已过期，请重新登录', 'warning')
+        utilsStore.showMessage(t('该用户登录状态已过期，请重新登录'), 'warning')
         return
     }
 
@@ -3913,7 +4019,7 @@ const isUserHasUploadTasks = (uid: number) => {
 const handleLogoutUser = async (uid: number) => {
     // 如果用户有上传任务，不允许登出
     if (isUserHasUploadTasks(uid)) {
-        utilsStore.showMessage('用户有未完成的上传任务，请先完成或取消任务', 'warning')
+        utilsStore.showMessage(t('用户有未完成的上传任务，请先完成或取消任务'), 'warning')
         return
     }
 
@@ -3936,21 +4042,21 @@ const handleLogoutUser = async (uid: number) => {
                         }
                     }
                 } catch (error) {
-                    console.error('清理localStorage记录失败:', error)
+                    console.error(t('清理localStorage记录失败:'), error)
                 }
             }
 
-            utilsStore.showMessage('用户已登出', 'success')
+            utilsStore.showMessage(t('用户已登出'), 'success')
             // 刷新前端数据
             await refreshAllData()
         } else {
-            utilsStore.showMessage('登出失败', 'error')
+            utilsStore.showMessage(t('登出失败'), 'error')
         }
     } catch (error) {
         // 如果用户取消了确认框，error会是'cancel'，不需要显示错误
         if (error !== 'cancel') {
-            console.error('登出用户失败:', error)
-            utilsStore.showMessage(`登出失败: ${error}`, 'error')
+            console.error(t('登出用户失败:'), error)
+            utilsStore.showMessage(t('登出失败: {0}', { 0: String(error) }), 'error')
         }
     }
 }
@@ -3971,7 +4077,7 @@ const refreshAllData = async () => {
         // 重写
         await userConfigStore.saveConfig()
     } catch (error) {
-        console.error('刷新数据失败:', error)
+        console.error(t('刷新数据失败:'), error)
     }
 }
 
@@ -3990,10 +4096,10 @@ const exportLogs = async () => {
             // 复制 ZIP 文件到用户指定位置
             await copyFile(zipPath, savePath)
             await remove(zipPath)
-            console.log('文件已保存到：', savePath)
+            console.log(t('文件已保存到：'), savePath)
         }
     } catch (error) {
-        console.error('导出日志失败:', error)
+        console.error(t('导出日志失败:'), error)
     }
 }
 
@@ -4011,11 +4117,11 @@ const checkVideoStatus = async () => {
     try {
         // 先刷新模板数据
         await ElMessageBox.confirm(
-            `此操作会重新拉取模板数据，此操作会丢失未保存的更改，是否继续？`,
+            t('此操作会重新拉取模板数据，此操作会丢失未保存的更改，是否继续？'),
             '',
             {
-                confirmButtonText: '刷新并继续',
-                cancelButtonText: '不刷新，仅显示当前',
+                confirmButtonText: t('刷新并继续'),
+                cancelButtonText: t('不刷新，仅显示当前'),
                 type: 'info'
             }
         )
@@ -4023,7 +4129,7 @@ const checkVideoStatus = async () => {
         // 然后显示状态对话框
         showVideoStatusDialog.value = true
     } catch (error) {
-        console.error('刷新模板数据失败:', error)
+        console.error(t('刷新模板数据失败:'), error)
         // 即使刷新失败也显示对话框
         showVideoStatusDialog.value = true
     }
@@ -4036,21 +4142,25 @@ const checkUpdate = async () => {
         if (updateInfo) {
             // 如果有更新，显示确认对话框
             try {
-                await ElMessageBox.confirm(`发现新版本 ${updateInfo}，是否前往下载？`, '发现更新', {
-                    confirmButtonText: '前往下载',
-                    cancelButtonText: '稍后再说',
-                    type: 'info'
-                })
+                await ElMessageBox.confirm(
+                    t('发现新版本 {0}，是否前往下载？', { 0: String(updateInfo) }),
+                    t('发现更新'),
+                    {
+                        confirmButtonText: t('前往下载'),
+                        cancelButtonText: t('稍后再说'),
+                        type: 'info'
+                    }
+                )
                 // 用户确认后打开下载页面
                 await openUrl(`https://github.com/biliup/biliup-app-new/releases/tag/${updateInfo}`)
             } catch {
                 // 用户取消，不做任何操作
             }
         } else {
-            utilsStore.showMessage('当前已是最新版本', 'success')
+            utilsStore.showMessage(t('当前已是最新版本'), 'success')
         }
     } catch (error) {
-        console.error('检查更新失败:', error)
+        console.error(t('检查更新失败:'), error)
     }
 }
 </script>

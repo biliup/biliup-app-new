@@ -9,9 +9,9 @@
             <div class="user-trigger">
                 <el-icon class="user-icon"><user /></el-icon>
                 <span class="user-count" v-if="loginUsers.length > 0">
-                    {{ loginUsers.length }} 个用户已登录
+                    {{ loginUsers.length }} {{ t('个用户已登录') }}
                 </span>
-                <span class="user-count" v-else> 点击添加用户 </span>
+                <span class="user-count" v-else> {{ t('点击添加用户') }} </span>
                 <el-icon class="dropdown-arrow"><arrow-down /></el-icon>
             </div>
 
@@ -26,7 +26,7 @@
                                 :class="{ 'user-item-expired': user.expired }"
                             >
                                 <div class="user-info">
-                                    <div class="drag-handle" title="拖动排序">
+                                    <div class="drag-handle" :title="t('拖动排序')">
                                         <span></span>
                                         <span></span>
                                     </div>
@@ -46,9 +46,9 @@
                                         <div class="username">{{ user.username }}</div>
                                         <div class="user-uid">
                                             UID: {{ user.uid }}
-                                            <span v-if="user.expired" class="expired-tip"
-                                                >登录状态已过期</span
-                                            >
+                                            <span v-if="user.expired" class="expired-tip">{{
+                                                t('登录状态已过期')
+                                            }}</span>
                                         </div>
                                     </div>
                                 </div>
@@ -56,8 +56,8 @@
                                 <el-tooltip
                                     :content="
                                         isUserHasUploadTasks(user.uid)
-                                            ? '请先删除上传队列中属于该用户的任务'
-                                            : '登出用户'
+                                            ? t('请先删除上传队列中属于该用户的任务')
+                                            : t('登出用户')
                                     "
                                     placement="top"
                                 >
@@ -74,7 +74,7 @@
                                             <div class="exit-door"></div>
                                             <div class="exit-arrow"></div>
                                         </div>
-                                        登出
+                                        {{ t('登出') }}
                                     </el-button>
                                 </el-tooltip>
                             </div>
@@ -82,9 +82,9 @@
 
                         <!-- 空状态 -->
                         <div v-if="loginUsers.length === 0" class="empty-state">
-                            <el-empty description="暂无登录用户" :image-size="60">
+                            <el-empty :description="t('暂无登录用户')" :image-size="60">
                                 <el-button type="primary" @click="$emit('show-login')">
-                                    立即登录
+                                    {{ t('立即登录') }}
                                 </el-button>
                             </el-empty>
                         </div>
@@ -97,8 +97,7 @@
                             @click="$emit('show-login')"
                             class="add-user-btn"
                         >
-                            <el-icon><plus /></el-icon>
-                            添加用户
+                            <el-icon><plus /></el-icon> {{ t('添加用户') }}
                         </el-button>
                     </div>
                 </el-dropdown-menu>
@@ -108,6 +107,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useUploadStore } from '../stores/upload'
@@ -144,10 +144,10 @@ const { syncSortable: syncUserSortable, destroySortable: destroyUserSortable } =
         onOrderChange: async nextOrder => {
             try {
                 await authStore.reorderLoginUsers(nextOrder)
-                utilsStore.showMessage('用户顺序已保存', 'success')
+                utilsStore.showMessage(t('用户顺序已保存'), 'success')
             } catch (error) {
-                console.error('用户排序失败:', error)
-                utilsStore.showMessage(`用户排序失败: ${error}`, 'error')
+                console.error(t('用户排序失败:'), error)
+                utilsStore.showMessage(t('用户排序失败: {0}', { 0: String(error) }), 'error')
                 await syncUserSortable()
             }
         },
@@ -182,17 +182,20 @@ const handleLogout = async (user: any) => {
     try {
         // 检查用户是否有未完成的上传任务
         if (isUserHasUploadTasks(user.uid)) {
-            utilsStore.showMessage('请先完成或取消该用户的未完成上传任务', 'warning')
+            utilsStore.showMessage(t('请先完成或取消该用户的未完成上传任务'), 'warning')
             return
         }
 
         // 确认对话框
         await ElMessageBox.confirm(
-            `确定要退出用户 "${user.username}" 吗？退出后会删除该账号的本地登录信息、设置及全部模板，不会删除本地视频文件或 B 站稿件。`,
-            '确认登出',
+            t(
+                '确定要退出用户 "{0}" 吗？退出后会删除该账号的本地登录信息、设置及全部模板，不会删除本地视频文件或 B 站稿件。',
+                { 0: String(user.username) }
+            ),
+            t('确认登出'),
             {
-                confirmButtonText: '确定登出',
-                cancelButtonText: '取消',
+                confirmButtonText: t('确定登出'),
+                cancelButtonText: t('取消'),
                 type: 'warning',
                 confirmButtonClass: 'el-button--danger'
             }
@@ -202,8 +205,8 @@ const handleLogout = async (user: any) => {
         emit('user-logout', user.uid)
     } catch (error) {
         if (error !== 'cancel') {
-            console.error('登出用户失败:', error)
-            utilsStore.showMessage(`登出用户失败: ${error}`, 'error')
+            console.error(t('登出用户失败:'), error)
+            utilsStore.showMessage(t('登出用户失败: {0}', { 0: String(error) }), 'error')
         }
     }
 }

@@ -71,7 +71,10 @@ pub async fn start_upload(
             Ok(true) => started_count += 1,
             Ok(false) => noop_task_ids.push(task_id),
             Err(error) => {
-                warn!("开始上传失败 {}: {}", task_id, error);
+                warn!(
+                    "{}",
+                    crate::tr!("upload.start_failed", task_id = task_id, error = error)
+                );
                 failed_task_ids.push(task_id);
             }
         }
@@ -101,7 +104,10 @@ pub async fn pause_upload(
             Ok(true) => paused_count += 1,
             Ok(false) => noop_task_ids.push(task_id),
             Err(error) => {
-                warn!("暂停上传失败 {}: {}", task_id, error);
+                warn!(
+                    "{}",
+                    crate::tr!("upload.pause_failed", task_id = task_id, error = error)
+                );
                 failed_task_ids.push(task_id);
             }
         }
@@ -131,7 +137,10 @@ pub async fn cancel_upload(
             Ok(true) => cancelled_count += 1,
             Ok(false) => noop_task_ids.push(task_id),
             Err(error) => {
-                warn!("取消上传失败 {}: {}", task_id, error);
+                warn!(
+                    "{}",
+                    crate::tr!("upload.cancel_failed", task_id = task_id, error = error)
+                );
                 failed_task_ids.push(task_id);
             }
         }
@@ -172,7 +181,10 @@ pub async fn retry_upload(
             Ok(true) => retried_count += 1,
             Ok(false) => noop_task_ids.push(task_id),
             Err(error) => {
-                warn!("重试上传失败 {}: {}", task_id, error);
+                warn!(
+                    "{}",
+                    crate::tr!("upload.retry_failed", task_id = task_id, error = error)
+                );
                 failed_task_ids.push(task_id);
             }
         }
@@ -201,7 +213,10 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
             use tracing::debug;
 
             let json_content = serde_json::to_string_pretty(&studio).unwrap();
-            debug!("转换后的B站提交表单: {uid}\n{}", json_content);
+            debug!(
+                "{}",
+                crate::tr!("submission.form_converted", uid = uid, form = json_content)
+            );
         }
 
         let proxy = app_data
@@ -215,10 +230,10 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
         let bilibili = app_data.get_bilibili(uid).await?;
         match bilibili.submit_by_web(&studio, proxy.as_deref()).await {
             Ok(resp) => {
-                info!("添加稿件成功：{resp}");
-                Ok(resp
-                    .data
-                    .ok_or_else(|| AppError::Biliup("返回值错误".to_string()))?)
+                info!("{}", crate::tr!("submission.created", response = resp));
+                Ok(resp.data.ok_or_else(|| {
+                    AppError::Biliup(crate::i18n::text("submission.invalid_response").to_string())
+                })?)
             }
             Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
         }
@@ -230,7 +245,7 @@ pub async fn submit(app: AppHandle, uid: u64, form: TemplateConfig) -> Result<Va
         let bilibili = app_data.get_bilibili(uid).await?;
         match bilibili.edit_by_web(&studio).await {
             Ok(resp) => {
-                info!("编辑稿件成功：{resp}");
+                info!("{}", crate::tr!("submission.edited", response = resp));
                 Ok(resp["data"].clone())
             }
             Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),

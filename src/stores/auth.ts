@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
@@ -59,7 +60,7 @@ export const useAuthStore = defineStore('auth', () => {
         try {
             return await invoke('get_login_qr', { proxy })
         } catch (error) {
-            console.error('获取二维码失败:', error)
+            console.error(t('获取二维码失败:'), error)
             throw error
         }
     }
@@ -74,7 +75,7 @@ export const useAuthStore = defineStore('auth', () => {
             }
             return response
         } catch (error) {
-            console.error('检查二维码登录失败:', error)
+            console.error(t('检查二维码登录失败:'), error)
             throw error
         }
     }
@@ -89,7 +90,7 @@ export const useAuthStore = defineStore('auth', () => {
             })
             return response
         } catch (error) {
-            console.error('发送短信验证码失败:', error)
+            console.error(t('发送短信验证码失败:'), error)
             throw error
         }
     }
@@ -102,7 +103,7 @@ export const useAuthStore = defineStore('auth', () => {
             })
             return response
         } catch (error) {
-            console.error('提交短信滑块验证失败:', error)
+            console.error(t('提交短信滑块验证失败:'), error)
             throw error
         }
     }
@@ -127,7 +128,7 @@ export const useAuthStore = defineStore('auth', () => {
             }
             return response
         } catch (error) {
-            console.error('短信登录失败:', error)
+            console.error(t('短信登录失败:'), error)
             throw error
         }
     }
@@ -139,7 +140,7 @@ export const useAuthStore = defineStore('auth', () => {
             loginUsers.value = users
             return users
         } catch (error) {
-            console.error('获取登录用户失败:', error)
+            console.error(t('获取登录用户失败:'), error)
             throw error
         }
     }
@@ -149,7 +150,7 @@ export const useAuthStore = defineStore('auth', () => {
             const success = await invoke('logout_user', { uid })
             return success
         } catch (error) {
-            console.error('登出用户失败:', error)
+            console.error(t('登出用户失败:'), error)
             throw error
         }
     }

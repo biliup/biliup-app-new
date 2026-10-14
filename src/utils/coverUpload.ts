@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { open } from '@tauri-apps/plugin-dialog'
 
 const COVER_EXTENSIONS = ['jpg', 'jpeg', 'png', 'pjp', 'pjpeg', 'jiff', 'gif']
@@ -24,7 +25,7 @@ export const selectAndUploadCover = async (
 
     const url = await uploadCover(uid, selected)
     if (!url) {
-        throw new Error('封面上传失败')
+        throw new Error(t('封面上传失败'))
     }
 
     return url

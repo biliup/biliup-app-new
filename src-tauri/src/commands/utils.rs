@@ -146,7 +146,7 @@ pub async fn upload_cover(
         .await
     {
         Ok(url) => {
-            info!("封面上传成功: {}", url);
+            info!("{}", crate::tr!("cover.uploaded", url = url));
             Ok(url)
         }
         Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
@@ -201,15 +201,22 @@ pub async fn get_archive_pre(app: tauri::AppHandle, uid: u64) -> Result<Value, A
                 if code == 0 {
                     archive_pre_data["type_list_v2"] = payload["data"]["type_list"].clone();
                 } else {
-                    warn!("获取新版分区列表返回异常 code={} payload={}", code, payload);
+                    warn!(
+                        "{}",
+                        crate::tr!(
+                            "category.unexpected_response",
+                            code = code,
+                            payload = payload
+                        )
+                    );
                 }
             }
             Err(e) => {
-                warn!("解析新版分区列表响应失败: {}", e);
+                warn!("{}", crate::tr!("category.parse_failed", error = e));
             }
         },
         Err(e) => {
-            warn!("获取新版分区列表失败: {}", e);
+            warn!("{}", crate::tr!("category.fetch_failed", error = e));
         }
     }
 
@@ -263,7 +270,7 @@ pub async fn search_topics(
         .await
     {
         Ok(res) => {
-            debug!("搜索话题成功: {}", res);
+            debug!("{}", crate::tr!("topic.search_completed", response = res));
             Ok(res["data"]["result"]["topics"].clone())
         }
         Err(e) => Err(AppError::Internal(anyhow::anyhow!("{}", e))),
@@ -296,7 +303,7 @@ pub async fn search_mention(
         return Err(AppError::Biliup(
             res["message"]
                 .as_str()
-                .unwrap_or("搜索用户失败")
+                .unwrap_or(crate::i18n::text("mention.search_failed"))
                 .to_string(),
         ));
     }
@@ -336,7 +343,10 @@ pub async fn search_mention(
                 .collect::<Vec<_>>();
 
             MentionUserGroup {
-                group_name: group["group_name"].as_str().unwrap_or("其他").to_string(),
+                group_name: group["group_name"]
+                    .as_str()
+                    .unwrap_or(crate::i18n::text("common.other"))
+                    .to_string(),
                 group_type: group["group_type"].as_i64().unwrap_or(0),
                 items,
             }
@@ -345,11 +355,11 @@ pub async fn search_mention(
 
     let download_client = client.clone();
     tokio::spawn(async move {
-        debug!("开始后台头像下载任务");
+        debug!("{}", crate::tr!("avatar.download_started"));
         let cache_dir = match get_avatar_cache_path() {
             Ok(path) => path,
             Err(e) => {
-                error!("创建头像缓存目录失败: {}", e);
+                error!("{}", crate::tr!("avatar.cache_dir_failed", error = e));
                 return;
             }
         };
@@ -378,19 +388,28 @@ pub async fn search_mention(
                     Ok(bytes) => {
                         if let Err(e) = tokio::fs::write(&save_path, bytes).await {
                             warn!(
-                                "写入头像缓存失败: {} -> {} ({})",
-                                face_url,
-                                save_path.display(),
-                                e
+                                "{}",
+                                crate::tr!(
+                                    "avatar.cache_write_failed",
+                                    uid = face_url,
+                                    path = save_path.display(),
+                                    error = e
+                                )
                             );
                         }
                     }
-                    Err(e) => warn!("读取头像响应失败: {} ({})", face_url, e),
+                    Err(e) => warn!(
+                        "{}",
+                        crate::tr!("avatar.response_failed", uid = face_url, error = e)
+                    ),
                 },
-                Err(e) => warn!("下载头像失败: {} ({})", face_url, e),
+                Err(e) => warn!(
+                    "{}",
+                    crate::tr!("avatar.download_failed", uid = face_url, error = e)
+                ),
             }
         }
-        debug!("后台头像下载任务完成");
+        debug!("{}", crate::tr!("avatar.download_finished"));
     });
 
     Ok(parsed_groups)
@@ -463,7 +482,7 @@ pub async fn get_video_detail(
     video_id: String,
 ) -> Result<TemplateConfig, AppError> {
     let vid = biliup::uploader::bilibili::Vid::from_str(&video_id)
-        .map_err(|e| AppError::Custom(format!("解析视频 ID 失败: {e}")))?;
+        .map_err(|e| AppError::Custom(crate::tr!("video.id_parse_failed", error = e)))?;
 
     let app_data = app.state::<AppData>();
 
@@ -525,7 +544,7 @@ pub async fn get_video_detail(
                                 }
                             }
                             Err(e) => {
-                                warn!("解析 desc_v2 失败: {}", e);
+                                warn!("{}", crate::tr!("video.desc_v2_parse_failed", error = e));
                             }
                         }
                     }
@@ -592,11 +611,20 @@ pub async fn get_video_detail(
                 }
             }
             Err(e) => {
-                error!("解析 web 接口响应失败: {:?}", e);
+                error!(
+                    "{}",
+                    crate::tr!(
+                        "video.web_response_parse_failed",
+                        error = format!("{:?}", e)
+                    )
+                );
             }
         },
         Err(e) => {
-            error!("请求 web 接口失败: {:?}", e);
+            error!(
+                "{}",
+                crate::tr!("video.web_request_failed", error = format!("{:?}", e))
+            );
         }
     }
 
@@ -669,10 +697,11 @@ pub async fn switch_season(
             .json::<Value>()
             .await?;
 
-        debug!("设置合集成功：{res}");
+        debug!("{}", crate::tr!("collection.set_success", response = res));
         if res["code"].as_i64() != Some(0) {
             return Err(AppError::Biliup(
-                serde_json::to_string(&res).unwrap_or_else(|_| "未知错误".to_string()),
+                serde_json::to_string(&res)
+                    .unwrap_or_else(|_| crate::i18n::text("common.unknown_error").to_string()),
             ));
         }
         Ok(true)
@@ -698,10 +727,14 @@ pub async fn switch_season(
             .json::<Value>()
             .await?;
 
-        debug!("修改合集成功：{res}");
+        debug!(
+            "{}",
+            crate::tr!("collection.update_success", response = res)
+        );
         if res["code"].as_i64() != Some(0) {
             return Err(AppError::Biliup(
-                serde_json::to_string(&res).unwrap_or_else(|_| "未知错误".to_string()),
+                serde_json::to_string(&res)
+                    .unwrap_or_else(|_| crate::i18n::text("common.unknown_error").to_string()),
             ));
         }
         Ok(true)
@@ -764,13 +797,16 @@ pub async fn check_update() -> Result<Option<String>, AppError> {
 
     let latest_tag = release_info["tag_name"]
         .as_str()
-        .ok_or_else(|| AppError::Custom("无法获取最新版本标签".to_string()))?;
+        .ok_or_else(|| AppError::Custom(crate::i18n::text("update.tag_unavailable").to_string()))?;
 
-    info!("最新版本：{latest_tag}");
+    info!(
+        "{}",
+        crate::tr!("update.latest_version", version = latest_tag)
+    );
     // 解析版本号 (格式: app-va.b.c)
     let latest_version = latest_tag
         .strip_prefix("app-v")
-        .ok_or_else(|| AppError::Custom("版本标签格式错误".to_string()))?;
+        .ok_or_else(|| AppError::Custom(crate::i18n::text("update.invalid_tag").to_string()))?;
 
     let current_version = env!("CARGO_PKG_VERSION");
 
@@ -787,7 +823,7 @@ fn is_newer_version(latest: &str, current: &str) -> anyhow::Result<bool> {
         v.split('.')
             .map(|part| {
                 part.parse::<u32>()
-                    .map_err(|_| anyhow::anyhow!("版本号格式错误"))
+                    .map_err(|_| anyhow::anyhow!("{}", crate::tr!("update.invalid_version")))
             })
             .collect()
     };

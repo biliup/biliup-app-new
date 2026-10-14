@@ -2,25 +2,25 @@ use serde::{Serialize, Serializer};
 
 #[derive(Debug, thiserror::Error)]
 pub enum AppError {
-    #[error("用户未登录或不存在: uid={0}")]
+    #[error("{prefix}: uid={0}", prefix = crate::i18n::text("error.user_not_found"))]
     UserNotFound(u64),
 
-    #[error("配置错误: {0}")]
+    #[error("{prefix}: {0}", prefix = crate::i18n::text("error.config"))]
     Config(String),
 
-    #[error("网络请求失败: {0}")]
+    #[error("{prefix}: {0}", prefix = crate::i18n::text("error.network"))]
     Network(#[from] reqwest::Error),
 
-    #[error("文件操作失败: {0}")]
+    #[error("{prefix}: {0}", prefix = crate::i18n::text("error.io"))]
     Io(#[from] std::io::Error),
 
-    #[error("ZIP操作失败: {0}")]
+    #[error("{prefix}: {0}", prefix = crate::i18n::text("error.zip"))]
     Zip(#[from] zip::result::ZipError),
 
-    #[error("Bilibili API 错误: {0}")]
+    #[error("{prefix}: {0}", prefix = crate::i18n::text("error.bilibili"))]
     Biliup(String),
 
-    #[error("内部错误: {0}")]
+    #[error("{prefix}: {0}", prefix = crate::i18n::text("error.internal"))]
     Internal(anyhow::Error),
 
     #[error("{0}")]

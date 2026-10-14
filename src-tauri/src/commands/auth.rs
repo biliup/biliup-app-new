@@ -65,7 +65,7 @@ pub async fn get_login_qr(
     let qrcode = auth_service
         .get_qr_code()
         .await
-        .map_err(|e| AppError::Custom(format!("获取二维码失败: {e}")))?;
+        .map_err(|e| AppError::Custom(crate::tr!("auth.qr_fetch_failed", error = e)))?;
     // info!("{}", qrcode);
     Ok(qrcode)
 }
@@ -81,7 +81,7 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, AppE
         let check_result = auth_service
             .check_qr_login()
             .await
-            .map_err(|e| AppError::Custom(format!("二维码登录状态失败: {e}")))?;
+            .map_err(|e| AppError::Custom(crate::tr!("auth.qr_check_failed", error = e)))?;
         let proxy = auth_service.get_proxy();
         (check_result, proxy)
     };
@@ -91,24 +91,31 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, AppE
             let (bilibili, user) =
                 AuthService::login_done_with_proxy(&login_info, proxy.as_deref())
                     .await
-                    .map_err(|e| AppError::Custom(format!("二维码登录状态失败: {e}")))?;
+                    .map_err(|e| AppError::Custom(crate::tr!("auth.qr_check_failed", error = e)))?;
 
             let config = app_data.config.clone();
             let clients = app_data.clients.clone();
             persist_login_success(config, clients, bilibili, user.clone(), proxy).await;
             auth_service.lock().await.destroy();
 
-            info!("用户：{} - {} 通过二维码登录成功", user.uid, user.username);
+            info!(
+                "{}",
+                crate::tr!(
+                    "auth.qr_login_success",
+                    uid = user.uid,
+                    username = user.username
+                )
+            );
 
             Ok(LoginResponse {
                 success: true,
-                message: "登录成功".to_string(),
+                message: crate::i18n::text("auth.login_success").to_string(),
                 status: Some("success".to_string()),
             })
         }
         QrLoginCheckResult::Pending => Ok(LoginResponse {
             success: false,
-            message: "等待扫码确认".to_string(),
+            message: crate::i18n::text("auth.qr_waiting").to_string(),
             status: Some("pending".to_string()),
         }),
         QrLoginCheckResult::Expired(message) => Ok(LoginResponse {
@@ -123,7 +130,7 @@ pub async fn check_qr_login(app: tauri::AppHandle) -> Result<LoginResponse, AppE
         }),
         QrLoginCheckResult::Idle => Ok(LoginResponse {
             success: false,
-            message: "请先获取二维码".to_string(),
+            message: crate::i18n::text("auth.qr_required").to_string(),
             status: Some("idle".to_string()),
         }),
     }
@@ -144,7 +151,7 @@ pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, AppErr
         .any(|task| task.user.uid == uid && !task.is_completed() && !task.is_cancelled())
     {
         return Err(AppError::Custom(
-            "用户有未完成的上传任务，请先完成或取消任务".into(),
+            crate::i18n::text("auth.unfinished_uploads").into(),
         ));
     }
     let mut clients = app_data.clients.lock().await;
@@ -155,13 +162,13 @@ pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, AppErr
     let mut updated = config.clone();
     updated
         .remove_user_config(uid)
-        .map_err(|e| AppError::Config(format!("清除用户配置失败: {e}")))?;
+        .map_err(|e| AppError::Config(crate::tr!("config.user_clear_failed", error = e)))?;
     updated
         .save_logout_to_file(&crate::utils::get_config_json_path().map_err(AppError::Internal)?)
-        .map_err(|e| AppError::Config(format!("保存退出登录状态失败: {e}")))?;
+        .map_err(|e| AppError::Config(crate::tr!("auth.logout_save_failed", error = e)))?;
     *config = updated;
     clients.remove(&uid);
-    info!("用户 {} 登出成功", uid);
+    info!("{}", crate::tr!("auth.logout_success", uid = uid));
     Ok(true)
 }
 
@@ -179,30 +186,29 @@ pub async fn send_sms_code(
     let phone_number = phone
         .trim()
         .parse::<u64>()
-        .map_err(|_| AppError::Custom("手机号格式错误".to_string()))?;
-    let country_code_number = country_code
-        .trim()
-        .parse::<u32>()
-        .map_err(|_| AppError::Custom("国家代码格式错误".to_string()))?;
+        .map_err(|_| AppError::Custom(crate::i18n::text("auth.invalid_phone").to_string()))?;
+    let country_code_number = country_code.trim().parse::<u32>().map_err(|_| {
+        AppError::Custom(crate::i18n::text("auth.invalid_country_code").to_string())
+    })?;
 
     let mut auth_service = auth_service.lock().await;
     auth_service.init(proxy.as_deref());
     let result = auth_service
         .send_sms_code(phone_number, country_code_number)
         .await
-        .map_err(|e| AppError::Custom(format!("发送验证码失败: {e}")))?;
+        .map_err(|e| AppError::Custom(crate::tr!("auth.sms_send_failed", error = e)))?;
 
-    info!("已请求发送短信验证码");
+    info!("{}", crate::tr!("auth.sms_requested"));
 
     match result {
         SmsSendState::Sent => Ok(json!({
             "success": true,
-            "message": "验证码已发送"
+            "message": crate::i18n::text("auth.sms_sent")
         })),
         SmsSendState::NeedRecaptcha(recaptcha_url) => Ok(json!({
             "success": false,
             "needRecaptcha": true,
-            "message": "需要先完成滑块验证",
+            "message": crate::i18n::text("auth.slider_required"),
             "recaptchaUrl": recaptcha_url
         })),
     }
@@ -222,11 +228,11 @@ pub async fn submit_sms_recaptcha(
     auth_service
         .submit_sms_recaptcha(challenge.trim(), validate.trim())
         .await
-        .map_err(|e| AppError::Custom(format!("滑块验证提交失败: {e}")))?;
+        .map_err(|e| AppError::Custom(crate::tr!("auth.slider_submit_failed", error = e)))?;
 
     Ok(json!({
         "success": true,
-        "message": "验证码已发送"
+        "message": crate::i18n::text("auth.sms_sent")
     }))
 }
 
@@ -253,20 +259,19 @@ pub async fn login_with_sms(
         let phone_number = phone
             .trim()
             .parse::<u64>()
-            .map_err(|_| AppError::Custom("手机号格式错误".to_string()))?;
-        let country_code_number = country_code
-            .trim()
-            .parse::<u32>()
-            .map_err(|_| AppError::Custom("国家代码格式错误".to_string()))?;
+            .map_err(|_| AppError::Custom(crate::i18n::text("auth.invalid_phone").to_string()))?;
+        let country_code_number = country_code.trim().parse::<u32>().map_err(|_| {
+            AppError::Custom(crate::i18n::text("auth.invalid_country_code").to_string())
+        })?;
         let sms_code = code
             .trim()
             .parse::<u32>()
-            .map_err(|_| AppError::Custom("验证码格式错误".to_string()))?;
+            .map_err(|_| AppError::Custom(crate::i18n::text("auth.invalid_code").to_string()))?;
 
         auth_service
             .login_with_sms_code_and_phone(sms_code, Some(phone_number), Some(country_code_number))
             .await
-            .map_err(|e| AppError::Custom(format!("短信登录失败: {e}")))?
+            .map_err(|e| AppError::Custom(crate::tr!("auth.sms_login_failed", error = e)))?
     };
 
     // 第2步：网络请求（获取用户信息）在锁外执行
@@ -277,7 +282,7 @@ pub async fn login_with_sms(
 
     let (bilibili, user) = AuthService::login_done_with_proxy(&login_info, proxy_opt.as_deref())
         .await
-        .map_err(|e| AppError::Custom(format!("短信登录失败: {e}")))?;
+        .map_err(|e| AppError::Custom(crate::tr!("auth.sms_login_failed", error = e)))?;
 
     // 第3步：持久化结果
     let config = app_data.config.clone();
@@ -285,11 +290,18 @@ pub async fn login_with_sms(
     persist_login_success(config, clients, bilibili, user.clone(), proxy_opt).await;
     auth_service.lock().await.destroy();
 
-    info!("用户：{} - {} 通过短信登录成功", user.uid, user.username);
+    info!(
+        "{}",
+        crate::tr!(
+            "auth.sms_login_success",
+            uid = user.uid,
+            username = user.username
+        )
+    );
 
     Ok(LoginResponse {
         success: true,
-        message: "登录成功".to_string(),
+        message: crate::i18n::text("auth.login_success").to_string(),
         status: None,
     })
 }

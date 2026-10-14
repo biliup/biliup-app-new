@@ -42,7 +42,14 @@ impl UploadService {
         let old = *curr;
         *curr = max_curr;
 
-        debug!("更新最大并发上传数: {} -> {}", old, max_curr);
+        debug!(
+            "{}",
+            crate::tr!(
+                "upload.concurrency_changed",
+                previous = old,
+                current = max_curr
+            )
+        );
     }
 
     pub fn new(max_curr: u32) -> Self {
@@ -85,7 +92,10 @@ impl UploadService {
     ) -> Result<bool> {
         let task = UploadTask::new(user, template, video, config_copy, clients);
         if self.upload_queue.lock().await.contains_key(&task.id) {
-            warn!("任务已存在: {}", task.title());
+            warn!(
+                "{}",
+                crate::tr!("upload.task_exists", task_id = task.title())
+            );
             return Ok(false); // 任务已存在
         }
         // 将任务添加到上传队列
@@ -94,7 +104,10 @@ impl UploadService {
             .lock()
             .await
             .insert(task.id.clone(), Arc::new(Mutex::new(task)));
-        info!("创建上传任务: {:?}", title);
+        info!(
+            "{}",
+            crate::tr!("upload.task_created", title = format!("{:?}", title))
+        );
         Ok(true)
     }
 
@@ -117,9 +130,9 @@ impl UploadService {
 
     pub async fn start_upload(&self, task_id: &str) -> Result<bool> {
         let queue = self.upload_queue.lock().await;
-        let task_mutex = queue
-            .get(task_id)
-            .ok_or_else(|| anyhow::anyhow!("任务ID不存在: {}", task_id))?;
+        let task_mutex = queue.get(task_id).ok_or_else(|| {
+            anyhow::anyhow!("{}", crate::tr!("upload.task_missing", task_id = task_id))
+        })?;
         let failed = task_mutex.lock().await.is_failed();
         if failed {
             self.stop_handle(task_id).await;
@@ -139,9 +152,9 @@ impl UploadService {
 
     pub async fn pause_upload(&self, task_id: &str) -> Result<bool> {
         let queue = self.upload_queue.lock().await;
-        let task_mutex = queue
-            .get(task_id)
-            .ok_or_else(|| anyhow::anyhow!("任务ID不存在: {}", task_id))?;
+        let task_mutex = queue.get(task_id).ok_or_else(|| {
+            anyhow::anyhow!("{}", crate::tr!("upload.task_missing", task_id = task_id))
+        })?;
         let mut task = task_mutex.lock().await;
         if !(task.is_running() || task.is_pending()) {
             return Ok(false);
@@ -152,9 +165,9 @@ impl UploadService {
 
     pub async fn cancel_upload(&self, task_id: &str) -> Result<bool> {
         let mut queue = self.upload_queue.lock().await;
-        let task_mutex = queue
-            .shift_remove(task_id)
-            .ok_or_else(|| anyhow::anyhow!("任务ID不存在: {}", task_id))?;
+        let task_mutex = queue.shift_remove(task_id).ok_or_else(|| {
+            anyhow::anyhow!("{}", crate::tr!("upload.task_missing", task_id = task_id))
+        })?;
         self.stop_handle(task_id).await;
         task_mutex.lock().await.cancel();
         Ok(true)
@@ -162,9 +175,9 @@ impl UploadService {
 
     pub async fn retry_upload(&self, task_id: &str) -> Result<bool> {
         let queue = self.upload_queue.lock().await;
-        let task_mutex = queue
-            .get(task_id)
-            .ok_or_else(|| anyhow::anyhow!("任务ID不存在: {}", task_id))?;
+        let task_mutex = queue.get(task_id).ok_or_else(|| {
+            anyhow::anyhow!("{}", crate::tr!("upload.task_missing", task_id = task_id))
+        })?;
         if task_mutex.lock().await.is_completed() {
             return Ok(false);
         }
@@ -184,7 +197,7 @@ impl Drop for UploadService {
                 handle.abort();
             }
         }
-        info!("上传服务已停止");
+        info!("{}", crate::tr!("upload.service_stopped"));
     }
 }
 
@@ -201,7 +214,7 @@ async fn upload_background(
         let max_running_clone = Arc::clone(&max_running);
         select! {
             _ = stop_rx.recv() => {
-                info!("上传服务已停止");
+                info!("{}", crate::tr!("upload.service_stopped"));
                 return;
             }
             _ = one_sec.tick() => {
@@ -236,11 +249,14 @@ async fn upload_background_interval(
         }
         let mut task = task_mutex.lock().await;
         if task.retry_count < 3 {
-            warn!("上传无进展，自动重试: {}", task.title());
+            warn!(
+                "{}",
+                crate::tr!("upload.stalled_retry", task_id = task.title())
+            );
             task.cancel();
             task.retry();
         } else {
-            task.fail("上传长时间没有进展，自动重试次数已达上限，请检查网络后手动重试".into());
+            task.fail(crate::i18n::text("upload.retries_exhausted").into());
         }
     }
     let mut current_running = 0;
@@ -268,7 +284,7 @@ async fn upload_background_interval(
                 task.id.clone(),
                 task::spawn(async move {
                     if let Err(e) = upload_impl(Arc::clone(&task_mutex_clone)).await {
-                        error!("上传任务失败: {}", e);
+                        error!("{}", crate::tr!("upload.task_failed", error = e));
                         task_mutex_clone.lock().await.fail(e.to_string());
                     }
                 }),
@@ -328,7 +344,10 @@ impl From<ChunkedBuffer> for Body {
 }
 
 async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
-    info!("开始上传任务: {}", task_title!(task_mutex));
+    info!(
+        "{}",
+        crate::tr!("upload.task_started", task_id = task_title!(task_mutex))
+    );
     let uid = task_mutex.lock().await.user.uid;
 
     let (line, _proxy, limit) = {
@@ -337,12 +356,15 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
         let config = config_root
             .config
             .get(&uid)
-            .ok_or_else(|| anyhow::anyhow!("用户未登录或不存在"))?;
+            .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("error.user_not_found")))?;
 
         (config.line.clone(), config.proxy.clone(), config.limit)
     };
 
-    anyhow::ensure!((1..=12).contains(&limit), "上传并发数必须在 1 到 12 之间");
+    anyhow::ensure!(
+        (1..=12).contains(&limit),
+        crate::i18n::text("upload.invalid_concurrency")
+    );
 
     let client = &task_mutex
         .lock()
@@ -351,7 +373,7 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
         .lock()
         .await
         .get(&uid)
-        .ok_or_else(|| anyhow::anyhow!("用户未登录或不存在"))?
+        .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("error.user_not_found")))?
         .bilibili
         .clone();
 
@@ -376,7 +398,14 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
         available_lines[line_index].to_string()
     };
 
-    info!("选择线路: {} (重试次数: {})", selected_line, retry_count);
+    info!(
+        "{}",
+        crate::tr!(
+            "upload.route_selected",
+            route = selected_line,
+            retry_count = retry_count
+        )
+    );
 
     let probe = match selected_line.as_str() {
         "bda2" => line::bda2(),
@@ -430,10 +459,16 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
         if paused {
             paused = false;
             if task_mutex.lock().await.is_cancelled() {
-                info!("任务已取消: {}", task_title!(task_mutex));
+                info!(
+                    "{}",
+                    crate::tr!("upload.task_canceled", task_id = task_title!(task_mutex))
+                );
                 return Ok(());
             }
-            info!("任务已恢复: {}", task_title!(task_mutex));
+            info!(
+                "{}",
+                crate::tr!("upload.task_resumed", task_id = task_title!(task_mutex))
+            );
         }
 
         select! {
@@ -449,18 +484,18 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
                 match result {
                     Ok(return_video) => {
                         // 处理视频上传完成
-                        debug!("视频上传完成: {:?}", return_video);
+                        debug!("{}", crate::tr!("upload.video_completed", video = format!("{:?}", return_video)));
                         // rewrite the stored id & name
                         task_mutex.lock().await.video.filename = return_video.filename.clone();
                         task_mutex.lock().await.video.path.clear();
                         task_mutex.lock().await.video.cid = return_video.cid as u64;
-                        info!("上传任务完成: {} -> {}", task_title!(task_mutex), return_video.filename);
+                        info!("{}", crate::tr!("upload.task_completed", title = task_title!(task_mutex), filename = return_video.filename));
                         task_mutex.lock().await.complete();
 
                         return Ok(())
                     }
                     Err(e) => {
-                        return Err(anyhow::anyhow!("上传任务失败: {}", e));
+                        return Err(anyhow::anyhow!("{}", crate::tr!("upload.task_failed", error = e)));
                     }
                 }
             }

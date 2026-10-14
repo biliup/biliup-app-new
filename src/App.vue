@@ -1,38 +1,32 @@
 <template>
     <div id="app">
         <div v-if="startupError" class="config-recovery">
-            <el-alert
-                title="配置加载失败，已进入受限恢复模式"
-                type="error"
-                :closable="false"
-                show-icon
-            />
-            <p>原配置及备份已保留。本次启动禁止保存配置，登录和上传功能暂不可用。</p>
+            <el-alert :title="t('app.recovery.title')" type="error" :closable="false" show-icon />
+            <p>{{ t('app.recovery.p1') }}</p>
             <pre>{{ startupError }}</pre>
-            <p>
-                请关闭应用，检查配置文件是否被其他程序占用、目录权限或安全软件拦截，然后重新启动。
-            </p>
-            <p>
-                若配置文件损坏，请先复制原文件留存，再用同目录中的 config.json.bak 恢复 config.json
-                后重启。
-            </p>
+            <p>{{ t('app.recovery.p2') }}</p>
+            <p>{{ t('app.recovery.p3') }}</p>
         </div>
-        <router-view v-else-if="startupChecked" />
+        <el-config-provider v-else-if="startupChecked" :locale="elementLocale">
+            <router-view />
+        </el-config-provider>
     </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { useI18nState } from './i18n'
 
 const startupError = ref<string | null>(null)
 const startupChecked = ref(false)
+const { t, elementLocale } = useI18nState()
 
 onMounted(async () => {
     try {
         startupError.value = await invoke<string | null>('get_startup_error')
     } catch (error) {
-        startupError.value = `无法确认配置状态：${error}`
+        startupError.value = t('app.recovery.checkError', { error: String(error) })
     } finally {
         startupChecked.value = true
     }

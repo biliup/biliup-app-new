@@ -12,7 +12,7 @@ impl Default for User {
     fn default() -> Self {
         Self {
             uid: 0,
-            username: "未登录用户".to_string(),
+            username: crate::i18n::text("auth.not_logged_in").to_string(),
             avatar: "default_profile_picture.png".to_string(),
             expired: false,
         }

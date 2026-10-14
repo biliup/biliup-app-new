@@ -4,6 +4,7 @@
   "version": "1.3.0",
   "type": "module",
   "scripts": {
+    "test:i18n": "node --test tests/i18n.test.mjs",
     "test:description": "node --experimental-strip-types --test tests/descriptionClipboard.test.mjs",
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",

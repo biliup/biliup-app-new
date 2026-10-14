@@ -18,15 +18,20 @@
                 v-if="!monitoring && !waitingForStart"
             >
                 <div class="info-text">
-                    <p>📁 <strong>文件夹监控功能：</strong></p>
+                    <p>
+                        📁 <strong>{{ t('文件夹监控功能：') }}</strong>
+                    </p>
                     <ul>
-                        <li>选择监控文件夹，按设定间隔自动检测新增视频文件</li>
-                        <li>可设置文件大小稳定检测次数，确保文件完整后再添加</li>
-                        <li>自动将符合大小要求且稳定的视频文件添加到当前模板</li>
+                        <li>{{ t('选择监控文件夹，按设定间隔自动检测新增视频文件') }}</li>
+                        <li>{{ t('可设置文件大小稳定检测次数，确保文件完整后再添加') }}</li>
+                        <li>{{ t('自动将符合大小要求且稳定的视频文件添加到当前模板') }}</li>
                         <li v-if="settings.autoSubmit">
-                            启用自动提交后，连续{{
-                                settings.maxEmptyChecks
-                            }}次检测，无小于1KB且无大小持续改变的文件后自动提交稿件
+                            {{
+                                t(
+                                    '启用自动提交后，连续 {count} 次检测，无小于1KB且无大小持续改变的文件后自动提交稿件',
+                                    { count: settings.maxEmptyChecks }
+                                )
+                            }}
                         </li>
                     </ul>
                 </div>
@@ -35,10 +40,10 @@
             <!-- 设置区域 -->
             <div v-if="!monitoring" class="settings-section">
                 <el-form :model="settings" label-width="110px" label-position="right" size="small">
-                    <el-form-item label="监控文件夹" required>
+                    <el-form-item :label="t('监控文件夹')" required>
                         <div class="folder-selection">
                             <div v-if="settings.folderPaths.length === 0" class="no-folders">
-                                <el-text type="info">尚未选择监控文件夹</el-text>
+                                <el-text type="info">{{ t('尚未选择监控文件夹') }}</el-text>
                             </div>
                             <div v-else class="selected-folders">
                                 <el-tag
@@ -58,8 +63,7 @@
                             </div>
                             <div class="folder-buttons">
                                 <el-button type="primary" @click="selectFolder">
-                                    <el-icon><folder-opened /></el-icon>
-                                    添加文件夹
+                                    <el-icon><folder-opened /></el-icon> {{ t('添加文件夹') }}
                                 </el-button>
                                 <el-button
                                     v-if="settings.folderPaths.length > 0"
@@ -67,14 +71,13 @@
                                     @click="clearAllFolders"
                                     plain
                                 >
-                                    <el-icon><delete /></el-icon>
-                                    清空全部
+                                    <el-icon><delete /></el-icon> {{ t('清空全部') }}
                                 </el-button>
                             </div>
                         </div>
                     </el-form-item>
 
-                    <el-form-item label="检测次数设置">
+                    <el-form-item :label="t('检测次数设置')">
                         <el-input-number
                             v-model="settings.maxEmptyChecks"
                             :min="1"
@@ -85,11 +88,13 @@
                             style="width: 180px"
                         />
                         <span class="setting-description">
-                            连续检测此次数后自动提交稿件<br />（每轮检测如果有小文件或有不稳定的文件会重置计数器）
+                            {{ t('连续检测此次数后自动提交稿件') }}<br />{{
+                                t('（每轮检测如果有小文件或有不稳定的文件会重置计数器）')
+                            }}
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="检测间隔时间">
+                    <el-form-item :label="t('检测间隔时间')">
                         <el-input-number
                             v-model="settings.checkInterval"
                             :min="5"
@@ -100,11 +105,11 @@
                             style="width: 180px"
                         />
                         <span class="setting-description">
-                            检测间隔时间（秒），范围：5秒-3600秒（1小时）
+                            {{ t('检测间隔时间（秒），范围：5秒-3600秒（1小时）') }}
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="稳定检测次数">
+                    <el-form-item :label="t('稳定检测次数')">
                         <el-input-number
                             v-model="settings.stableCheckCount"
                             :min="0"
@@ -115,20 +120,20 @@
                             style="width: 180px"
                         />
                         <span class="setting-description">
-                            文件大小连续相同次数后才添加，0表示不检测直接添加
+                            {{ t('文件大小连续相同次数后才添加，0表示不检测直接添加') }}
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="监控范围">
+                    <el-form-item :label="t('监控范围')">
                         <el-checkbox v-model="settings.includeSubfolders">
-                            包含子文件夹
+                            {{ t('包含子文件夹') }}
                         </el-checkbox>
                         <span class="setting-description">
-                            勾选后将递归监控所有子文件夹中的视频文件（最大深度20）
+                            {{ t('勾选后将递归监控所有子文件夹中的视频文件（最大深度20）') }}
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="最小文件大小">
+                    <el-form-item :label="t('最小文件大小')">
                         <el-input-number
                             v-model="settings.minFileSize"
                             :min="0"
@@ -139,29 +144,29 @@
                             style="width: 180px"
                         />
                         <span class="setting-description">
-                            过滤小于此大小的文件（MB），0为不过滤
+                            {{ t('过滤小于此大小的文件（MB），0为不过滤') }}
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="文件名过滤">
+                    <el-form-item :label="t('文件名过滤')">
                         <el-checkbox v-model="settings.enableFilenameFilter">
-                            启用正则表达式过滤
+                            {{ t('启用正则表达式过滤') }}
                         </el-checkbox>
                         <span class="setting-description">
-                            启用后，忽略符合正则表达式的文件名
+                            {{ t('启用后，忽略符合正则表达式的文件名') }}
                         </span>
                     </el-form-item>
 
-                    <el-form-item v-if="settings.enableFilenameFilter" label="正则表达式">
+                    <el-form-item v-if="settings.enableFilenameFilter" :label="t('正则表达式')">
                         <el-input
                             v-model="settings.filenameRegex"
-                            placeholder="例如：^.*_temp\.|\.tmp$"
+                            :placeholder="t('例如：^.*_temp\\.|\\.tmp$')"
                             size="small"
                             style="width: 280px"
                             :class="{ 'regex-error': regexError }"
                         />
                         <span class="setting-description">
-                            匹配要忽略的文件名的正则表达式，支持 JavaScript 正则语法
+                            {{ t('匹配要忽略的文件名的正则表达式，支持 JavaScript 正则语法') }}
                         </span>
                         <div v-if="regexError" class="regex-error-msg">
                             {{ regexError }}
@@ -173,7 +178,7 @@
                             <div class="test-input-group">
                                 <el-input
                                     v-model="testFilename"
-                                    placeholder="输入文件名测试忽略结果，例如：video_temp.mp4"
+                                    :placeholder="t('输入文件名测试忽略结果，例如：video_temp.mp4')"
                                     size="small"
                                     style="width: 200px; margin-right: 8px"
                                     clearable
@@ -185,39 +190,46 @@
                         </div>
                     </el-form-item>
 
-                    <el-form-item label="自动提交">
-                        <el-checkbox v-model="settings.autoSubmit"> 启用 </el-checkbox>
+                    <el-form-item :label="t('自动提交')">
+                        <el-checkbox v-model="settings.autoSubmit"> {{ t('启用') }} </el-checkbox>
                         <span class="setting-description">
-                            启用后，连续{{ settings.maxEmptyChecks }}次检测，无变化后将自动提交到"{{
-                                templateTitle || '当前模板'
-                            }}"
+                            {{
+                                t('启用后，连续 {count} 次检测无变化后将自动提交到“{template}”', {
+                                    count: settings.maxEmptyChecks,
+                                    template: templateTitle || t('当前模板')
+                                })
+                            }}
                         </span>
                     </el-form-item>
 
-                    <el-form-item v-if="settings.autoSubmit" label="提交模式">
+                    <el-form-item v-if="settings.autoSubmit" :label="t('提交模式')">
                         <el-radio-group v-model="settings.autoSubmitMode" size="small">
-                            <el-radio-button label="single" value="single"
-                                >单稿件模式</el-radio-button
-                            >
-                            <el-radio-button label="multi" value="multi"
-                                >多稿件模式</el-radio-button
-                            >
+                            <el-radio-button label="single" value="single">{{
+                                t('单稿件模式')
+                            }}</el-radio-button>
+                            <el-radio-button label="multi" value="multi">{{
+                                t('多稿件模式')
+                            }}</el-radio-button>
                         </el-radio-group>
                         <span class="setting-description">
-                            单稿件：按当前模板一次提交；多稿件：每个视频单独投稿一条稿件
+                            {{ t('单稿件：按当前模板一次提交；多稿件：每个视频单独投稿一条稿件') }}
                         </span>
                     </el-form-item>
 
-                    <el-form-item label="定时开始">
-                        <el-checkbox v-model="settings.delayedStart"> 启用定时开始 </el-checkbox>
-                        <span class="setting-description"> 启用后，将在指定时间开始监控 </span>
+                    <el-form-item :label="t('定时开始')">
+                        <el-checkbox v-model="settings.delayedStart">
+                            {{ t('启用定时开始') }}
+                        </el-checkbox>
+                        <span class="setting-description">
+                            {{ t('启用后，将在指定时间开始监控') }}
+                        </span>
                     </el-form-item>
 
-                    <el-form-item v-if="settings.delayedStart" label="开始时间">
+                    <el-form-item v-if="settings.delayedStart" :label="t('开始时间')">
                         <el-date-picker
                             v-model="settings.startTime"
                             type="datetime"
-                            placeholder="选择开始时间"
+                            :placeholder="t('选择开始时间')"
                             format="YYYY-MM-DD HH:mm:ss"
                             value-format="YYYY-MM-DD HH:mm:ss"
                             size="small"
@@ -239,17 +251,19 @@
                     <!-- 等待定时开始状态 -->
                     <div v-if="waitingForStart && !monitoring" class="status-header">
                         <el-icon class="status-icon waiting"><clock /></el-icon>
-                        <h3>等待定时开始...</h3>
+                        <h3>{{ t('等待定时开始...') }}</h3>
                     </div>
 
                     <!-- 正在监控状态 -->
                     <div v-else-if="monitoring" class="status-header">
                         <el-icon class="status-icon rotating"><loading /></el-icon>
-                        <h3>正在监控中...</h3>
+                        <h3>{{ t('正在监控中...') }}</h3>
                     </div>
 
                     <div class="status-info">
-                        <div><strong>监控路径：</strong></div>
+                        <div>
+                            <strong>{{ t('监控路径：') }}</strong>
+                        </div>
                         <ul class="folder-list">
                             <li
                                 v-for="folder in settings.folderPaths"
@@ -260,49 +274,64 @@
                             </li>
                         </ul>
                         <p>
-                            <strong>监控配置：</strong>
-                            {{ settings.includeSubfolders ? '包含子文件夹' : '仅当前文件夹' }}，
-                            最小文件大小 {{ settings.minFileSize }}MB
+                            <strong>{{ t('监控配置：') }}</strong>
+                            {{ settings.includeSubfolders ? t('包含子文件夹') : t('仅当前文件夹')
+                            }}{{ t('， 最小文件大小') }} {{ settings.minFileSize }}MB
                             <span v-if="settings.enableFilenameFilter">
-                                ，正则忽略：{{ settings.filenameRegex || '未设置' }}
+                                {{ t('，正则忽略：') }}{{ settings.filenameRegex || t('未设置') }}
                             </span>
                         </p>
                         <p v-if="settings.autoSubmit" class="auto-submit-info">
-                            <strong>自动提交：</strong>连续
-                            {{ settings.maxEmptyChecks }} 次检测，无变化后将自动提交到"{{
-                                templateTitle || '当前模板'
-                            }}" （{{
-                                settings.autoSubmitMode === 'multi' ? '多稿件模式' : '单稿件模式'
-                            }}）
+                            <strong>{{ t('自动提交：') }}</strong>
+                            {{
+                                t('连续 {count} 次检测无变化后将自动提交到“{template}”（{mode}）', {
+                                    count: settings.maxEmptyChecks,
+                                    template: templateTitle || t('当前模板'),
+                                    mode:
+                                        settings.autoSubmitMode === 'multi'
+                                            ? t('多稿件模式')
+                                            : t('单稿件模式')
+                                })
+                            }}
                         </p>
 
                         <!-- 等待定时开始时显示倒计时 -->
                         <p v-if="waitingForStart && !monitoring">
-                            <strong>预定开始时间：</strong>{{ settings.startTime }}
+                            <strong>{{ t('预定开始时间：') }}</strong
+                            >{{ settings.startTime }}
                         </p>
                         <p
                             v-if="waitingForStart && !monitoring && timeUntilStart"
                             class="countdown-info"
                         >
-                            <strong>距离开始还有：</strong>{{ timeUntilStart }}
+                            <strong>{{ t('距离开始还有：') }}</strong
+                            >{{ timeUntilStart }}
                         </p>
 
                         <!-- 监控进行中时显示检测信息 -->
                         <template v-if="monitoring">
                             <p>
-                                <strong>检测轮数：</strong>{{ currentCheckRound }} /
+                                <strong>{{ t('检测轮数：') }}</strong
+                                >{{ currentCheckRound }} /
                                 {{ settings.maxEmptyChecks }}
                             </p>
-                            <p><strong>下次检测：</strong>{{ nextCheckTime }}</p>
-                            <p><strong>已添加文件：</strong>{{ addedFilesCount }} 个</p>
+                            <p>
+                                <strong>{{ t('下次检测：') }}</strong
+                                >{{ nextCheckTime }}
+                            </p>
+                            <p>
+                                <strong>{{ t('已添加文件：') }}</strong
+                                >{{ addedFilesCount }} {{ t('个') }}
+                            </p>
                         </template>
                     </div>
 
                     <div v-if="lastCheckResult && monitoring" class="last-check">
-                        <h4>最近检测结果：</h4>
+                        <h4>{{ t('最近检测结果：') }}</h4>
                         <ul>
                             <li v-if="lastCheckResult.newFiles.length > 0">
-                                已添加稳定文件：{{ lastCheckResult.stableFiles.join(', ') }}
+                                {{ t('已添加稳定文件：')
+                                }}{{ lastCheckResult.stableFiles.join(', ') }}
                             </li>
                             <li
                                 v-if="
@@ -310,7 +339,7 @@
                                     lastCheckResult.newFiles.length === 0
                                 "
                             >
-                                本次检测无新增稳定文件
+                                {{ t('本次检测无新增稳定文件') }}
                             </li>
                         </ul>
                     </div>
@@ -322,7 +351,7 @@
         <template #footer>
             <div class="dialog-footer">
                 <template v-if="!monitoring && !waitingForStart">
-                    <el-button @click="closeDialog">取消</el-button>
+                    <el-button @click="closeDialog">{{ t('取消') }}</el-button>
                     <el-button
                         type="primary"
                         :disabled="
@@ -331,15 +360,19 @@
                         "
                         @click="startMonitoring"
                     >
-                        {{ settings.delayedStart ? '设置定时开始' : '开始监控' }}
+                        {{ settings.delayedStart ? t('设置定时开始') : t('开始监控') }}
                     </el-button>
                 </template>
                 <template v-else-if="waitingForStart && !monitoring">
-                    <el-button type="warning" @click="cancelDelayedStart">取消定时</el-button>
-                    <el-button type="primary" @click="startMonitoringNow">立即开始</el-button>
+                    <el-button type="warning" @click="cancelDelayedStart">{{
+                        t('取消定时')
+                    }}</el-button>
+                    <el-button type="primary" @click="startMonitoringNow">{{
+                        t('立即开始')
+                    }}</el-button>
                 </template>
                 <template v-else>
-                    <el-button type="danger" @click="stopMonitoring">停止监控</el-button>
+                    <el-button type="danger" @click="stopMonitoring">{{ t('停止监控') }}</el-button>
                 </template>
             </div>
         </template>
@@ -347,6 +380,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { ref, computed, onUnmounted, watch } from 'vue'
 import { FolderOpened, Loading, Clock, Delete } from '@element-plus/icons-vue'
 import { open } from '@tauri-apps/plugin-dialog'
@@ -452,7 +486,7 @@ watch(
                 compiledRegex.value = new RegExp(newRegex, 'i') // 不区分大小写
                 regexError.value = ''
             } catch (error) {
-                regexError.value = '正则表达式语法错误'
+                regexError.value = t('正则表达式语法错误')
                 compiledRegex.value = null
             }
         } else {
@@ -486,7 +520,7 @@ const selectFolder = async () => {
         const selected = await open({
             directory: true,
             multiple: true, // 允许多选
-            title: '选择要监控的文件夹'
+            title: t('选择要监控的文件夹')
         })
 
         if (selected) {
@@ -505,8 +539,8 @@ const selectFolder = async () => {
             }
         }
     } catch (error) {
-        console.error('选择文件夹失败:', error)
-        utilsStore.showMessage('选择文件夹失败', 'error')
+        console.error(t('选择文件夹失败:'), error)
+        utilsStore.showMessage(t('选择文件夹失败'), 'error')
     }
 }
 
@@ -538,15 +572,15 @@ const isSupportedVideoFormat = (filename: string): boolean => {
 // 获取测试文件名的匹配结果
 const getTestResult = (): string => {
     if (!testFilename.value.trim()) {
-        return '请输入文件名进行测试'
+        return t('请输入文件名进行测试')
     }
 
     if (!compiledRegex.value) {
-        return '正则表达式无效'
+        return t('正则表达式无效')
     }
 
     const isMatch = compiledRegex.value.test(testFilename.value.trim())
-    return isMatch ? '✓ 将被忽略' : '✗ 将被监控'
+    return isMatch ? t('✓ 将被忽略') : t('✗ 将被监控')
 }
 
 // 获取测试结果的CSS类
@@ -623,7 +657,7 @@ const performCheck = async (
                 if (!isActive()) return { newFiles: [], resetCounter: false, stableFiles: [] }
                 allEntries.push(...entries)
             } catch (error) {
-                console.error(`读取文件夹 ${folderPath} 失败:`, error)
+                console.error(t('读取文件夹 {0} 失败:', { 0: String(folderPath) }), error)
                 // 继续处理其他文件夹，不因单个文件夹失败而中断
             }
         }
@@ -668,7 +702,11 @@ const performCheck = async (
                     // 检查文件大小是否符合最小要求
                     if (fileSizeMB < settings.value.minFileSize) {
                         console.log(
-                            `文件 ${entry.name} 大小 ${fileSizeMB.toFixed(2)}MB 小于最小要求 ${settings.value.minFileSize}MB，跳过`
+                            t('文件 {0} 大小 {1}MB 小于最小要求 {2}MB，跳过', {
+                                0: String(entry.name),
+                                1: String(fileSizeMB.toFixed(2)),
+                                2: String(settings.value.minFileSize)
+                            })
                         )
                         continue
                     }
@@ -689,13 +727,20 @@ const performCheck = async (
                             if (isStable) {
                                 if (shouldIgnoreByRegex) {
                                     // 过滤项仍参与监控，但不加入待添加列表
-                                    console.log(`文件 ${entry.name} 命中过滤规则，仅监控不添加`)
+                                    console.log(
+                                        t('文件 {0} 命中过滤规则，仅监控不添加', {
+                                            0: String(entry.name)
+                                        })
+                                    )
                                 } else {
                                     // 文件大小稳定，可以添加
                                     newFiles.push(filePath)
                                     stableFiles.push(entry.name)
                                     console.log(
-                                        `添加文件: ${entry.name} (${fileSizeMB.toFixed(2)}MB)`
+                                        t('添加文件: {0} ({1}MB)', {
+                                            0: String(entry.name),
+                                            1: String(fileSizeMB.toFixed(2))
+                                        })
                                     )
                                 }
                             } else {
@@ -712,9 +757,14 @@ const performCheck = async (
                     errorMsg.includes('permission') ||
                     errorMsg.includes('access')
                 ) {
-                    console.warn(`权限不足，跳过文件: ${entry.name} (${filePath})`)
+                    console.warn(
+                        t('权限不足，跳过文件: {0} ({1})', {
+                            0: String(entry.name),
+                            1: String(filePath)
+                        })
+                    )
                 } else {
-                    console.warn(`获取文件 ${entry.name} 状态失败:`, statError)
+                    console.warn(t('获取文件 {0} 状态失败:', { 0: String(entry.name) }), statError)
                 }
                 // 如果无法获取文件状态，跳过该文件
                 continue
@@ -723,7 +773,7 @@ const performCheck = async (
 
         return { newFiles, resetCounter, stableFiles }
     } catch (error) {
-        console.error('检测文件夹失败:', error)
+        console.error(t('检测文件夹失败:'), error)
         throw error
     }
 }
@@ -742,7 +792,10 @@ const addNewFiles = async (
     accepted.forEach(path => addedFilePaths.add(path))
     addedFilesCount.value += accepted.length
     if (accepted.length > 0) {
-        utilsStore.showMessage(`已添加 ${accepted.length} 个视频文件`, 'success')
+        utilsStore.showMessage(
+            t('已添加 {0} 个视频文件', { 0: String(accepted.length) }),
+            'success'
+        )
     }
     return result
 }
@@ -788,13 +841,18 @@ const performMonitoringCycle = async (session: number) => {
         if (currentCheckRound.value >= settings.value.maxEmptyChecks) {
             if (settings.value.autoSubmit) {
                 utilsStore.showMessage(
-                    `连续 ${settings.value.maxEmptyChecks} 次检测，自动提交稿件到"${templateTitle.value || '当前模板'}"`,
+                    t('连续 {0} 次检测，自动提交稿件到"{1}"', {
+                        0: String(settings.value.maxEmptyChecks),
+                        1: String(templateTitle.value || t('当前模板'))
+                    }),
                     'success'
                 )
                 emit('submit-videos', settings.value.autoSubmitMode)
             } else {
                 utilsStore.showMessage(
-                    `连续 ${settings.value.maxEmptyChecks} 次检测，文件夹监控结束"`,
+                    t('连续 {0} 次检测，文件夹监控结束"', {
+                        0: String(settings.value.maxEmptyChecks)
+                    }),
                     'success'
                 )
             }
@@ -805,8 +863,8 @@ const performMonitoringCycle = async (session: number) => {
         updateNextCheckTime()
     } catch (error) {
         if (isActive()) {
-            console.error('监控检测失败:', error)
-            utilsStore.showMessage('监控检测失败，请检查文件夹路径', 'error')
+            console.error(t('监控检测失败:'), error)
+            utilsStore.showMessage(t('监控检测失败，请检查文件夹路径'), 'error')
             stopMonitoring()
         }
     } finally {
@@ -821,7 +879,7 @@ const performMonitoringCycle = async (session: number) => {
 // 开始监控
 const startMonitoring = async () => {
     if (!settings.value.folderPaths || settings.value.folderPaths.length === 0) {
-        utilsStore.showMessage('请先选择监控文件夹', 'error')
+        utilsStore.showMessage(t('请先选择监控文件夹'), 'error')
         return
     }
 
@@ -831,7 +889,7 @@ const startMonitoring = async () => {
         const now = new Date()
 
         if (startTime <= now) {
-            utilsStore.showMessage('开始时间不能早于当前时间', 'error')
+            utilsStore.showMessage(t('开始时间不能早于当前时间'), 'error')
             return
         }
 
@@ -853,7 +911,7 @@ const startMonitoring = async () => {
         }, delay)
 
         utilsStore.showMessage(
-            `已设置定时开始，将在 ${settings.value.startTime} 开始监控`,
+            t('已设置定时开始，将在 {0} 开始监控', { 0: String(settings.value.startTime) }),
             'success'
         )
         return
@@ -887,12 +945,18 @@ const startMonitoringNow = async () => {
     addedFilePaths.clear()
 
     const folderMsg = settings.value.includeSubfolders
-        ? `开始监控文件夹 (${settings.value.folderPaths.length}个，包含子文件夹): ${settings.value.folderPaths.join(', ')}`
-        : `开始监控文件夹 (${settings.value.folderPaths.length}个): ${settings.value.folderPaths.join(', ')}`
+        ? t('开始监控文件夹 ({0}个，包含子文件夹): {1}', {
+              0: String(settings.value.folderPaths.length),
+              1: String(settings.value.folderPaths.join(', '))
+          })
+        : t('开始监控文件夹 ({0}个): {1}', {
+              0: String(settings.value.folderPaths.length),
+              1: String(settings.value.folderPaths.join(', '))
+          })
 
-    let configMsg = `最小文件大小: ${settings.value.minFileSize}MB`
+    let configMsg = t('最小文件大小: {0}MB', { 0: String(settings.value.minFileSize) })
     if (settings.value.enableFilenameFilter && settings.value.filenameRegex) {
-        configMsg += `，正则忽略: ${settings.value.filenameRegex}`
+        configMsg += t('，正则忽略: {0}', { 0: String(settings.value.filenameRegex) })
     }
     console.log(`${folderMsg}，${configMsg}`)
 
@@ -901,11 +965,11 @@ const startMonitoringNow = async () => {
     if (!monitoring.value || session !== monitorSession) return
 
     let successMsg = settings.value.includeSubfolders
-        ? `开始监控文件夹（包含子文件夹，最小${settings.value.minFileSize}MB`
-        : `开始监控文件夹（最小${settings.value.minFileSize}MB`
+        ? t('开始监控文件夹（包含子文件夹，最小{0}MB', { 0: String(settings.value.minFileSize) })
+        : t('开始监控文件夹（最小{0}MB', { 0: String(settings.value.minFileSize) })
 
     if (settings.value.enableFilenameFilter && settings.value.filenameRegex) {
-        successMsg += `，正则忽略）`
+        successMsg += t('，正则忽略）')
     } else {
         successMsg += `）`
     }
@@ -927,7 +991,7 @@ const cancelDelayedStart = () => {
         startCountdownTimer.value = null
     }
 
-    utilsStore.showMessage('已取消定时开始', 'info')
+    utilsStore.showMessage(t('已取消定时开始'), 'info')
 }
 
 // 开始倒计时显示
@@ -940,7 +1004,7 @@ const startCountdown = () => {
         const diff = startTime.getTime() - now.getTime()
 
         if (diff <= 0) {
-            timeUntilStart.value = '即将开始...'
+            timeUntilStart.value = t('即将开始...')
             if (startCountdownTimer.value) {
                 clearInterval(startCountdownTimer.value)
                 startCountdownTimer.value = null
@@ -955,15 +1019,15 @@ const startCountdown = () => {
 
         let countdownText = ''
         if (days > 0) {
-            countdownText += `${days}天 `
+            countdownText += t('{0}天 ', { 0: String(days) })
         }
         if (hours > 0 || days > 0) {
-            countdownText += `${hours}小时 `
+            countdownText += t('{0}小时 ', { 0: String(hours) })
         }
         if (minutes > 0 || hours > 0 || days > 0) {
-            countdownText += `${minutes}分钟 `
+            countdownText += t('{0}分钟 ', { 0: String(minutes) })
         }
-        countdownText += `${seconds}秒`
+        countdownText += t('{0}秒', { 0: String(seconds) })
 
         timeUntilStart.value = countdownText
     }
@@ -995,7 +1059,7 @@ const stopMonitoring = () => {
         startCountdownTimer.value = null
     }
 
-    utilsStore.showMessage('已停止文件夹监控', 'info')
+    utilsStore.showMessage(t('已停止文件夹监控'), 'info')
 }
 
 // 关闭对话框

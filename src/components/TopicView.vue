@@ -11,7 +11,7 @@
                 <span v-if="selectedTopicName" class="selected-topic-text">
                     {{ selectedTopicName }}
                 </span>
-                <span v-else class="placeholder-text">请输入</span>
+                <span v-else class="placeholder-text">{{ t('请输入') }}</span>
             </el-button>
             <div class="action-buttons">
                 <el-button
@@ -32,7 +32,7 @@
         <!-- 话题选择对话框 -->
         <el-dialog
             v-model="showTopicDialog"
-            title="参与活动"
+            :title="t('参与活动')"
             width="500px"
             :before-close="handleDialogClose"
             class="topic-dialog"
@@ -41,7 +41,7 @@
                 <!-- 搜索框 -->
                 <el-input
                     v-model="searchKeyword"
-                    placeholder="请输入"
+                    :placeholder="t('请输入')"
                     clearable
                     class="search-input"
                     @input="handleSearch"
@@ -80,7 +80,7 @@
                                                 v-if="supportsCommonStaff(topic.mission_id)"
                                                 class="staff-badge-compact"
                                             >
-                                                联合投稿
+                                                {{ t('联合投稿') }}
                                             </span>
                                             <span class="play-count-compact">
                                                 {{ formatPlayCount(topic.arc_play_vv) }}
@@ -95,13 +95,13 @@
 
                 <!-- 如果没有搜索结果 -->
                 <div v-if="filteredTopics.length === 0" class="no-results">
-                    <el-empty description="暂无相关活动" :image-size="80" />
+                    <el-empty :description="t('暂无相关活动')" :image-size="80" />
                 </div>
             </div>
 
             <template #footer>
                 <div class="dialog-footer">
-                    <el-button type="primary" @click="confirmSelection">确定</el-button>
+                    <el-button type="primary" @click="confirmSelection">{{ t('确定') }}</el-button>
                 </div>
             </template>
         </el-dialog>
@@ -109,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import { t, useI18nState } from '../i18n'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useUtilsStore } from '../stores/utils'
 import { ArrowDown, Search, Loading, Close } from '@element-plus/icons-vue'
@@ -186,12 +187,19 @@ const supportsCommonStaff = (missionId: number) => {
 }
 
 // 格式化播放量
+const { language } = useI18nState()
 const formatPlayCount = (count: number): string => {
+    if (language.value === 'en-US') {
+        return new Intl.NumberFormat('en-US', {
+            notation: 'compact',
+            maximumFractionDigits: 1
+        }).format(count)
+    }
     if (count === 0) return '0'
     if (count < 1000) return count.toString()
-    if (count < 10000) return (count / 1000).toFixed(1) + '千'
-    if (count < 100000000) return (count / 10000).toFixed(1) + '万'
-    return (count / 100000000).toFixed(1) + '亿'
+    if (count < 10000) return (count / 1000).toFixed(1) + t('千')
+    if (count < 100000000) return (count / 10000).toFixed(1) + t('万')
+    return (count / 100000000).toFixed(1) + t('亿')
 }
 
 // 搜索处理函数
@@ -246,20 +254,20 @@ const performLocalSearch = (searchQuery: string) => {
 // 执行远程搜索
 const performRemoteSearch = async (query: string, requestId: number, uid?: number) => {
     if (!uid || requestId !== topicRequestId || uid !== props.userUid) {
-        console.warn('用户UID未提供，跳过远程搜索')
+        console.warn(t('用户UID未提供，跳过远程搜索'))
         return
     }
 
     try {
         isSearching.value = true
-        console.log('开始远程搜索:', query)
+        console.log(t('开始远程搜索:'), query)
 
         // 调用utils store的搜索方法
         const searchResults = (await utilsStore.searchTopics(uid, query)) as any[]
 
         if (requestId !== topicRequestId || uid !== props.userUid) return
         if (searchResults && searchResults.length > 0) {
-            console.log('远程搜索返回结果:', searchResults.length)
+            console.log(t('远程搜索返回结果:'), searchResults.length)
 
             // 将搜索结果的id字段映射为topic_id，转换为Topic格式
             const mappedResults: Topic[] = searchResults.map(result => ({
@@ -284,11 +292,11 @@ const performRemoteSearch = async (query: string, requestId: number, uid?: numbe
 
             if (newResults.length > 0) {
                 filteredTopics.value = [...filteredTopics.value, ...newResults]
-                console.log('添加了新的搜索结果:', newResults.length)
+                console.log(t('添加了新的搜索结果:'), newResults.length)
             }
         }
     } catch (error) {
-        if (requestId === topicRequestId) console.error('远程搜索失败:', error)
+        if (requestId === topicRequestId) console.error(t('远程搜索失败:'), error)
     } finally {
         if (requestId === topicRequestId) isSearching.value = false
     }

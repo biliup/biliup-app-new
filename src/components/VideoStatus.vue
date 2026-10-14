@@ -1,13 +1,13 @@
 <template>
     <el-dialog
         v-model="dialogVisible"
-        title="视频转码状态"
+        :title="t('视频转码状态')"
         width="600px"
         :close-on-click-modal="false"
     >
         <div class="video-status-container">
             <div v-if="completedVideos.length === 0" class="empty-state">
-                <el-empty description="暂无已完成上传的视频文件" />
+                <el-empty :description="t('暂无已完成上传的视频文件')" />
             </div>
             <div v-else>
                 <el-table
@@ -27,13 +27,14 @@
                                 class="expanded-error-detail"
                             >
                                 <div class="error-message-full">
-                                    <strong>错误详情：</strong>{{ getErrorDetail(row.statusDesc) }}
+                                    <strong>{{ t('错误详情：') }}</strong
+                                    >{{ getErrorDetail(row.statusDesc) }}
                                 </div>
                             </div>
                         </template>
                     </el-table-column>
 
-                    <el-table-column prop="filename" label="文件名" min-width="250">
+                    <el-table-column prop="filename" :label="t('文件名')" min-width="250">
                         <template #default="{ row }">
                             <div class="filename-cell">
                                 <el-icon class="file-icon"><video-play /></el-icon>
@@ -43,7 +44,12 @@
                             </div>
                         </template>
                     </el-table-column>
-                    <el-table-column prop="status" label="转码状态" width="180" align="center">
+                    <el-table-column
+                        prop="status"
+                        :label="t('转码状态')"
+                        width="180"
+                        align="center"
+                    >
                         <template #default="{ row }">
                             <div class="status-content">
                                 <el-tag
@@ -80,9 +86,9 @@
 
         <template #footer>
             <div class="dialog-footer">
-                <el-button @click="dialogVisible = false">关闭</el-button>
+                <el-button @click="dialogVisible = false">{{ t('关闭') }}</el-button>
                 <el-button type="primary" @click="refreshAllStatus" :loading="refreshingAll">
-                    刷新全部
+                    {{ t('刷新全部') }}
                 </el-button>
             </div>
         </template>
@@ -90,6 +96,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { ref, computed } from 'vue'
 import { Check, Loading, Warning, VideoPlay, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
@@ -151,20 +158,20 @@ const getFilename = (video: VideoFile): string => {
     if (video.path) {
         return video.path.split(/[/\\]/).pop() || video.path
     }
-    return `视频文件 ${video.id}`
+    return t('视频文件 {0}', { 0: String(video.id) })
 }
 
 // 获取状态文本
 const getStatusText = (statusCode: number | null): string => {
     switch (statusCode) {
         case null:
-            return '状态未知'
+            return t('状态未知')
         case ENCODING_STATUS.SUCCESS:
-            return '转码成功'
+            return t('转码成功')
         case ENCODING_STATUS.PROCESSING:
-            return '转码中'
+            return t('转码中')
         default:
-            return '转码失败'
+            return t('转码失败')
     }
 }
 
@@ -216,7 +223,7 @@ const getRowClassName = ({ row }: { row: VideoStatusItem }): string => {
 
 // 获取错误详情
 const getErrorDetail = (statusDesc?: string): string => {
-    return statusDesc || '未知错误'
+    return statusDesc || t('未知错误')
 }
 
 // 检查是否为失败状态
@@ -233,10 +240,10 @@ const refreshAllStatus = async () => {
     refreshingAll.value = true
     try {
         const refreshed = await props.reloadStatus()
-        if (refreshed) ElMessage.success('视频状态已刷新')
-        else ElMessage.info('当前无法刷新，请等待模板加载完成后重试')
+        if (refreshed) ElMessage.success(t('视频状态已刷新'))
+        else ElMessage.info(t('当前无法刷新，请等待模板加载完成后重试'))
     } catch (error) {
-        ElMessage.error('刷新状态失败')
+        ElMessage.error(t('刷新状态失败'))
     } finally {
         refreshingAll.value = false
     }

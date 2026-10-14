@@ -5,11 +5,11 @@
                 <div class="login-content">
                     <el-tabs v-model="activeTab" class="login-tabs">
                         <!-- 二维码登录 -->
-                        <el-tab-pane label="二维码登录" name="qr">
+                        <el-tab-pane :label="t('二维码登录')" name="qr">
                             <div class="qr-login">
                                 <div v-if="qrCode" class="qr-container">
-                                    <img :src="qrCode" alt="登录二维码" class="qr-image" />
-                                    <p class="qr-tip">请使用哔哩哔哩APP扫描二维码登录</p>
+                                    <img :src="qrCode" :alt="t('登录二维码')" class="qr-image" />
+                                    <p class="qr-tip">{{ t('请使用哔哩哔哩APP扫描二维码登录') }}</p>
                                     <p
                                         v-if="qrStatusMessage"
                                         class="qr-status"
@@ -24,7 +24,7 @@
                                         @click="getQRCode"
                                         :loading="loading"
                                     >
-                                        刷新二维码
+                                        {{ t('刷新二维码') }}
                                     </el-button>
                                 </div>
                                 <el-button
@@ -33,25 +33,25 @@
                                     @click="getQRCode"
                                     :loading="loading"
                                 >
-                                    获取二维码
+                                    {{ t('获取二维码') }}
                                 </el-button>
                             </div>
                         </el-tab-pane>
 
                         <!-- 短信登录 -->
-                        <el-tab-pane label="短信登录" name="sms">
+                        <el-tab-pane :label="t('短信登录')" name="sms">
                             <div class="sms-login">
                                 <el-form :model="smsForm" ref="smsFormRef" :rules="smsRules">
                                     <el-form-item prop="phone">
                                         <div class="phone-input-container">
                                             <el-select
                                                 v-model="smsForm.countryCode"
-                                                placeholder="国家"
+                                                :placeholder="t('国家')"
                                                 class="country-select"
                                                 filterable
                                                 :clearable="false"
                                                 default-first-option
-                                                no-match-text="未找到国家或区号"
+                                                :no-match-text="t('未找到国家或区号')"
                                             >
                                                 <el-option
                                                     v-for="country in countryList"
@@ -67,7 +67,7 @@
                                             </el-select>
                                             <el-input
                                                 v-model="smsForm.phone"
-                                                placeholder="请输入手机号"
+                                                :placeholder="t('请输入手机号')"
                                                 prefix-icon="Phone"
                                                 class="phone-input"
                                             />
@@ -77,7 +77,7 @@
                                         <div class="sms-code-container">
                                             <el-input
                                                 v-model="smsForm.code"
-                                                placeholder="请输入验证码"
+                                                :placeholder="t('请输入验证码')"
                                                 prefix-icon="Message"
                                                 class="sms-code-input"
                                             />
@@ -90,7 +90,7 @@
                                                 {{
                                                     smsCountdown > 0
                                                         ? `${smsCountdown}s`
-                                                        : '发送验证码'
+                                                        : t('发送验证码')
                                                 }}
                                             </el-button>
                                         </div>
@@ -98,11 +98,13 @@
                                 </el-form>
 
                                 <div v-if="smsRecaptcha.visible" class="sms-recaptcha-panel">
-                                    <div class="sms-recaptcha-title">需要滑块验证</div>
+                                    <div class="sms-recaptcha-title">{{ t('需要滑块验证') }}</div>
                                     <div class="sms-recaptcha-desc">
-                                        请在浏览器打开下方链接完成滑块验证。打开浏览器开发者工具，
-                                        从 ajax.php 请求的 payload 中获取 challenge， 从响应中获取
-                                        validate。
+                                        {{
+                                            t(
+                                                '请在浏览器打开下方链接完成滑块验证。打开浏览器开发者工具， 从 ajax.php 请求的 payload 中获取 challenge， 从响应中获取 validate。'
+                                            )
+                                        }}
                                     </div>
                                     <el-input
                                         v-model="smsRecaptcha.url"
@@ -113,17 +115,17 @@
                                     />
                                     <div class="sms-recaptcha-actions">
                                         <el-button @click="copyRecaptchaUrl" plain>
-                                            复制验证链接
+                                            {{ t('复制验证链接') }}
                                         </el-button>
                                     </div>
                                     <div class="sms-recaptcha-fields">
                                         <el-input
                                             v-model="smsRecaptcha.challenge"
-                                            placeholder="请输入 challenge"
+                                            :placeholder="t('请输入 challenge')"
                                         />
                                         <el-input
                                             v-model="smsRecaptcha.validate"
-                                            placeholder="请输入 validate"
+                                            :placeholder="t('请输入 validate')"
                                         />
                                     </div>
                                     <el-button
@@ -132,7 +134,7 @@
                                         @click="submitSMSRecaptcha"
                                         class="login-btn"
                                     >
-                                        提交滑块验证并发送验证码
+                                        {{ t('提交滑块验证并发送验证码') }}
                                     </el-button>
                                 </div>
 
@@ -142,7 +144,7 @@
                                     :loading="loading"
                                     class="login-btn"
                                 >
-                                    登录
+                                    {{ t('登录') }}
                                 </el-button>
                             </div>
                         </el-tab-pane>
@@ -154,7 +156,7 @@
                             class="advanced-toggle"
                             @click="showAdvancedOptions = !showAdvancedOptions"
                         >
-                            <span class="advanced-toggle-text">高级选项</span>
+                            <span class="advanced-toggle-text">{{ t('高级选项') }}</span>
                             <el-icon
                                 class="advanced-toggle-icon"
                                 :class="{ 'is-expanded': showAdvancedOptions }"
@@ -166,22 +168,22 @@
                         <el-collapse-transition>
                             <div v-show="showAdvancedOptions" class="advanced-content">
                                 <div class="proxy-settings">
-                                    <h4 class="proxy-title">代理服务器设置</h4>
+                                    <h4 class="proxy-title">{{ t('代理服务器设置') }}</h4>
                                     <el-form :model="proxyForm" class="proxy-form">
                                         <el-form-item>
                                             <el-checkbox
                                                 v-model="proxyForm.enabled"
                                                 class="proxy-checkbox"
                                             >
-                                                启用代理
+                                                {{ t('启用代理') }}
                                             </el-checkbox>
                                         </el-form-item>
 
                                         <div v-show="proxyForm.enabled" class="proxy-config">
-                                            <el-form-item label="代理类型">
+                                            <el-form-item :label="t('代理类型')">
                                                 <el-select
                                                     v-model="proxyForm.type"
-                                                    placeholder="选择代理类型"
+                                                    :placeholder="t('选择代理类型')"
                                                     class="proxy-type-select"
                                                 >
                                                     <el-option label="HTTP" value="http" />
@@ -190,7 +192,7 @@
                                                 </el-select>
                                             </el-form-item>
 
-                                            <el-form-item label="服务器地址">
+                                            <el-form-item :label="t('服务器地址')">
                                                 <el-input
                                                     v-model="proxyForm.host"
                                                     placeholder="127.0.0.1"
@@ -198,7 +200,7 @@
                                                 />
                                             </el-form-item>
 
-                                            <el-form-item label="端口">
+                                            <el-form-item :label="t('端口')">
                                                 <el-input
                                                     v-model="proxyForm.port"
                                                     type="number"
@@ -212,24 +214,24 @@
                                                     v-model="proxyForm.needAuth"
                                                     class="proxy-auth-checkbox"
                                                 >
-                                                    需要身份验证
+                                                    {{ t('需要身份验证') }}
                                                 </el-checkbox>
                                             </el-form-item>
 
                                             <div v-show="proxyForm.needAuth" class="proxy-auth">
-                                                <el-form-item label="用户名">
+                                                <el-form-item :label="t('用户名')">
                                                     <el-input
                                                         v-model="proxyForm.username"
-                                                        placeholder="用户名"
+                                                        :placeholder="t('用户名')"
                                                         class="proxy-input"
                                                     />
                                                 </el-form-item>
 
-                                                <el-form-item label="密码">
+                                                <el-form-item :label="t('密码')">
                                                     <el-input
                                                         v-model="proxyForm.password"
                                                         type="password"
-                                                        placeholder="密码"
+                                                        :placeholder="t('密码')"
                                                         show-password
                                                         class="proxy-input"
                                                     />
@@ -248,7 +250,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { t } from '../i18n'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { ArrowDown } from '@element-plus/icons-vue'
 import { useUtilsStore } from '../stores/utils'
@@ -357,20 +360,22 @@ const copyRecaptchaUrl = async () => {
 
     try {
         await navigator.clipboard.writeText(smsRecaptcha.value.url)
-        utilsStore.showMessage('验证链接已复制', 'success')
+        utilsStore.showMessage(t('验证链接已复制'), 'success')
     } catch {
-        utilsStore.showMessage('复制失败，请手动复制链接', 'warning')
+        utilsStore.showMessage(t('复制失败，请手动复制链接'), 'warning')
     }
 }
 
 // 国家代码列表
-const countryList = ref(COUNTRY_CODE_OPTIONS)
+const countryList = computed(() =>
+    COUNTRY_CODE_OPTIONS.map(country => ({ ...country, name: t(country.name) }))
+)
 
 // 表单验证规则
-const smsRules = {
-    phone: [{ required: true, message: '请输入手机号', trigger: 'blur' }],
-    code: [{ required: true, message: '请输入验证码', trigger: 'blur' }]
-}
+const smsRules = computed(() => ({
+    phone: [{ required: true, message: t('请输入手机号'), trigger: 'blur' }],
+    code: [{ required: true, message: t('请输入验证码'), trigger: 'blur' }]
+}))
 
 const stopQRPolling = () => {
     if (qrPollTimer !== null) {
@@ -391,22 +396,22 @@ const pollQRLogin = async () => {
         if (response.success) {
             stopQRPolling()
             qrStatusType.value = 'success'
-            qrStatusMessage.value = response.message || '登录成功'
-            utilsStore.showMessage('登录成功！', 'success')
+            qrStatusMessage.value = response.message || t('登录成功')
+            utilsStore.showMessage(t('登录成功！'), 'success')
             emit('login-success')
             return
         }
 
         if (response.status === 'pending') {
             qrStatusType.value = 'pending'
-            qrStatusMessage.value = response.message || '等待扫码确认'
+            qrStatusMessage.value = response.message || t('等待扫码确认')
             return
         }
 
         if (response.status === 'expired') {
             stopQRPolling()
             qrStatusType.value = 'warning'
-            qrStatusMessage.value = response.message || '二维码已过期，请刷新后重试'
+            qrStatusMessage.value = response.message || t('二维码已过期，请刷新后重试')
             utilsStore.showMessage(qrStatusMessage.value, 'warning')
             return
         }
@@ -414,18 +419,18 @@ const pollQRLogin = async () => {
         if (response.status === 'idle') {
             stopQRPolling()
             qrStatusType.value = 'warning'
-            qrStatusMessage.value = response.message || '请重新获取二维码'
+            qrStatusMessage.value = response.message || t('请重新获取二维码')
             return
         }
 
         stopQRPolling()
         qrStatusType.value = 'error'
-        qrStatusMessage.value = response.message || '二维码登录失败'
+        qrStatusMessage.value = response.message || t('二维码登录失败')
         utilsStore.showMessage(qrStatusMessage.value, 'error')
     } catch (error) {
         stopQRPolling()
         qrStatusType.value = 'error'
-        qrStatusMessage.value = getErrorMessage(error, '检查登录状态失败')
+        qrStatusMessage.value = getErrorMessage(error, t('检查登录状态失败'))
         utilsStore.showMessage(qrStatusMessage.value, 'error')
     } finally {
         qrChecking.value = false
@@ -459,13 +464,13 @@ const getQRCode = async () => {
         const response = (await authStore.getLoginQR(proxyUrl)) as any
         qrCode.value = response
         qrStatusType.value = 'pending'
-        qrStatusMessage.value = '等待扫码确认'
+        qrStatusMessage.value = t('等待扫码确认')
         startQRPolling()
     } catch (error) {
         qrCode.value = ''
         qrStatusType.value = 'error'
         qrStatusMessage.value = ''
-        utilsStore.showMessage(getErrorMessage(error, '获取二维码失败'), 'error')
+        utilsStore.showMessage(getErrorMessage(error, t('获取二维码失败')), 'error')
     } finally {
         loading.value = false
         emit('loading-change', false)
@@ -491,19 +496,19 @@ const sendSMSCode = async () => {
         )) as any
         if (response.success) {
             resetSMSRecaptcha()
-            utilsStore.showMessage('验证码已发送', 'success')
+            utilsStore.showMessage(t('验证码已发送'), 'success')
             startSMSCountdown()
         } else if (response.needRecaptcha && response.recaptchaUrl) {
             smsRecaptcha.value.visible = true
             smsRecaptcha.value.url = response.recaptchaUrl
             smsRecaptcha.value.challenge = ''
             smsRecaptcha.value.validate = ''
-            utilsStore.showMessage(response.message || '需要先完成滑块验证', 'warning')
+            utilsStore.showMessage(response.message || t('需要先完成滑块验证'), 'warning')
         } else {
-            utilsStore.showMessage(response.message || '发送失败', 'error')
+            utilsStore.showMessage(response.message || t('发送失败'), 'error')
         }
     } catch (error) {
-        utilsStore.showMessage(getErrorMessage(error, '发送验证码失败'), 'error')
+        utilsStore.showMessage(getErrorMessage(error, t('发送验证码失败')), 'error')
     } finally {
         sendingCode.value = false
         emit('loading-change', false)
@@ -512,7 +517,7 @@ const sendSMSCode = async () => {
 
 const submitSMSRecaptcha = async () => {
     if (!smsRecaptcha.value.challenge.trim() || !smsRecaptcha.value.validate.trim()) {
-        utilsStore.showMessage('请输入 challenge 和 validate', 'warning')
+        utilsStore.showMessage(t('请输入 challenge 和 validate'), 'warning')
         return
     }
 
@@ -525,13 +530,13 @@ const submitSMSRecaptcha = async () => {
         )
         if (response.success) {
             resetSMSRecaptcha()
-            utilsStore.showMessage('验证码已发送', 'success')
+            utilsStore.showMessage(t('验证码已发送'), 'success')
             startSMSCountdown()
         } else {
-            utilsStore.showMessage(response.message || '发送失败', 'error')
+            utilsStore.showMessage(response.message || t('发送失败'), 'error')
         }
     } catch (error) {
-        utilsStore.showMessage(getErrorMessage(error, '滑块验证提交失败'), 'error')
+        utilsStore.showMessage(getErrorMessage(error, t('滑块验证提交失败')), 'error')
     } finally {
         sendingCode.value = false
         emit('loading-change', false)
@@ -559,13 +564,13 @@ const loginWithSMS = async () => {
         if (response.success) {
             resetSMSRecaptcha()
             clearSMSCountdown()
-            utilsStore.showMessage('登录成功！', 'success')
+            utilsStore.showMessage(t('登录成功！'), 'success')
             emit('login-success')
         } else {
-            utilsStore.showMessage(response.message || '登录失败', 'error')
+            utilsStore.showMessage(response.message || t('登录失败'), 'error')
         }
     } catch (error) {
-        utilsStore.showMessage(getErrorMessage(error, '登录失败'), 'error')
+        utilsStore.showMessage(getErrorMessage(error, t('登录失败')), 'error')
     } finally {
         loading.value = false
         emit('loading-change', false)

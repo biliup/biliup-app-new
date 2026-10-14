@@ -60,7 +60,14 @@ fn read_dir_recursive_internal(
         Ok(entries) => entries,
         Err(e) => {
             // 记录警告但继续处理其他目录
-            error!("无法读取目录 {:?}: {}", dir_path, e);
+            error!(
+                "{}",
+                crate::tr!(
+                    "file.directory_read_failed",
+                    path = format!("{:?}", dir_path),
+                    error = e
+                )
+            );
             return Ok(());
         }
     };
@@ -69,7 +76,7 @@ fn read_dir_recursive_internal(
         let entry = match entry {
             Ok(entry) => entry,
             Err(e) => {
-                error!("无法读取目录条目: {}", e);
+                error!("{}", crate::tr!("file.entry_read_failed", error = e));
                 continue;
             }
         };
@@ -104,7 +111,14 @@ fn read_dir_recursive_internal(
                     current_depth + 1,
                     result,
                 ) {
-                    error!("无法读取子目录 {:?}: {}", path, e);
+                    error!(
+                        "{}",
+                        crate::tr!(
+                            "file.subdirectory_read_failed",
+                            path = format!("{:?}", path),
+                            error = e
+                        )
+                    );
                 }
             }
         } else {
@@ -148,7 +162,8 @@ pub fn get_avatar_cache_path() -> Result<PathBuf> {
 
 /// 获取应用配置目录路径
 pub fn get_config_dir() -> Result<PathBuf> {
-    let appdata_dir = dirs::config_dir().ok_or_else(|| anyhow::anyhow!("无法获取 APPDATA 目录"))?;
+    let appdata_dir = dirs::config_dir()
+        .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("file.appdata_unavailable")))?;
 
     let biliup_dir = appdata_dir.join("biliup");
 
@@ -186,9 +201,12 @@ pub fn get_old_cookie_file_path() -> Result<PathBuf> {
         .filter(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("json"))
         .map(|e| e.path());
     if let Some(first_file) = entries.next() {
-        info!("找到cookie文件: {}", first_file.display());
+        info!(
+            "{}",
+            crate::tr!("file.cookie_found", path = first_file.display())
+        );
         Ok(first_file)
     } else {
-        Err(anyhow::anyhow!("没有找到cookie文件"))
+        Err(anyhow::anyhow!("{}", crate::tr!("file.cookie_missing")))
     }
 }

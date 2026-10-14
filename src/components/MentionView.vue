@@ -3,7 +3,7 @@
         <el-autocomplete
             v-model="inputValue"
             :fetch-suggestions="fetchSuggestions"
-            :placeholder="placeholder"
+            :placeholder="placeholder || t('请输入 UID 或昵称')"
             :trigger-on-focus="true"
             :disabled="disabled || !userUid"
             clearable
@@ -17,7 +17,7 @@
                         <el-avatar :size="34" :src="item.avatarSrc" />
                         <div class="mention-main">
                             <div class="mention-name">{{ item.name }}</div>
-                            <div class="mention-meta">{{ item.fans }}粉丝</div>
+                            <div class="mention-meta">{{ item.fans }}{{ t('粉丝') }}</div>
                         </div>
                         <div class="mention-uid">UID: {{ item.uid }}</div>
                     </div>
@@ -28,6 +28,7 @@
 </template>
 
 <script setup lang="ts">
+import { t } from '../i18n'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useUtilsStore } from '../stores/utils'
 import {
@@ -47,7 +48,7 @@ const props = withDefaults(
     }>(),
     {
         modelValue: '',
-        placeholder: '请输入 UID 或昵称',
+        placeholder: '',
         disabled: false,
         debounceMs: 350
     }
