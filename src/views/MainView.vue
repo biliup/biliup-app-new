@@ -1506,6 +1506,12 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
         return
     }
 
+    const progressMessage = t('正在配置合集信息：{0}，请稍后...', {
+        0: String(resp.bvid || resp.aid)
+    })
+    utilsStore.showMessage(progressMessage, 'info')
+    console.info(progressMessage)
+
     try {
         if (configuredSeasonId > 0) await utilsStore.getSeasonList(uid)
         const changed = await utilsStore.switchSeason(

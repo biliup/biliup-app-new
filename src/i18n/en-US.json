@@ -436,6 +436,7 @@
     "模板 {0} 自动提交失败:": "Auto submission failed for template {0}:",
     "视频{0}加入合集{1}": "Adding video {0} to collection {1}",
     "视频{0}已移出合集": "Video {0} has been removed from the collection",
+    "正在配置合集信息：{0}，请稍后...": "Configuring collection information for {0}, please wait...",
     "设置合集失败: ": "Failed to set collection: ",
     "设置合集失败: {0}": "Failed to set collection: {0}",
     "从BV号创建模板成功": "Template created from BV ID",
