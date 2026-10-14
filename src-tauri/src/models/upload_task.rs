@@ -36,13 +36,14 @@ pub struct UploadTask {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum TaskStatus {
-    Waiting,   // 未开始
-    Pending,   // 等待中
-    Running,   // 运行中
-    Paused,    // 已暂停
-    Completed, // 已完成
-    Failed,    // 失败
-    Cancelled, // 已取消
+    Waiting,              // 未开始
+    Pending,              // 等待中
+    Running,              // 运行中
+    AwaitingVerification, // 等待安全验证
+    Paused,               // 已暂停
+    Completed,            // 已完成
+    Failed,               // 失败
+    Cancelled,            // 已取消
 }
 
 impl UploadTask {

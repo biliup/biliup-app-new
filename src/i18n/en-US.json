@@ -345,6 +345,7 @@
     "重试上传失败: {0}": "Failed to retry upload: {0}",
     "待开始": "Not started",
     "等待中": "Waiting",
+    "等待安全验证": "Waiting for security verification",
     "已完成": "Completed",
     "已取消": "Canceled",
     "已暂停": "Paused",

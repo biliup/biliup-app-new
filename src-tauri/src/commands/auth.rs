@@ -168,6 +168,7 @@ pub async fn logout_user(app: tauri::AppHandle, uid: u64) -> Result<bool, AppErr
         .map_err(|e| AppError::Config(crate::tr!("auth.logout_save_failed", error = e)))?;
     *config = updated;
     clients.remove(&uid);
+    app_data.upload_service.risk.clear(uid);
     info!("{}", crate::tr!("auth.logout_success", uid = uid));
     Ok(true)
 }

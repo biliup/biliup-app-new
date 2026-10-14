@@ -288,7 +288,7 @@ const canStart = (status: string) => {
 }
 
 const canPause = (status: string) => {
-    return status === 'Pending' || status === 'Running'
+    return status === 'Pending' || status === 'Running' || status === 'AwaitingVerification'
 }
 
 const canCancel = (status: string) => {
@@ -484,6 +484,7 @@ const getStatusText = (status: string) => {
         Completed: t('已完成'),
         Cancelled: t('已取消'),
         Paused: t('已暂停'),
+        AwaitingVerification: t('等待安全验证'),
         Failed: t('失败')
     }
     return statusMap[status as keyof typeof statusMap] || status

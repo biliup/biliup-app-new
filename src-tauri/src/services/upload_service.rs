@@ -1,8 +1,9 @@
 use std::{collections::HashMap, path::PathBuf, pin::Pin, sync::Arc, task::Poll};
 
+use super::upload_risk::{UploadRiskService, verified_line};
 use crate::{
     MyClient,
-    models::{ConfigRoot, UploadTask, User, VideoInfo},
+    models::{ConfigRoot, TaskStatus, UploadTask, User, VideoInfo},
 };
 use anyhow::Result;
 use biliup::{
@@ -29,6 +30,7 @@ macro_rules! task_title {
 }
 
 pub struct UploadService {
+    pub risk: Arc<UploadRiskService>,
     upload_queue: Arc<Mutex<IndexMap<String, Arc<Mutex<UploadTask>>>>>,
     upload_handle: Arc<Mutex<HashMap<String, task::JoinHandle<()>>>>,
     _upload_backgnd: task::JoinHandle<()>,
@@ -63,8 +65,11 @@ impl UploadService {
         let upload_handle_clone = Arc::clone(&upload_handle);
 
         let (stop_tx, stop_rx) = mpsc::channel(1);
+        let risk = Arc::new(UploadRiskService::default());
+        let risk_clone = Arc::clone(&risk);
 
         Self {
+            risk,
             upload_queue,
             upload_handle,
             _upload_backgnd: task::spawn(async move {
@@ -72,6 +77,7 @@ impl UploadService {
                     upload_queue_clone,
                     upload_handle_clone,
                     max_running_clone,
+                    risk_clone,
                     stop_rx,
                 )
                 .await;
@@ -133,7 +139,11 @@ impl UploadService {
         let task_mutex = queue.get(task_id).ok_or_else(|| {
             anyhow::anyhow!("{}", crate::tr!("upload.task_missing", task_id = task_id))
         })?;
-        let failed = task_mutex.lock().await.is_failed();
+        let (failed, uid) = {
+            let task = task_mutex.lock().await;
+            (task.is_failed(), task.user.uid)
+        };
+        let risk_cleared = self.risk.prepare_retry(uid);
         if failed {
             self.stop_handle(task_id).await;
         }
@@ -143,7 +153,7 @@ impl UploadService {
             task.retry();
             return Ok(true);
         }
-        if task.is_paused() || task.is_waiting() {
+        if task.is_paused() || task.is_waiting() || (risk_cleared && task.is_pending()) {
             task.pending();
             return Ok(true);
         }
@@ -156,7 +166,10 @@ impl UploadService {
             anyhow::anyhow!("{}", crate::tr!("upload.task_missing", task_id = task_id))
         })?;
         let mut task = task_mutex.lock().await;
-        if !(task.is_running() || task.is_pending()) {
+        if !(task.is_running()
+            || task.is_pending()
+            || matches!(task.status, TaskStatus::AwaitingVerification))
+        {
             return Ok(false);
         }
         task.pause();
@@ -178,9 +191,17 @@ impl UploadService {
         let task_mutex = queue.get(task_id).ok_or_else(|| {
             anyhow::anyhow!("{}", crate::tr!("upload.task_missing", task_id = task_id))
         })?;
-        if task_mutex.lock().await.is_completed() {
-            return Ok(false);
-        }
+        let uid = {
+            let task = task_mutex.lock().await;
+            if matches!(
+                task.status,
+                TaskStatus::Completed | TaskStatus::AwaitingVerification
+            ) {
+                return Ok(false);
+            }
+            task.user.uid
+        };
+        self.risk.prepare_retry(uid);
         self.stop_handle(task_id).await;
         let mut task = task_mutex.lock().await;
         task.cancel();
@@ -205,6 +226,7 @@ async fn upload_background(
     queue: Arc<Mutex<IndexMap<String, Arc<Mutex<UploadTask>>>>>,
     handle: Arc<Mutex<HashMap<String, task::JoinHandle<()>>>>,
     max_running: Arc<Mutex<u32>>,
+    risk: Arc<UploadRiskService>,
     mut stop_rx: mpsc::Receiver<()>,
 ) {
     let mut one_sec = tokio::time::interval(tokio::time::Duration::from_secs(1));
@@ -218,7 +240,7 @@ async fn upload_background(
                 return;
             }
             _ = one_sec.tick() => {
-                upload_background_interval(queue_clone, handle_clone, max_running_clone).await;
+                upload_background_interval(queue_clone, handle_clone, max_running_clone, Arc::clone(&risk)).await;
             }
         }
     }
@@ -228,6 +250,7 @@ async fn upload_background_interval(
     queue: Arc<Mutex<IndexMap<String, Arc<Mutex<UploadTask>>>>>,
     handle: Arc<Mutex<HashMap<String, task::JoinHandle<()>>>>,
     max_running: Arc<Mutex<u32>>,
+    risk: Arc<UploadRiskService>,
 ) {
     let queue = queue.lock().await;
     handle
@@ -271,7 +294,7 @@ async fn upload_background_interval(
             break;
         }
         let mut task = task_mutex.lock().await;
-        if !task.is_pending() {
+        if !task.is_pending() || risk.is_blocked(task.user.uid) {
             continue;
         }
         let mut handles = handle.lock().await;
@@ -280,10 +303,11 @@ async fn upload_background_interval(
         } else {
             task.start();
             let task_mutex_clone = Arc::clone(task_mutex);
+            let risk_clone = Arc::clone(&risk);
             handles.insert(
                 task.id.clone(),
                 task::spawn(async move {
-                    if let Err(e) = upload_impl(Arc::clone(&task_mutex_clone)).await {
+                    if let Err(e) = upload_impl(Arc::clone(&task_mutex_clone), risk_clone).await {
                         error!("{}", crate::tr!("upload.task_failed", error = e));
                         task_mutex_clone.lock().await.fail(e.to_string());
                     }
@@ -343,14 +367,17 @@ impl From<ChunkedBuffer> for Body {
     }
 }
 
-async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
+async fn upload_impl(
+    task_mutex: Arc<Mutex<UploadTask>>,
+    risk: Arc<UploadRiskService>,
+) -> Result<()> {
     info!(
         "{}",
         crate::tr!("upload.task_started", task_id = task_title!(task_mutex))
     );
     let uid = task_mutex.lock().await.user.uid;
 
-    let (line, _proxy, limit) = {
+    let (line, proxy, limit) = {
         let lock = task_mutex.lock().await;
         let config_root = lock.config().lock().await;
         let config = config_root
@@ -378,6 +405,7 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
         .clone();
 
     let retry_count = task_mutex.lock().await.retry_count();
+    wait_for_account_verification(&task_mutex, &risk).await?;
 
     // 定义可用的上传线路列表
     let available_lines = ["auto", "bda2", "bldsa", "tx", "txa", "alia"];
@@ -419,7 +447,35 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
     let filepath = PathBuf::from(&task_mutex.lock().await.video.path);
     let video_file = VideoFile::new(&filepath)?;
     let total_size = task_mutex.lock().await.total_size;
-    let parcel = probe.pre_upload(client, video_file).await?;
+    wait_for_account_verification(&task_mutex, &risk).await?;
+    let upload_line = risk
+        .recent_token(uid)
+        .map(|token| verified_line(&probe, &token))
+        .transpose()?
+        .unwrap_or_else(|| probe.clone());
+    let parcel = match upload_line.pre_upload(client, video_file).await {
+        Ok(parcel) => parcel,
+        Err(biliup::error::Kind::RateLimit { .. }) => {
+            {
+                let mut task = task_mutex.lock().await;
+                if !task.is_paused() {
+                    task.status = TaskStatus::AwaitingVerification;
+                }
+            }
+            let token = risk
+                .verify(uid, client.clone(), probe.clone(), filepath.clone(), proxy)
+                .await?;
+            resume_after_verification(&task_mutex).await?;
+            let result = verified_line(&probe, &token)?
+                .pre_upload(client, VideoFile::new(&filepath)?)
+                .await;
+            if matches!(&result, Err(biliup::error::Kind::RateLimit { .. })) {
+                risk.hold(uid, "安全验证后仍被限流，后续上传已暂停；请稍后手动重试");
+            }
+            result?
+        }
+        Err(error) => return Err(error.into()),
+    };
     {
         let mut task = task_mutex.lock().await;
         task.transferring = true;
@@ -447,6 +503,7 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
 
     let mut paused = false;
     loop {
+        wait_for_account_verification(&task_mutex, &risk).await?;
         while {
             let task = task_mutex.lock().await;
             task.is_paused() || task.is_pending()
@@ -501,6 +558,45 @@ async fn upload_impl(task_mutex: Arc<Mutex<UploadTask>>) -> Result<()> {
     }
 }
 
+async fn wait_for_account_verification(
+    task: &Arc<Mutex<UploadTask>>,
+    risk: &UploadRiskService,
+) -> Result<()> {
+    let uid = task.lock().await.user.uid;
+    if let Some(receiver) = risk.subscribe(uid) {
+        {
+            let mut task = task.lock().await;
+            if !task.is_paused() {
+                task.status = TaskStatus::AwaitingVerification;
+            }
+        }
+        UploadRiskService::wait(receiver).await?;
+        resume_after_verification(task).await?;
+    }
+    Ok(())
+}
+
+async fn resume_after_verification(task: &Arc<Mutex<UploadTask>>) -> Result<()> {
+    {
+        let mut task = task.lock().await;
+        if matches!(task.status, TaskStatus::AwaitingVerification) {
+            task.pending();
+        }
+    }
+    loop {
+        {
+            let task = task.lock().await;
+            if task.is_running() {
+                return Ok(());
+            }
+            if task.is_cancelled() {
+                return Err(anyhow::anyhow!("上传任务已取消"));
+            }
+        }
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -514,6 +610,63 @@ mod tests {
             Arc::new(Mutex::new(ConfigRoot::default())),
             Arc::new(Mutex::new(HashMap::new())),
         )
+    }
+
+    #[tokio::test]
+    async fn verification_blocks_only_its_account_and_does_not_timeout() {
+        let risk = Arc::new(UploadRiskService::default());
+        risk.hold(1, "等待人工验证");
+        let mut waiting = task("verification");
+        waiting.status = TaskStatus::AwaitingVerification;
+        waiting.last_activity -= std::time::Duration::from_secs(1000);
+        let mut blocked = task("blocked");
+        blocked.pending();
+        let mut other = task("other-account");
+        other.user.uid = 2;
+        other.pending();
+        let waiting = Arc::new(Mutex::new(waiting));
+        let blocked = Arc::new(Mutex::new(blocked));
+        let other = Arc::new(Mutex::new(other));
+        let queue = Arc::new(Mutex::new(IndexMap::from([
+            ("verification".into(), Arc::clone(&waiting)),
+            ("blocked".into(), Arc::clone(&blocked)),
+            ("other-account".into(), Arc::clone(&other)),
+        ])));
+        let handles = Arc::new(Mutex::new(HashMap::from([
+            ("verification".into(), tokio::spawn(std::future::pending())),
+            ("blocked".into(), tokio::spawn(std::future::pending())),
+            ("other-account".into(), tokio::spawn(std::future::pending())),
+        ])));
+        upload_background_interval(queue, Arc::clone(&handles), Arc::new(Mutex::new(1)), risk)
+            .await;
+        assert!(matches!(
+            waiting.lock().await.status,
+            TaskStatus::AwaitingVerification
+        ));
+        assert_eq!(waiting.lock().await.retry_count, 0);
+        assert!(blocked.lock().await.is_pending());
+        assert!(other.lock().await.is_running());
+        for (_, handle) in handles.lock().await.drain() {
+            handle.abort();
+        }
+    }
+
+    #[tokio::test]
+    async fn verification_does_not_resume_a_manually_paused_task() {
+        let mut paused = task("manual-pause");
+        paused.pause();
+        let paused = Arc::new(Mutex::new(paused));
+        let worker_task = Arc::clone(&paused);
+        let worker = tokio::spawn(async move { resume_after_verification(&worker_task).await });
+        tokio::time::sleep(tokio::time::Duration::from_millis(20)).await;
+        assert!(paused.lock().await.is_paused());
+        assert!(!worker.is_finished());
+        paused.lock().await.resume();
+        tokio::time::timeout(tokio::time::Duration::from_secs(1), worker)
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
     }
 
     #[tokio::test]
@@ -560,11 +713,18 @@ mod tests {
             Arc::clone(&queue),
             Arc::clone(&handles),
             Arc::clone(&maximum),
+            Arc::new(UploadRiskService::default()),
         )
         .await;
         assert!(pending.lock().await.is_running());
         paused.lock().await.pending();
-        upload_background_interval(queue, Arc::clone(&handles), maximum).await;
+        upload_background_interval(
+            queue,
+            Arc::clone(&handles),
+            maximum,
+            Arc::new(UploadRiskService::default()),
+        )
+        .await;
         assert!(paused.lock().await.is_pending());
         for (_, handle) in handles.lock().await.drain() {
             handle.abort();
@@ -587,7 +747,13 @@ mod tests {
             "stalled".into(),
             tokio::spawn(std::future::pending()),
         )])));
-        upload_background_interval(queue, handles, Arc::new(Mutex::new(0))).await;
+        upload_background_interval(
+            queue,
+            handles,
+            Arc::new(Mutex::new(0)),
+            Arc::new(UploadRiskService::default()),
+        )
+        .await;
         let task = stalled.lock().await;
         assert!(task.is_pending());
         assert_eq!(task.retry_count, 1);

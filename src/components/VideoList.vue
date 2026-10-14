@@ -75,7 +75,12 @@
                             <circle-close />
                         </el-icon>
                         <!-- 暂停 -->
-                        <el-icon v-else-if="video.status === 'Paused'" class="status-paused">
+                        <el-icon
+                            v-else-if="
+                                video.status === 'Paused' || video.status === 'AwaitingVerification'
+                            "
+                            class="status-paused"
+                        >
                             <video-pause />
                         </el-icon>
                         <!-- 已取消 -->
@@ -660,6 +665,7 @@ const getStatusText = (status: string) => {
         Completed: t('已完成'),
         Cancelled: t('已取消'),
         Paused: t('已暂停'),
+        AwaitingVerification: t('等待安全验证'),
         Failed: t('失败')
     }
     return statusMap[status as keyof typeof statusMap] || status
@@ -673,6 +679,7 @@ const getProgressColor = (status: string) => {
         case 'Failed':
             return '#f56c6c'
         case 'Paused':
+        case 'AwaitingVerification':
             return '#e6a23c'
         case 'Cancelled':
             return '#909399'

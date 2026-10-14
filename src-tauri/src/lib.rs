@@ -288,6 +288,10 @@ pub async fn run() {
             }
 
             // 管理应用数据状态
+            appdata
+                .upload_service
+                .risk
+                .set_app_handle(app.handle().clone());
             app.manage(appdata);
             Ok(())
         })
