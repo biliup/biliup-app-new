@@ -271,7 +271,7 @@ impl ConfigRoot {
         self.normalize_user_order();
         self.language = normalize_language(&self.language);
         for user_config in self.config.values_mut() {
-            if matches!(user_config.line.as_deref(), Some("ws" | "qn")) {
+            if matches!(user_config.line.as_deref(), Some("ws" | "qn" | "bda")) {
                 user_config.line = None;
             }
             if !(1..=12).contains(&user_config.limit) {
@@ -370,7 +370,7 @@ impl ConfigRoot {
         anyhow::ensure!(
             matches!(
                 line.as_deref(),
-                None | Some("auto" | "bda2" | "bldsa" | "tx" | "txa" | "bda" | "alia")
+                None | Some("auto" | "bda2" | "bldsa" | "tx" | "txa" | "alia")
             ),
             crate::i18n::text("upload.unsupported_route")
         );

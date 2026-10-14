@@ -122,7 +122,6 @@
                             <el-option label="BLDSA" value="bldsa" />
                             <el-option label="TX" value="tx" />
                             <el-option label="TXA" value="txa" />
-                            <el-option label="BDA" value="bda" />
                             <el-option label="ALIA" value="alia" />
                         </el-select>
                         <div class="form-tip">{{ t('globalConfig.line.tip') }}</div>
