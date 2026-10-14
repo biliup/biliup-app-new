@@ -1,13 +1,16 @@
 import english from './en-US.json'
+import japanese from './ja-JP.json'
 import { computed, ref } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import en from 'element-plus/es/locale/lang/en'
+import ja from 'element-plus/es/locale/lang/ja'
 
-export type AppLanguage = 'zh-CN' | 'en-US'
+export type AppLanguage = 'zh-CN' | 'en-US' | 'ja-JP'
 
 type TranslationMap = Record<string, string>
 
-const SUPPORTED_LANGUAGES: AppLanguage[] = ['zh-CN', 'en-US']
+const SUPPORTED_LANGUAGES: AppLanguage[] = ['zh-CN', 'en-US', 'ja-JP']
+const elementLocales = { 'zh-CN': zhCn, 'en-US': en, 'ja-JP': ja }
 
 const messages: Record<AppLanguage, TranslationMap> = {
     'zh-CN': {
@@ -29,6 +32,7 @@ const messages: Record<AppLanguage, TranslationMap> = {
         'globalConfig.language.label': '界面语言',
         'globalConfig.language.zh': '中文',
         'globalConfig.language.en': 'English',
+        'globalConfig.language.ja': '日本語',
         'globalConfig.language.tip': '点击保存后生效，下次启动会恢复所选语言',
         'globalConfig.maxCurr.label': '最大并发任务数',
         'globalConfig.maxCurr.tip1': '控制同时进行的上传任务数量，建议根据网络状况调整',
@@ -78,6 +82,7 @@ const messages: Record<AppLanguage, TranslationMap> = {
         'main.drag.needSelection': '请先选择用户和模板'
     },
     'en-US': {
+        ...english,
         'common.cancel': 'Cancel',
         'common.save': 'Save',
         'common.confirm': 'Confirm',
@@ -97,6 +102,7 @@ const messages: Record<AppLanguage, TranslationMap> = {
         'globalConfig.language.label': 'Language',
         'globalConfig.language.zh': '中文',
         'globalConfig.language.en': 'English',
+        'globalConfig.language.ja': '日本語',
         'globalConfig.language.tip': 'Applies after saving; your choice is restored on next launch',
         'globalConfig.maxCurr.label': 'Max Concurrent Tasks',
         'globalConfig.maxCurr.tip1': 'Controls how many upload tasks run at the same time',
@@ -144,7 +150,8 @@ const messages: Record<AppLanguage, TranslationMap> = {
         'main.drag.title': 'Drop video files here',
         'main.drag.formats': 'Supports MP4, AVI, MOV, MKV, WMV, FLV, M4V, WEBM',
         'main.drag.needSelection': 'Please select user and template first'
-    }
+    },
+    'ja-JP': japanese
 }
 
 const language = ref<AppLanguage>('zh-CN')
@@ -158,17 +165,14 @@ export const normalizeLanguage = (value?: string | null): AppLanguage => {
 
 export const setLanguage = (value?: string | null) => {
     language.value = normalizeLanguage(value)
+    if (typeof document !== 'undefined') {
+        document.documentElement.lang = language.value
+    }
 }
 
 // 只翻译明确标记的应用文本，插值参数保持原样。
 export const t = (key: string, params?: Record<string, string | number>) => {
-    const source =
-        language.value === 'en-US'
-            ? ((english as TranslationMap)[key] ??
-              messages['en-US'][key] ??
-              messages['zh-CN'][key] ??
-              key)
-            : (messages['zh-CN'][key] ?? key)
+    const source = messages[language.value][key] ?? messages['zh-CN'][key] ?? key
     return source.replace(/\{(\w+)\}/g, (placeholder, name) =>
         params && Object.prototype.hasOwnProperty.call(params, name)
             ? String(params[name])
@@ -178,6 +182,6 @@ export const t = (key: string, params?: Record<string, string | number>) => {
 
 export const useI18nState = () => ({
     language,
-    elementLocale: computed(() => (language.value === 'en-US' ? en : zhCn)),
+    elementLocale: computed(() => elementLocales[language.value]),
     t
 })

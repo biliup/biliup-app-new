@@ -62,4 +62,13 @@ onMounted(async () => {
 body {
     background-color: #f5f5f5;
 }
+
+html[lang='ja-JP'] .el-form-item__label {
+    height: auto;
+    min-height: var(--el-component-size);
+    align-self: flex-start;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    line-height: 20px;
+}
 </style>

@@ -185,9 +185,9 @@
 
                         <el-form
                             :model="currentForm"
-                            :label-width="language === 'en-US' ? '140px' : '80px'"
+                            :label-width="language === 'zh-CN' ? '80px' : '140px'"
                             class="upload-form"
-                            :class="{ 'english-form': language === 'en-US' }"
+                            :class="{ 'translated-form': language !== 'zh-CN' }"
                         >
                             <!-- 基本信息 -->
                             <el-card
@@ -4369,7 +4369,7 @@ const checkUpdate = async () => {
     margin-bottom: 20px;
 }
 
-.upload-form.english-form :deep(.el-form-item__label) {
+.upload-form.translated-form :deep(.el-form-item__label) {
     height: auto;
     min-height: var(--el-component-size);
     align-self: flex-start;

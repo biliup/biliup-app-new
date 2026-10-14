@@ -18,6 +18,7 @@
                 <el-select v-model="configForm.language" class="user-select">
                     <el-option :label="t('globalConfig.language.zh')" value="zh-CN" />
                     <el-option :label="t('globalConfig.language.en')" value="en-US" />
+                    <el-option :label="t('globalConfig.language.ja')" value="ja-JP" />
                 </el-select>
                 <div class="form-tip">{{ t('globalConfig.language.tip') }}</div>
             </el-form-item>

@@ -189,8 +189,8 @@ const supportsCommonStaff = (missionId: number) => {
 // 格式化播放量
 const { language } = useI18nState()
 const formatPlayCount = (count: number): string => {
-    if (language.value === 'en-US') {
-        return new Intl.NumberFormat('en-US', {
+    if (language.value !== 'zh-CN') {
+        return new Intl.NumberFormat(language.value, {
             notation: 'compact',
             maximumFractionDigits: 1
         }).format(count)

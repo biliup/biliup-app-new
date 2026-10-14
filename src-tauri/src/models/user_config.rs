@@ -749,15 +749,18 @@ mod persistence_tests {
         template.desc = "原始简介".to_string();
         config.add_user_template(1, "中文模板", template);
         // 使用真实持久化路径验证语言字段，账号及模板数据不参与翻译。
-        config.save_global_config(2, true, true, "info".to_string(), "en-US".to_string());
         let original_users = serde_json::to_value(&config.config).unwrap();
-        config.save_to_file(&path).unwrap();
+        for language in ["en-US", "ja-JP"] {
+            config.save_global_config(2, true, true, "info".to_string(), language.to_string());
+            config.save_to_file(&path).unwrap();
+            let restored = ConfigRoot::from_file(&path).unwrap();
+            assert_eq!(restored.language, language);
+            assert_eq!(
+                serde_json::to_value(&restored.config).unwrap(),
+                original_users
+            );
+        }
         let restored = ConfigRoot::from_file(&path).unwrap();
-        assert_eq!(restored.language, "en-US");
-        assert_eq!(
-            serde_json::to_value(&restored.config).unwrap(),
-            original_users
-        );
 
         let mut old_config = serde_json::to_value(&restored).unwrap();
         old_config.as_object_mut().unwrap().remove("language");
