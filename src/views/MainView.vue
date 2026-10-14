@@ -18,6 +18,18 @@
                 <div class="header-left">
                     <h2 class="app-title">Biliup APP</h2>
                     <div class="app-version">(v{{ currentVer }})</div>
+                    <el-select
+                        :model-value="language"
+                        :aria-label="t('globalConfig.language.label')"
+                        :disabled="languageSaving"
+                        :loading="languageSaving"
+                        class="language-select"
+                        @change="handleLanguageChange"
+                    >
+                        <el-option :label="t('globalConfig.language.zh')" value="zh-CN" />
+                        <el-option :label="t('globalConfig.language.en')" value="en-US" />
+                        <el-option :label="t('globalConfig.language.ja')" value="ja-JP" />
+                    </el-select>
                 </div>
                 <div class="header-center">
                     <el-button
@@ -1106,6 +1118,23 @@ const typeList = computed(() => utilsStore.typelist)
 const typeListV2 = computed(() => utilsStore.typeListV2)
 
 const currentVer = ref<string>('')
+const languageSaving = ref(false)
+
+const handleLanguageChange = async (value: string) => {
+    if (languageSaving.value || value === language.value) return
+
+    languageSaving.value = true
+    try {
+        if (!userConfigStore.configRoot) {
+            await userConfigStore.loadConfig()
+        }
+        await userConfigStore.updateGlobalConfig({ language: value })
+    } catch (error) {
+        utilsStore.showMessage(t('globalConfig.save.failed', { error: String(error) }), 'error')
+    } finally {
+        languageSaving.value = false
+    }
+}
 
 // 封面显示URL
 const coverDisplayUrl = ref<string>('')
@@ -4185,6 +4214,19 @@ const checkUpdate = async () => {
     justify-content: space-between;
     align-items: center;
     height: 100%;
+}
+
+.header-left {
+    display: flex;
+    align-items: baseline;
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.language-select {
+    width: 120px;
+    margin-left: 16px;
+    align-self: center;
 }
 
 .app-title {

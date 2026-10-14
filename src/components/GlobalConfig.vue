@@ -14,15 +14,6 @@
                 }}</el-text>
             </el-divider>
 
-            <el-form-item :label="t('globalConfig.language.label')">
-                <el-select v-model="configForm.language" class="user-select">
-                    <el-option :label="t('globalConfig.language.zh')" value="zh-CN" />
-                    <el-option :label="t('globalConfig.language.en')" value="en-US" />
-                    <el-option :label="t('globalConfig.language.ja')" value="ja-JP" />
-                </el-select>
-                <div class="form-tip">{{ t('globalConfig.language.tip') }}</div>
-            </el-form-item>
-
             <!-- 最大并发任务数 -->
             <el-form-item :label="t('globalConfig.maxCurr.label')">
                 <div class="slider-container">
@@ -244,7 +235,7 @@ import { ElMessageBox } from 'element-plus'
 import { useUserConfigStore } from '../stores/user_config'
 import { useAuthStore } from '../stores/auth'
 import { useUtilsStore } from '../stores/utils'
-import { normalizeLanguage, useI18nState } from '../i18n'
+import { useI18nState } from '../i18n'
 
 // 全局配置表单接口
 interface GlobalConfigForm {
@@ -252,7 +243,6 @@ interface GlobalConfigForm {
     auto_upload: boolean
     auto_start: boolean
     log_level: string
-    language: string
 }
 
 // Props
@@ -307,8 +297,7 @@ const configForm = ref<GlobalConfigForm>({
     max_curr: 1,
     auto_upload: true,
     auto_start: true,
-    log_level: 'info',
-    language: 'zh-CN'
+    log_level: 'info'
 })
 
 // 保存原始配置用于检查变化
@@ -316,8 +305,7 @@ const originalConfig = ref<GlobalConfigForm>({
     max_curr: 1,
     auto_upload: true,
     auto_start: true,
-    log_level: 'info',
-    language: 'zh-CN'
+    log_level: 'info'
 })
 
 // 监听 modelValue 变化
@@ -376,8 +364,7 @@ const loadGlobalConfig = async () => {
                 max_curr: config.max_curr || 2,
                 auto_upload: config.auto_upload ?? true,
                 auto_start: config.auto_start ?? true,
-                log_level: config.log_level || 'info',
-                language: normalizeLanguage(config.language)
+                log_level: config.log_level || 'info'
             }
 
             // 保存原始配置
@@ -409,8 +396,7 @@ const handleSave = async () => {
             max_curr: configForm.value.max_curr,
             auto_upload: configForm.value.auto_upload,
             auto_start: configForm.value.auto_start,
-            log_level: configForm.value.log_level,
-            language: normalizeLanguage(configForm.value.language)
+            log_level: configForm.value.log_level
         })
 
         // 如果选择了用户，保存用户配置
@@ -569,8 +555,7 @@ const handleDialogClose = () => {
         max_curr: 1,
         auto_upload: true,
         auto_start: true,
-        log_level: 'info',
-        language: 'zh-CN'
+        log_level: 'info'
     }
     originalConfig.value = { ...configForm.value }
 }
@@ -581,8 +566,7 @@ const hasUnsavedChanges = (): boolean => {
         configForm.value.max_curr !== originalConfig.value.max_curr ||
         configForm.value.auto_upload !== originalConfig.value.auto_upload ||
         configForm.value.auto_start !== originalConfig.value.auto_start ||
-        configForm.value.log_level !== originalConfig.value.log_level ||
-        configForm.value.language !== originalConfig.value.language
+        configForm.value.log_level !== originalConfig.value.log_level
     )
 }
 </script>
