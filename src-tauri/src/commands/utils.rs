@@ -1183,7 +1183,7 @@ mod season_tests {
         assert_eq!((season_id, section_id, episode.id), (1, 11, 999));
         let requests = requests.await.unwrap();
         assert_eq!(requests.len(), 3);
-        assert!(requests[0].starts_with("GET /x2/creative/web/season/aid?id=123 "));
+        assert!(requests[0].starts_with("GET /x2/creative/web/season/aid?id=123&t="));
         assert!(requests[1].starts_with("GET /x2/creative/web/season/section?id=10&"));
         assert!(requests[2].starts_with("GET /x2/creative/web/season/section?id=11&"));
     }
@@ -1207,7 +1207,7 @@ mod season_tests {
             );
             let requests = requests.await.unwrap();
             assert_eq!(requests.len(), 1);
-            assert!(requests[0].starts_with("GET /x2/creative/web/season/aid?id=123 "));
+            assert!(requests[0].starts_with("GET /x2/creative/web/season/aid?id=123&t="));
         }
     }
 
