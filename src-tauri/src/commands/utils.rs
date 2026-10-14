@@ -469,27 +469,66 @@ async fn load_seasons(api: &SeasonApi<'_>) -> Result<Vec<SeasonEntry>, AppError>
     Ok(seasons)
 }
 
+async fn video_season_id(bilibili: &BiliBili, member: &str, aid: u64) -> Result<u64, AppError> {
+    let response: Value = bilibili
+        .client
+        .get(format!("{member}/x2/creative/web/season/aid"))
+        .query(&[("id", aid), ("t", chrono::Utc::now().timestamp() as u64)])
+        .timeout(Duration::from_secs(10))
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await?;
+    match response["code"].as_i64() {
+        Some(0) => {}
+        Some(-404) => return Ok(0),
+        Some(code) => {
+            return Err(AppError::Biliup(format!(
+                "查询稿件合集失败：code {code}，{}",
+                response["message"].as_str().unwrap_or_default()
+            )));
+        }
+        None => return Err(AppError::Custom("稿件合集响应缺少有效的 code".to_string())),
+    }
+    match response.get("data") {
+        Some(Value::Null) => Ok(0),
+        Some(data) => data["id"]
+            .as_u64()
+            .ok_or_else(|| AppError::Custom("稿件合集响应缺少有效的合集 ID".to_string())),
+        None => Err(AppError::Custom("稿件合集响应缺少 data".to_string())),
+    }
+}
+
 async fn find_video_season(
     api: &SeasonApi<'_>,
     seasons: &[SeasonEntry],
     aid: u64,
+    season_id: u64,
 ) -> Result<Option<(u64, u64, Episode)>, AppError> {
-    for entry in seasons {
-        for section in &entry.sections.sections {
-            let detail = api
-                .season_section(section.id, Some("desc"))
-                .await
-                .map_err(|e| AppError::Biliup(e.to_string()))?;
-            if let Some(episode) = detail
-                .episodes
-                .into_iter()
-                .find(|episode| episode.aid == aid)
-            {
-                return Ok(Some((entry.season.id, section.id, episode)));
-            }
+    if season_id == 0 {
+        return Ok(None);
+    }
+    let entry = seasons
+        .iter()
+        .find(|entry| entry.season.id == season_id)
+        .ok_or_else(|| AppError::Custom("稿件所属合集不在合集列表中，请刷新后重试".to_string()))?;
+    for section in &entry.sections.sections {
+        let detail = api
+            .season_section(section.id, Some("desc"))
+            .await
+            .map_err(|e| AppError::Biliup(e.to_string()))?;
+        if let Some(episode) = detail
+            .episodes
+            .into_iter()
+            .find(|episode| episode.aid == aid)
+        {
+            return Ok(Some((entry.season.id, section.id, episode)));
         }
     }
-    Ok(None)
+    Err(AppError::Custom(
+        "未在所属合集的小节中找到稿件，请刷新后重试".to_string(),
+    ))
 }
 
 #[tauri::command]
@@ -656,9 +695,13 @@ pub async fn get_video_season(
 ) -> Result<Value, AppError> {
     let app_data = app.state::<AppData>();
     let bilibili = app_data.get_bilibili(uid).await?;
+    let season_id = video_season_id(&bilibili, "https://member.bilibili.com", aid).await?;
+    if season_id == 0 {
+        return Ok(json!({ "season_id": 0, "section_id": 0 }));
+    }
     let api = bilibili.season_api();
     let seasons = load_seasons(&api).await?;
-    let membership = find_video_season(&api, &seasons, aid).await?;
+    let membership = find_video_season(&api, &seasons, aid, season_id).await?;
     Ok(match membership {
         Some((season_id, section_id, _)) => {
             json!({ "season_id": season_id, "section_id": section_id })
@@ -677,6 +720,10 @@ pub async fn switch_season(
 ) -> Result<bool, AppError> {
     let app_data = app.state::<AppData>();
     let bilibili = app_data.get_bilibili(uid).await?;
+    let current_season_id = video_season_id(&bilibili, "https://member.bilibili.com", aid).await?;
+    if current_season_id == 0 && season_id == 0 {
+        return Ok(false);
+    }
     let api = bilibili.season_api();
     let seasons = load_seasons(&api).await?;
     let target_section = if season_id == 0 {
@@ -695,7 +742,7 @@ pub async fn switch_season(
             .ok_or_else(|| AppError::Custom("目标合集的小节不存在".to_string()))?;
         Some(section.id)
     };
-    let current = find_video_season(&api, &seasons, aid).await?;
+    let current = find_video_season(&api, &seasons, aid, current_season_id).await?;
     if current.as_ref().map(|(_, section_id, _)| *section_id) == target_section {
         return Ok(false);
     }
@@ -1112,6 +1159,7 @@ mod season_tests {
     #[tokio::test]
     async fn season_membership_preserves_non_default_section() {
         let (host, requests) = server(vec![
+            json!({"code": 0, "data": {"id": 1}}),
             json!({"code": 0, "data": {"section": {"id": 10}, "episodes": []}}),
             json!({"code": 0, "data": {"section": {"id": 11}, "episodes": [
                 {"id": 999, "aid": 123, "cid": 456}
@@ -1120,16 +1168,100 @@ mod season_tests {
         .await;
         let bili = bilibili();
         let api = SeasonApi::with_hosts(&bili, &host, &host);
+        let seasons: Vec<SeasonEntry> = serde_json::from_value(json!([
+            {"season": {"id": 2}, "sections": {"sections": [{"id": 20}]}},
+            {"season": {"id": 1}, "sections": {"sections": [{"id": 10}, {"id": 11}]}},
+            {"season": {"id": 3}, "sections": {"sections": [{"id": 30}]}}
+        ]))
+        .unwrap();
+        let membership_id = video_season_id(&bili, &host, 123).await.unwrap();
+        let (season_id, section_id, episode) =
+            find_video_season(&api, &seasons, 123, membership_id)
+                .await
+                .unwrap()
+                .unwrap();
+        assert_eq!((season_id, section_id, episode.id), (1, 11, 999));
+        let requests = requests.await.unwrap();
+        assert_eq!(requests.len(), 3);
+        assert!(requests[0].starts_with("GET /x2/creative/web/season/aid?id=123 "));
+        assert!(requests[1].starts_with("GET /x2/creative/web/season/section?id=10&"));
+        assert!(requests[2].starts_with("GET /x2/creative/web/season/section?id=11&"));
+    }
+
+    #[tokio::test]
+    async fn season_membership_without_collection_does_not_query_sections() {
+        for data in [json!({"id": 0}), Value::Null] {
+            let (host, requests) = server(vec![json!({"code": 0, "data": data})]).await;
+            let bili = bilibili();
+            let api = SeasonApi::with_hosts(&bili, "http://127.0.0.1:1", "http://127.0.0.1:1");
+            let seasons: Vec<SeasonEntry> = serde_json::from_value(json!([{
+                "season": {"id": 1}, "sections": {"sections": [{"id": 10}]}
+            }]))
+            .unwrap();
+            let season_id = video_season_id(&bili, &host, 123).await.unwrap();
+            assert!(
+                find_video_season(&api, &seasons, 123, season_id)
+                    .await
+                    .unwrap()
+                    .is_none()
+            );
+            let requests = requests.await.unwrap();
+            assert_eq!(requests.len(), 1);
+            assert!(requests[0].starts_with("GET /x2/creative/web/season/aid?id=123 "));
+        }
+    }
+
+    #[tokio::test]
+    async fn season_membership_not_found_is_unassigned_without_data() {
+        for response in [
+            json!({"code": -404, "message": "未加入合集"}),
+            json!({"code": -404, "data": null}),
+            json!({"code": -404, "data": {}}),
+        ] {
+            let (host, requests) = server(vec![response]).await;
+            assert_eq!(video_season_id(&bilibili(), &host, 123).await.unwrap(), 0);
+            assert_eq!(requests.await.unwrap().len(), 1);
+        }
+    }
+
+    #[tokio::test]
+    async fn season_membership_rejects_api_errors_and_malformed_responses() {
+        for response in [
+            json!({"code": -101, "message": "账号未登录", "data": null}),
+            json!({"data": {"id": 0}}),
+            json!({"code": 0}),
+            json!({"code": 0, "data": {}}),
+            json!({"code": 0, "data": {"id": "1"}}),
+            json!({"code": 0, "data": {"id": -1}}),
+        ] {
+            let (host, requests) = server(vec![response]).await;
+            assert!(video_season_id(&bilibili(), &host, 123).await.is_err());
+            assert_eq!(requests.await.unwrap().len(), 1);
+        }
+        assert!(
+            video_season_id(&bilibili(), "http://127.0.0.1:1", 123)
+                .await
+                .is_err()
+        );
+    }
+
+    #[tokio::test]
+    async fn season_membership_inconsistency_is_not_treated_as_unassigned() {
+        let bili = bilibili();
+        let api = SeasonApi::with_hosts(&bili, "http://127.0.0.1:1", "http://127.0.0.1:1");
+        assert!(find_video_season(&api, &[], 123, 1).await.is_err());
+
+        let (host, requests) = server(vec![
+            json!({"code": 0, "data": {"section": {"id": 10}, "episodes": []}}),
+        ])
+        .await;
+        let api = SeasonApi::with_hosts(&bili, &host, &host);
         let seasons: Vec<SeasonEntry> = serde_json::from_value(json!([{
-            "season": {"id": 1}, "sections": {"sections": [{"id": 10}, {"id": 11}]}
+            "season": {"id": 1}, "sections": {"sections": [{"id": 10}]}
         }]))
         .unwrap();
-        let (season_id, section_id, episode) = find_video_season(&api, &seasons, 123)
-            .await
-            .unwrap()
-            .unwrap();
-        assert_eq!((season_id, section_id, episode.id), (1, 11, 999));
-        assert_eq!(requests.await.unwrap().len(), 2);
+        assert!(find_video_season(&api, &seasons, 123, 1).await.is_err());
+        assert_eq!(requests.await.unwrap().len(), 1);
     }
 
     #[tokio::test]
