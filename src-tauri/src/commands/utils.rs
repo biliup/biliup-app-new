@@ -1035,6 +1035,47 @@ mod season_tests {
     }
 
     #[tokio::test]
+    async fn season_move_adds_to_target_section_after_removal() {
+        let (host, requests) = server(vec![
+            json!({"code": 0, "data": null}),
+            json!({"code": 0, "data": null}),
+        ])
+        .await;
+        let bili = bilibili();
+        let api = SeasonApi::with_hosts(&bili, &host, &host);
+        assert!(
+            change_season(&api, current(), Some(20), Some(episode()))
+                .await
+                .unwrap()
+        );
+        let requests = requests.await.unwrap();
+        assert!(requests[0].contains("id=999"));
+        let added = request_json(&requests[1]);
+        assert_eq!(added["sectionId"], 20);
+        assert_eq!(added["episodes"][0]["cid"], 789);
+        assert_eq!(added["episodes"][0]["title"], "更新稿件");
+    }
+
+    #[tokio::test]
+    async fn season_move_reports_both_add_and_restore_failures() {
+        let (host, requests) = server(vec![
+            json!({"code": 0, "data": null}),
+            json!({"code": -400, "message": "目标拒绝"}),
+            json!({"code": -500, "message": "原合集拒绝"}),
+        ])
+        .await;
+        let bili = bilibili();
+        let api = SeasonApi::with_hosts(&bili, &host, &host);
+        let error = change_season(&api, current(), Some(20), Some(episode()))
+            .await
+            .unwrap_err();
+        let message = error.to_string();
+        assert!(message.contains("目标拒绝"));
+        assert!(message.contains("原合集拒绝"));
+        assert_eq!(requests.await.unwrap().len(), 3);
+    }
+
+    #[tokio::test]
     async fn season_remove_failure_does_not_attempt_to_add() {
         let (host, requests) = server(vec![json!({"code": -400, "message": "移出失败"})]).await;
         let bili = bilibili();

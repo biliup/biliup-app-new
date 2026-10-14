@@ -29,28 +29,6 @@ pub struct MyClient {
     pub user: User,
 }
 
-impl MyClient {
-    pub fn get_csrf(&self) -> Result<String, AppError> {
-        let csrf = self
-            .bilibili
-            .login_info
-            .cookie_info
-            .get("cookies")
-            .and_then(|c| c.as_array())
-            .ok_or_else(|| {
-                AppError::Custom(crate::i18n::text("auth.invalid_login_data").to_string())
-            })?
-            .iter()
-            .filter_map(|c| c.as_object())
-            .find(|c| c["name"] == "bili_jct")
-            .ok_or_else(|| AppError::Custom(crate::i18n::text("auth.invalid_jct").to_string()))?
-            .get("value")
-            .and_then(|v| v.as_str())
-            .ok_or_else(|| AppError::Custom(crate::i18n::text("auth.invalid_csrf").to_string()))?;
-        Ok(csrf.to_string())
-    }
-}
-
 pub struct AppData {
     pub startup_error: Option<String>,
     pub config: Arc<Mutex<ConfigRoot>>,
