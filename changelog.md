@@ -1,5 +1,29 @@
 # 更新日志
 
+## [1.4.1](https://github.com/biliup/biliup-app-new/releases/tag/app-v1.4.1) - 2026-10-15
+
+**Full Changelog**: [app-v1.4.0...app-v1.4.1](https://github.com/biliup/biliup-app-new/compare/app-v1.4.0...app-v1.4.1)
+
+### 修复
+
+- 修复暂停、重试及重新开始上传后的速度显示异常。
+
+- 修复编辑稿件时无损音质、水印、字幕及精选评论等设置未正确恢复的问题。
+
+- 修复新稿模板的“提交后自动编辑”选项未继承用户设置的问题。
+
+- 编辑稿件时禁止修改分区、水印、杜比及无损音质设置，清空卡片时保留这些设置。
+
+- 完善上传安全验证的多语言提示。
+
+- 上游 biliup 依赖切换至官方仓库。
+
+### 新增
+
+- 新增繁体中文界面，支持切换并自动保存。（所有翻译均为 GPT 翻译）
+
+- 上传队列根据任务状态调整刷新间隔，空闲时降低刷新频率。
+
 ## [1.4.0](https://github.com/biliup/biliup-app-new/releases/tag/app-v1.4.0) - 2026-10-15
 
 **Full Changelog**: [app-v1.3.0...app-v1.4.0](https://github.com/biliup/biliup-app-new/compare/app-v1.3.0...app-v1.4.0)
