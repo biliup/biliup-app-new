@@ -14,6 +14,8 @@ function run({
     origin = 'https://member.bilibili.com',
     document = {},
     fetchRequest,
+    sdkLoader,
+    timeoutMs = 30000,
     setTimer = setTimeout,
     onReady = () => {}
 } = {}) {
@@ -23,6 +25,7 @@ function run({
             JSON.stringify({ riskParams: { v_voucher: 'voucher";evil()' } })
         )
         .replace('__EXPECTED_UID__', '42')
+        .replace('__RISK_TIMEOUT_MS__', JSON.stringify(timeoutMs))
         .replace(
             '__RISK_READY_CALLBACK__',
             JSON.stringify('https://member.bilibili.com/callback#ready')
@@ -34,7 +37,7 @@ function run({
                 onReady(value)
             }
         },
-        window: sdk ? { CaptchaLoader: { load: async () => sdk } } : {},
+        window: sdk || sdkLoader ? { CaptchaLoader: { load: sdkLoader ?? (async () => sdk) } } : {},
         document,
         fetch: fetchRequest ?? (async () => ({ json: async () => ({ code: 0, data: { mid } }) })),
         AbortController,
@@ -110,6 +113,34 @@ test('SDK 就绪时先通知后端，人工验证可以稍后完成', async () =
     assert.equal(ready, true)
     complete('manual-token')
     assert.equal(await verification, 'manual-token')
+})
+
+test('调试模式不为账号检查和 SDK 加载设置超时', async () => {
+    let completeAccount, completeSdk
+    let ready = false
+    const verification = run({
+        timeoutMs: null,
+        setTimer: () => assert.fail('调试模式不应启动超时计时器'),
+        fetchRequest: () =>
+            new Promise(resolve => {
+                completeAccount = resolve
+            }),
+        sdkLoader: () =>
+            new Promise(resolve => {
+                completeSdk = resolve
+            }),
+        onReady: () => {
+            ready = true
+        }
+    })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(ready, false)
+    completeAccount({ json: async () => ({ code: 0, data: { mid: 42 } }) })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(ready, false)
+    completeSdk(async () => 'debug-token')
+    assert.equal(await verification, 'debug-token')
+    assert.equal(ready, true)
 })
 
 test('账号或来源不一致时不能启动验证码', async () => {

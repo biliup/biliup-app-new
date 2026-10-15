@@ -99,7 +99,7 @@ async fn read_headers(stream: &mut (impl AsyncRead + Unpin)) -> Result<String> {
 }
 
 async fn relay(mut browser: TcpStream, upstream: &Url, tls: Option<TlsConnector>) -> Result<()> {
-    let connected = tokio::time::timeout(Duration::from_secs(30), async {
+    let connect = async {
         let request = read_headers(&mut browser).await?;
         let mut request_line = request
             .lines()
@@ -160,8 +160,12 @@ async fn relay(mut browser: TcpStream, upstream: &Url, tls: Option<TlsConnector>
             );
         }
         Ok::<_, anyhow::Error>(socket)
-    })
-    .await;
+    };
+    let connected = if cfg!(debug_assertions) {
+        Ok(connect.await)
+    } else {
+        tokio::time::timeout(Duration::from_secs(30), connect).await
+    };
     let mut socket = match connected {
         Ok(Ok(socket)) => socket,
         result => {

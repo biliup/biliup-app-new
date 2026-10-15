@@ -181,17 +181,16 @@ async fn recover_voucher(bili: &BiliBili, line: &Line, path: &PathBuf) -> Result
     let query = serialized["query"]
         .as_str()
         .ok_or_else(|| anyhow!("无法读取上传线路"))?;
-    let response = bili
+    let request = bili
         .client
         .get(format!("{MEMBER}/preupload?{query}"))
         .query(&json!({
             "name": file.file_name, "size": file.total_size, "r": "upos", "profile": "ugcupos/bup",
             "ssl": 0, "version": "2.14.0", "build": 2140000,
-        }))
-        .timeout(Duration::from_secs(30))
-        .send()
-        .await
-        .context("恢复验证挑战请求失败")?;
+        }));
+    #[cfg(not(debug_assertions))]
+    let request = request.timeout(Duration::from_secs(30));
+    let response = request.send().await.context("恢复验证挑战请求失败")?;
     let status = response.status().as_u16();
     let response: Value = response.json().await.context("恢复验证挑战响应不是 JSON")?;
     tracing::info!(status, code = ?response["code"].as_i64(), has_voucher = response["detail"]["v_voucher"].as_str().is_some_and(|v| !v.trim().is_empty()), "上传风控：恢复挑战响应");
@@ -273,12 +272,20 @@ fn verification_ready(url: &Url, session: &str) -> bool {
 async fn wait_for_verification(
     mut receiver: oneshot::Receiver<Result<String>>,
     initialize: impl std::future::Future<Output = Result<()>>,
-    timeout: Duration,
+    timeout: Option<Duration>,
 ) -> Result<String> {
+    let initialize = async {
+        match timeout {
+            Some(timeout) => tokio::time::timeout(timeout, initialize)
+                .await
+                .context("安全验证页面初始化超时，请检查网络或代理后重试")?,
+            None => initialize.await,
+        }
+    };
     tokio::select! {
         result = &mut receiver => result.map_err(|_| anyhow!(CANCELLED))?,
-        initialized = tokio::time::timeout(timeout, initialize) => {
-            initialized.context("安全验证页面初始化超时，请检查网络或代理后重试")??;
+        initialized = initialize => {
+            initialized?;
             // SDK 已就绪，之后只等待用户完成验证或关闭窗口。
             receiver.await.map_err(|_| anyhow!(CANCELLED))?
         }
@@ -314,6 +321,14 @@ async fn verify_window(
     let script = include_str!("upload_risk_verification.js")
         .replace("__RISK_OPTIONS__", &options)
         .replace("__EXPECTED_UID__", &uid.to_string())
+        .replace(
+            "__RISK_TIMEOUT_MS__",
+            if cfg!(debug_assertions) {
+                "null"
+            } else {
+                "30000"
+            },
+        )
         .replace("__RISK_READY_CALLBACK__", &ready_callback);
     let callback_json = serde_json::to_string(&callback)?;
     let script = format!(
@@ -448,7 +463,8 @@ async fn verify_window(
             .context("导航到安全验证页面失败")?;
         ready_receiver.await.context("安全验证初始化已中断")
     };
-    wait_for_verification(receiver, initialize, Duration::from_secs(60)).await
+    let timeout = (!cfg!(debug_assertions)).then_some(Duration::from_secs(60));
+    wait_for_verification(receiver, initialize, timeout).await
 }
 
 #[cfg(test)]
@@ -466,7 +482,7 @@ mod initialization_tests {
                 let _guard = guard;
                 std::future::pending::<Result<()>>().await
             },
-            Duration::from_millis(10),
+            Some(Duration::from_millis(10)),
         )
         .await;
         assert!(result.unwrap_err().to_string().contains("初始化超时"));
@@ -483,7 +499,7 @@ mod initialization_tests {
                 ready.send(()).unwrap();
                 Ok(())
             },
-            Duration::from_millis(10),
+            Some(Duration::from_millis(10)),
         ));
         initialized.await.unwrap();
         tokio::time::sleep(Duration::from_millis(30)).await;
@@ -496,8 +512,12 @@ mod initialization_tests {
     async fn closing_window_interrupts_initialization_immediately() {
         let (sender, receiver) = oneshot::channel();
         sender.send(Err(anyhow!(CANCELLED))).unwrap();
-        let result =
-            wait_for_verification(receiver, std::future::pending(), Duration::from_secs(60)).await;
+        let result = wait_for_verification(
+            receiver,
+            std::future::pending(),
+            Some(Duration::from_secs(60)),
+        )
+        .await;
         assert_eq!(result.unwrap_err().to_string(), CANCELLED);
     }
 
@@ -519,6 +539,20 @@ mod initialization_tests {
                 "session"
             ));
         }
+    }
+
+    #[tokio::test]
+    async fn debug_initialization_waits_until_cancelled() {
+        let (sender, receiver) = oneshot::channel();
+        let worker = tokio::spawn(wait_for_verification(
+            receiver,
+            std::future::pending(),
+            None,
+        ));
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert!(!worker.is_finished());
+        sender.send(Err(anyhow!(CANCELLED))).unwrap();
+        assert_eq!(worker.await.unwrap().unwrap_err().to_string(), CANCELLED);
     }
 }
 

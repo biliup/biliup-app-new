@@ -7,7 +7,8 @@
     const expectedUid = __EXPECTED_UID__
     console.info('[上传风控] 检查验证窗口登录账号')
     const controller = new AbortController()
-    const accountTimer = setTimeout(() => controller.abort(), 30000)
+    const timeout = __RISK_TIMEOUT_MS__
+    const accountTimer = timeout === null ? null : setTimeout(() => controller.abort(), timeout)
     let response, user
     try {
         response = await fetch('https://api.bilibili.com/x/web-interface/nav', {
@@ -16,7 +17,7 @@
         })
         user = await response.json()
     } finally {
-        clearTimeout(accountTimer)
+        if (accountTimer !== null) clearTimeout(accountTimer)
     }
     console.info('[上传风控] 账号检查', { status: response.status, code: user.code, matches: user.data?.mid === expectedUid })
     if (user.code !== 0) {
@@ -43,8 +44,8 @@
         }
         return window.CaptchaLoader.load()
     }
-    const useCaptcha = await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('验证码 SDK 加载超时')), 30000)
+    const useCaptcha = timeout === null ? await loadSdk() : await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('验证码 SDK 加载超时')), timeout)
         loadSdk().then(resolve, reject).finally(() => clearTimeout(timer))
     })
     // SDK 就绪后通知后端结束初始化计时，人工验证不设超时。
