@@ -25,11 +25,9 @@ use url::Url;
 const MEMBER: &str = "https://member.bilibili.com";
 const CALLBACK_PATH: &str = "/__biliup_upload_verification__";
 const CANCELLED: &str = "安全验证失败或已取消，后续上传已暂停；点击开始或重试重新验证";
-// Windows 下 wry 使用 Cookie::domain()，前导点会被移除；按实际主机写入避免子域丢失登录态。
-#[cfg(all(not(test), target_os = "windows"))]
+// 按实际主机写入，兼容 Windows 的域处理和 macOS 的 Cookie 读回精确匹配。
+#[cfg(not(test))]
 const COOKIE_DOMAINS: &[&str] = &["member.bilibili.com", "api.bilibili.com"];
-#[cfg(all(not(test), not(target_os = "windows")))]
-const COOKIE_DOMAINS: &[&str] = &[".bilibili.com"];
 
 #[derive(Clone)]
 pub(super) enum VerificationState {
