@@ -22,6 +22,9 @@ use tauri::{
 use tokio::sync::{Mutex as AsyncMutex, oneshot, watch};
 use url::Url;
 
+#[cfg(not(test))]
+use super::upload_risk_proxy::VerificationProxy;
+
 const MEMBER: &str = "https://member.bilibili.com";
 const CALLBACK_PATH: &str = "/__biliup_upload_verification__";
 const CANCELLED: &str = "安全验证失败或已取消，后续上传已暂停；点击开始或重试重新验证";
@@ -335,9 +338,13 @@ async fn verify_window(
             }
         }
     });
-    if let Some(proxy) = proxy {
-        builder = builder.proxy_url(Url::parse(proxy)?);
-    }
+    let _proxy = if let Some(proxy) = proxy {
+        let proxy = VerificationProxy::start(proxy).await?;
+        builder = builder.proxy_url(proxy.url.clone());
+        Some(proxy)
+    } else {
+        None
+    };
     let window = VerificationWindow(builder.build().context("创建安全验证窗口失败")?);
     tracing::info!(uid, "上传风控：验证窗口已创建");
     #[cfg(debug_assertions)]

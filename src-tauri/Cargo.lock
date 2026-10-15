@@ -509,6 +509,7 @@ dependencies = [
  "indexmap 2.11.3",
  "qrcode",
  "reqwest 0.13.5",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "serde_yaml",
@@ -522,6 +523,7 @@ dependencies = [
  "tauri-plugin-window-state",
  "thiserror 2.0.16",
  "tokio",
+ "tokio-rustls",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -4782,6 +4784,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0ebcbd2f03de0fc1122ad9bb24b127a5a6cd51d72604a3f3c50ac459762b6cc"
 dependencies = [
  "aws-lc-rs",
+ "log",
  "once_cell",
  "ring",
  "rustls-pki-types",
