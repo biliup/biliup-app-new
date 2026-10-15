@@ -233,6 +233,30 @@ impl Drop for VerificationWindow {
     }
 }
 
+#[cfg(all(target_os = "windows", not(test)))]
+struct VerificationDataDirectory(PathBuf);
+
+#[cfg(all(target_os = "windows", not(test)))]
+impl Drop for VerificationDataDirectory {
+    fn drop(&mut self) {
+        let path = self.0.clone();
+        tokio::spawn(async move {
+            // close 仅投递关闭请求，WebView2 退出前可能仍占用目录中的文件。
+            for attempt in 0..30 {
+                match tokio::fs::remove_dir_all(&path).await {
+                    Ok(()) => return,
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+                    Err(error) if attempt == 29 => {
+                        tracing::warn!(error = %error, "清理安全验证临时目录失败");
+                    }
+                    Err(_) => {}
+                }
+                tokio::time::sleep(Duration::from_secs(1)).await;
+            }
+        });
+    }
+}
+
 fn finish(sender: &Mutex<Option<oneshot::Sender<Result<String>>>>, result: Result<String>) {
     if let Some(sender) = sender.lock().unwrap().take() {
         let _ = sender.send(result);
@@ -319,6 +343,14 @@ async fn verify_window(
         "{uid}-{}",
         chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
     );
+    // 每次本地代理的端口不同，不能复用主窗口或上一次验证的 WebView2 环境。
+    // 在窗口 guard 之前创建，保证先关闭窗口再清理目录；创建窗口失败也会清理。
+    #[cfg(target_os = "windows")]
+    let data_directory = proxy.map(|_| {
+        VerificationDataDirectory(
+            std::env::temp_dir().join(format!("biliup-upload-risk-{session}")),
+        )
+    });
     let callback = format!("{MEMBER}{CALLBACK_PATH}#{session}");
     let ready_callback = serde_json::to_string(&format!("{callback}&ready=1"))?;
     let options = json!({"riskParams": {"v_voucher": voucher}}).to_string();
@@ -386,6 +418,10 @@ async fn verify_window(
             }
         }
     });
+    #[cfg(target_os = "windows")]
+    if let Some(directory) = &data_directory {
+        builder = builder.data_directory(directory.0.clone());
+    }
     let _proxy = if let Some(proxy) = proxy {
         let proxy = VerificationProxy::start(proxy).await?;
         builder = builder.proxy_url(proxy.url.clone());
