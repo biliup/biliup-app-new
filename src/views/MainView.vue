@@ -282,6 +282,9 @@
                                         <el-form-item :label="t('视频分区')">
                                             <el-popover
                                                 v-model:visible="categoryPopoverVisible"
+                                                :disabled="
+                                                    templateLoading || Boolean(currentForm.aid)
+                                                "
                                                 placement="bottom-start"
                                                 :width="600"
                                                 trigger="click"
@@ -658,7 +661,9 @@
                                                     v-model="currentForm.watermark"
                                                     :true-value="1"
                                                     :false-value="0"
-                                                    :disabled="templateLoading"
+                                                    :disabled="
+                                                        templateLoading || Boolean(currentForm.aid)
+                                                    "
                                                 >
                                                     {{ t('开启 (本功能只对本次上传的视频生效)') }}
                                                 </el-checkbox>
@@ -762,7 +767,9 @@
                                                     v-model="currentForm.dolby"
                                                     :true-value="1"
                                                     :false-value="0"
-                                                    :disabled="templateLoading"
+                                                    :disabled="
+                                                        templateLoading || Boolean(currentForm.aid)
+                                                    "
                                                 >
                                                     {{ t('杜比音效') }}
                                                 </el-checkbox>
@@ -770,7 +777,9 @@
                                                     v-model="currentForm.lossless_music"
                                                     :true-value="1"
                                                     :false-value="0"
-                                                    :disabled="templateLoading"
+                                                    :disabled="
+                                                        templateLoading || Boolean(currentForm.aid)
+                                                    "
                                                 >
                                                     {{ t('无损音乐') }}
                                                 </el-checkbox>
@@ -2894,13 +2903,15 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
             case 'basic':
                 currentForm.value.title = ''
                 currentForm.value.cover = ''
-                currentForm.value.tid = 0
-                currentForm.value.tid_v2 = 0
+                // 编辑稿件不能修改分区，清空卡片时也保留原分区及其显示状态。
+                if (!currentForm.value.aid) {
+                    currentForm.value.tid = 0
+                    currentForm.value.tid_v2 = 0
+                    selectedCategory.value = null
+                    selectedSubCategory.value = null
+                }
                 currentForm.value.copyright = 1
                 currentForm.value.source = ''
-                // 同步清空分区选择状态
-                selectedCategory.value = null
-                selectedSubCategory.value = null
                 // 清空封面显示
                 coverDisplayUrl.value = ''
                 break
@@ -2921,12 +2932,15 @@ const clearCardContent = async (cardType: 'basic' | 'tags' | 'description' | 'ad
                 break
 
             case 'advanced':
-                currentForm.value.watermark =
-                    userConfigStore?.configRoot?.config[selectedUser.value.uid]?.watermark || 0
+                // 编辑稿件保留远端的水印、杜比和无损音质设置，避免通过清空绕过禁用控件。
+                if (!currentForm.value.aid) {
+                    currentForm.value.watermark =
+                        userConfigStore?.configRoot?.config[selectedUser.value.uid]?.watermark || 0
+                    currentForm.value.dolby = 0
+                    currentForm.value.lossless_music = 0
+                }
                 currentForm.value.dtime = undefined
                 currentForm.value.interactive = 0
-                currentForm.value.dolby = 0
-                currentForm.value.lossless_music = 0
                 currentForm.value.no_reprint = 0
                 currentForm.value.open_elec = 0
                 currentForm.value.no_disturbance = 0
@@ -3297,7 +3311,6 @@ const getNewTemplateFromAv = async (userUid: number, aid: number) => {
             }
         }
 
-        newTemplate.watermark = currentForm.value?.watermark
         return newTemplate
     } catch (error) {
         console.error(t('获取新模板失败: '), error)
@@ -3549,6 +3562,7 @@ const saveTemplate = async () => {
 
 // 分区选择相关
 const onCategoryChange = (categoryId: number) => {
+    if (templateLoading.value || currentForm.value?.aid) return
     const category = typeList.value.find(item => item.id === categoryId)
     selectedCategory.value = category
     selectedSubCategory.value = null
@@ -3562,6 +3576,7 @@ const onCategoryChange = (categoryId: number) => {
 }
 
 const onSubCategoryChange = (subCategoryId: number) => {
+    if (templateLoading.value || currentForm.value?.aid) return
     if (selectedCategory.value && selectedCategory.value.children) {
         const subCategory = selectedCategory.value.children.find(
             (item: any) => item.id === subCategoryId
@@ -4751,6 +4766,18 @@ const checkUpdate = async () => {
     background: #fff;
     border-color: #409eff;
     color: #409eff;
+}
+
+.category-trigger.is-disabled,
+.category-trigger.is-disabled:hover {
+    background: var(--el-fill-color-light);
+    border-color: var(--el-border-color-light);
+    color: var(--el-text-color-placeholder);
+    cursor: not-allowed;
+}
+
+.category-trigger.is-disabled .placeholder {
+    color: inherit;
 }
 
 .category-trigger .placeholder {

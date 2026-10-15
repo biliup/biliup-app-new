@@ -91,6 +91,54 @@ fn normalize_desc_v2_tokens(tokens: Vec<Credit>) -> Vec<Credit> {
     normalized
 }
 
+/// 补齐创作者 API 缺少的投稿设置；缺失、null 或类型异常时保留原值，0/false 正常覆盖。
+fn apply_web_video_settings(template: &mut TemplateConfig, data: &Value) {
+    let archive = data.get("archive").unwrap_or(data);
+
+    // 新版分区由 Web 接口的 human_type2.id 提供，不覆盖旧版分区 tid。
+    if let Some(id) = archive["human_type2"]["id"]
+        .as_u64()
+        .and_then(|id| u32::try_from(id).ok())
+    {
+        template.tid_v2 = id;
+    }
+
+    // 杜比和无损音质优先使用 archive 顶层开关，缺失时兼容 attrs 中的同名字段。
+    let audio_flag = |key: &str| {
+        archive
+            .get(key)
+            .and_then(Value::as_u64)
+            .or_else(|| archive["attrs"][key].as_u64())
+            .filter(|value| *value <= 1)
+            .map(|value| value as u8)
+    };
+    if let Some(dolby) = audio_flag("is_dolby") {
+        template.dolby = dolby;
+    }
+    if let Some(lossless_music) = audio_flag("lossless_music") {
+        template.lossless_music = lossless_music;
+    }
+
+    // data.subtitle.allow 对应字幕开关，同时同步内部 subtitle，lan 保留接口语言值。
+    if let Some(allow) = data["subtitle"]["allow"].as_bool() {
+        template.open_subtitle = allow;
+        template.subtitle.open = u8::from(allow);
+    }
+    if let Some(lan) = data["subtitle"]["lan"].as_str() {
+        template.subtitle.lan = lan.to_string();
+    }
+    // 水印状态和精选评论均位于 data 层，不在 archive 内；false 必须清除原来的开启值。
+    if let Some(state) = data["watermark"]["state"]
+        .as_u64()
+        .filter(|state| *state <= 1)
+    {
+        template.watermark = state as u8;
+    }
+    if let Some(selection) = data["reply"]["up_selection"].as_bool() {
+        template.up_selection_reply = u8::from(selection);
+    }
+}
+
 #[tauri::command]
 pub async fn get_avatar_cache_dir() -> Result<String, AppError> {
     Ok(get_avatar_cache_path()
@@ -574,16 +622,12 @@ pub async fn get_video_detail(
         Ok(response) => match response.json::<Value>().await {
             Ok(res) => {
                 // debug!("获取稿件 web 接口数据成功: {}", res);
-                if let Some(data) = res.get("data") {
+                if let Some(data) = res.get("data").filter(|_| res["code"].as_i64() == Some(0)) {
                     let archive_data = data.get("archive").unwrap_or(data);
+                    apply_web_video_settings(&mut template_config, data);
 
                     if let Some(desc) = archive_data["desc"].as_str().filter(|s| !s.is_empty()) {
                         template_config.desc = desc.to_string();
-                    }
-                    if let Some(human_type2) = archive_data.get("human_type2") {
-                        if let Some(id) = human_type2.get("id").and_then(|v| v.as_u64()) {
-                            template_config.tid_v2 = id as u32;
-                        }
                     }
                     template_config.state = archive_data["state"].as_i64();
                     template_config.state_desc = archive_data["state_desc"]
@@ -960,6 +1004,88 @@ pub async fn console_log(
         _ => info!("Webconsole: {}", message),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod video_settings_tests {
+    use super::*;
+
+    #[test]
+    fn web_settings_override_creator_values_including_false_and_zero() {
+        let mut template: TemplateConfig = serde_json::from_value(json!({
+            "tid": 29, "tid_v2": 9, "dolby": 1, "lossless_music": 0,
+            "open_subtitle": true, "subtitle": {"open": 1, "lan": "en"},
+            "watermark": 0, "up_selection_reply": 1, "title": "原始标题"
+        }))
+        .unwrap();
+        // 使用附件的字段层级和值，验证异名参数及 data 层的设置能补齐第一步结果。
+        apply_web_video_settings(
+            &mut template,
+            &json!({
+                "archive": {
+                    "human_type2": {"id": 1003, "name": "音乐"},
+                    "is_dolby": 0, "lossless_music": 1,
+                    "attrs": {"is_dolby": 1, "lossless_music": 0},
+                    "title": "不在本次覆盖范围"
+                },
+                "subtitle": {"allow": false, "lan": ""},
+                "watermark": {"state": 1},
+                "reply": {"up_selection": false}
+            }),
+        );
+        assert_eq!(template.tid, 29);
+        assert_eq!(template.tid_v2, 1003);
+        assert_eq!(template.dolby, 0);
+        assert_eq!(template.lossless_music, 1);
+        assert!(!template.open_subtitle);
+        assert_eq!(template.subtitle.open, 0);
+        assert_eq!(template.subtitle.lan, "");
+        assert_eq!(template.watermark, 1);
+        assert_eq!(template.up_selection_reply, 0);
+        assert_eq!(template.title, "原始标题");
+    }
+
+    #[test]
+    fn web_settings_support_attrs_and_enabled_boolean_settings() {
+        let mut template: TemplateConfig = serde_json::from_value(json!({"watermark": 1})).unwrap();
+        apply_web_video_settings(
+            &mut template,
+            &json!({
+                "archive": {"attrs": {"is_dolby": 1, "lossless_music": 1}},
+                "subtitle": {"allow": true, "lan": "zh-CN"},
+                "watermark": {"state": 0},
+                "reply": {"up_selection": true}
+            }),
+        );
+        assert_eq!(template.dolby, 1);
+        assert_eq!(template.lossless_music, 1);
+        assert!(template.open_subtitle);
+        assert_eq!(template.subtitle.open, 1);
+        assert_eq!(template.subtitle.lan, "zh-CN");
+        assert_eq!(template.watermark, 0);
+        assert_eq!(template.up_selection_reply, 1);
+    }
+
+    #[test]
+    fn missing_or_invalid_web_settings_preserve_creator_values() {
+        let mut template: TemplateConfig = serde_json::from_value(json!({
+            "tid_v2": 1003, "dolby": 1, "lossless_music": 1,
+            "open_subtitle": true, "subtitle": {"open": 1, "lan": "zh-CN"},
+            "watermark": 1, "up_selection_reply": 1
+        }))
+        .unwrap();
+        let original = serde_json::to_value(&template).unwrap();
+        apply_web_video_settings(&mut template, &json!({}));
+        apply_web_video_settings(
+            &mut template,
+            &json!({
+                "archive": {"human_type2": {"id": 4294967296_u64}, "is_dolby": -1, "lossless_music": 256},
+                "subtitle": {"allow": null, "lan": false},
+                "watermark": {"state": 2}, "reply": {"up_selection": 1}
+            }),
+        );
+        assert_eq!(serde_json::to_value(&template).unwrap(), original);
+    }
 }
 
 #[cfg(test)]
