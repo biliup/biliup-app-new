@@ -32,7 +32,7 @@ impl VerificationProxy {
             let version = std::process::Command::new("/usr/bin/sw_vers")
                 .arg("-productVersion")
                 .output()
-                .context("无法检查 macOS 验证代理支持情况")?;
+                .context(crate::i18n::text("risk.proxy.macos_check_failed"))?;
             ensure!(
                 version.status.success()
                     && String::from_utf8_lossy(&version.stdout)
@@ -40,15 +40,19 @@ impl VerificationProxy {
                         .next()
                         .and_then(|major| major.parse::<u32>().ok())
                         .is_some_and(|major| major >= 14),
-                "使用代理进行安全验证需要 macOS 14 或更高版本"
+                crate::i18n::text("risk.proxy.macos_unsupported")
             );
         }
-        let upstream = Url::parse(proxy).map_err(|_| anyhow!("验证代理地址无效"))?;
+        let upstream =
+            Url::parse(proxy).map_err(|_| anyhow!(crate::i18n::text("risk.proxy.invalid_url")))?;
         ensure!(
             matches!(upstream.scheme(), "http" | "https" | "socks5"),
-            "验证代理仅支持 HTTP、HTTPS 和 SOCKS5"
+            crate::i18n::text("risk.proxy.unsupported_scheme")
         );
-        ensure!(upstream.host_str().is_some(), "验证代理缺少主机地址");
+        ensure!(
+            upstream.host_str().is_some(),
+            crate::i18n::text("risk.proxy.host_missing")
+        );
         let tls = if upstream.scheme() == "https" {
             Some(TlsConnector::from(Arc::new(
                 rustls::ClientConfig::builder_with_provider(Arc::new(
@@ -92,7 +96,10 @@ impl<T: AsyncRead + AsyncWrite + Unpin + Send> ProxyStream for T {}
 async fn read_headers(stream: &mut (impl AsyncRead + Unpin)) -> Result<String> {
     let mut header = Vec::new();
     while !header.ends_with(b"\r\n\r\n") {
-        ensure!(header.len() < 16384, "验证代理响应头过长");
+        ensure!(
+            header.len() < 16384,
+            crate::i18n::text("risk.proxy.headers_too_long")
+        );
         header.push(stream.read_u8().await?);
     }
     Ok(String::from_utf8(header)?)
@@ -108,9 +115,11 @@ async fn relay(mut browser: TcpStream, upstream: &Url, tls: Option<TlsConnector>
             .split_whitespace();
         ensure!(
             request_line.next() == Some("CONNECT"),
-            "验证代理只接受 HTTPS 隧道"
+            crate::i18n::text("risk.proxy.https_only")
         );
-        let target = request_line.next().ok_or_else(|| anyhow!("缺少隧道目标"))?;
+        let target = request_line
+            .next()
+            .ok_or_else(|| anyhow!(crate::i18n::text("risk.proxy.target_missing")))?;
         let target_url = Url::parse(&format!("https://{target}"))?;
         ensure!(
             target_url.host_str().is_some()
@@ -119,13 +128,13 @@ async fn relay(mut browser: TcpStream, upstream: &Url, tls: Option<TlsConnector>
                 && target_url.path() == "/"
                 && target_url.query().is_none()
                 && target_url.fragment().is_none(),
-            "验证代理隧道目标无效"
+            crate::i18n::text("risk.proxy.target_invalid")
         );
         let host = upstream.host().unwrap().to_string();
         let port = upstream.port_or_known_default().unwrap_or(1080);
         let socket = TcpStream::connect((host.as_str(), port))
             .await
-            .context("连接上游代理失败")?;
+            .context(crate::i18n::text("risk.proxy.connect_failed"))?;
         let mut socket: Box<dyn ProxyStream> = if let Some(tls) = tls {
             let server_name = match upstream.host().unwrap() {
                 url::Host::Domain(host) => {
@@ -137,7 +146,7 @@ async fn relay(mut browser: TcpStream, upstream: &Url, tls: Option<TlsConnector>
             Box::new(
                 tls.connect(server_name, socket)
                     .await
-                    .context("上游 HTTPS 代理 TLS 握手失败")?,
+                    .context(crate::i18n::text("risk.proxy.tls_failed"))?,
             )
         } else {
             Box::new(socket)
@@ -160,7 +169,7 @@ async fn relay(mut browser: TcpStream, upstream: &Url, tls: Option<TlsConnector>
                     .next()
                     .and_then(|line| line.split_whitespace().nth(1))
                     == Some("200"),
-                "上游代理拒绝 CONNECT，请检查代理认证和连接配置"
+                crate::i18n::text("risk.proxy.connect_rejected")
             );
         }
         Ok::<_, anyhow::Error>(socket)
@@ -178,7 +187,7 @@ async fn relay(mut browser: TcpStream, upstream: &Url, tls: Option<TlsConnector>
                 .await;
             return match result {
                 Ok(Err(error)) => Err(error),
-                _ => Err(anyhow!("连接验证代理超时")),
+                _ => Err(anyhow!(crate::i18n::text("risk.proxy.timeout"))),
             };
         }
     };
@@ -195,7 +204,7 @@ fn credentials(proxy: &Url) -> Result<(String, String)> {
         let encoded = format!("v={}", value.replace('+', "%2B").replace('&', "%26"));
         Ok(url::form_urlencoded::parse(encoded.as_bytes())
             .next()
-            .ok_or_else(|| anyhow!("代理认证信息无效"))?
+            .ok_or_else(|| anyhow!(crate::i18n::text("risk.proxy.credentials_invalid")))?
             .1
             .into_owned())
     }
@@ -211,12 +220,15 @@ async fn socks_connect(socket: &mut Box<dyn ProxyStream>, proxy: &Url, target: &
     socket.write_all(&[5, 1, method]).await?;
     let mut reply = [0; 2];
     socket.read_exact(&mut reply).await?;
-    ensure!(reply == [5, method], "SOCKS5 代理不支持配置的认证方式");
+    ensure!(
+        reply == [5, method],
+        crate::i18n::text("risk.proxy.socks_method_unsupported")
+    );
     if authenticated {
         let (username, password) = credentials(proxy)?;
         ensure!(
             username.len() <= 255 && password.len() <= 255,
-            "SOCKS5 认证信息过长"
+            crate::i18n::text("risk.proxy.socks_credentials_too_long")
         );
         let mut auth = vec![1, username.len() as u8];
         auth.extend_from_slice(username.as_bytes());
@@ -224,12 +236,18 @@ async fn socks_connect(socket: &mut Box<dyn ProxyStream>, proxy: &Url, target: &
         auth.extend_from_slice(password.as_bytes());
         socket.write_all(&auth).await?;
         socket.read_exact(&mut reply).await?;
-        ensure!(reply == [1, 0], "SOCKS5 代理认证失败");
+        ensure!(
+            reply == [1, 0],
+            crate::i18n::text("risk.proxy.socks_auth_failed")
+        );
     }
     let mut connect = vec![5, 1, 0];
     match target.host().unwrap() {
         url::Host::Domain(host) => {
-            ensure!(host.len() <= 255, "SOCKS5 目标域名过长");
+            ensure!(
+                host.len() <= 255,
+                crate::i18n::text("risk.proxy.socks_host_too_long")
+            );
             connect.extend_from_slice(&[3, host.len() as u8]);
             connect.extend_from_slice(host.as_bytes());
         }
@@ -246,12 +264,19 @@ async fn socks_connect(socket: &mut Box<dyn ProxyStream>, proxy: &Url, target: &
     socket.write_all(&connect).await?;
     let mut response = [0; 4];
     socket.read_exact(&mut response).await?;
-    ensure!(response[0..3] == [5, 0, 0], "SOCKS5 代理连接目标失败");
+    ensure!(
+        response[0..3] == [5, 0, 0],
+        crate::i18n::text("risk.proxy.socks_connect_failed")
+    );
     let length = match response[3] {
         1 => 4,
         3 => socket.read_u8().await? as usize,
         4 => 16,
-        _ => return Err(anyhow!("SOCKS5 代理响应地址无效")),
+        _ => {
+            return Err(anyhow!(crate::i18n::text(
+                "risk.proxy.socks_address_invalid"
+            )));
+        }
     };
     socket.read_exact(&mut vec![0; length + 2]).await?;
     Ok(())

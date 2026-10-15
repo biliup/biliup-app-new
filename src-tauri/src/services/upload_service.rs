@@ -485,7 +485,7 @@ async fn upload_impl(
                 .pre_upload(client, VideoFile::new(&filepath)?)
                 .await;
             if matches!(&result, Err(biliup::error::Kind::RateLimit { .. })) {
-                risk.hold(uid, "安全验证后仍被限流，后续上传已暂停；请稍后手动重试");
+                risk.hold(uid, crate::i18n::text("risk.still_limited"));
             }
             result?
         }
@@ -605,7 +605,7 @@ async fn resume_after_verification(task: &Arc<Mutex<UploadTask>>) -> Result<()> 
                 return Ok(());
             }
             if task.is_cancelled() {
-                return Err(anyhow::anyhow!("上传任务已取消"));
+                return Err(anyhow::anyhow!(crate::i18n::text("risk.task_cancelled")));
             }
         }
         tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;

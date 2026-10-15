@@ -17,9 +17,13 @@ function run({
     sdkLoader,
     timeoutMs = 30000,
     setTimer = setTimeout,
+    language = 'zh-CN',
     onReady = () => {}
 } = {}) {
+    const catalog = JSON.parse(readFileSync(new URL('../src-tauri/src/i18n/' + language + '.json', import.meta.url), 'utf8'))
+    const messages = Object.fromEntries(Object.entries(catalog).filter(([key]) => key.startsWith('risk.script.')).map(([key, value]) => [key.slice('risk.script.'.length), value]))
     const source = template
+        .replace('__RISK_MESSAGES__', JSON.stringify(messages))
         .replace(
             '__RISK_OPTIONS__',
             JSON.stringify({ riskParams: { v_voucher: 'voucher";evil()' } })
@@ -183,3 +187,11 @@ test('SDK 加载失败明确报错', async () => {
         /加载失败/
     )
 })
+
+for (const language of ['en-US', 'ja-JP']) {
+    test('风控脚本使用所选语言并保留账号检查 (' + language + ')', async () => {
+        const catalog = JSON.parse(readFileSync(new URL('../src-tauri/src/i18n/' + language + '.json', import.meta.url), 'utf8'))
+        await assert.rejects(run({ language, mid: 99 }), error => error.message === catalog['risk.script.account_mismatch'])
+        await assert.rejects(run({ language, sdk: async () => '' }), error => error.message === catalog['risk.script.token_invalid'])
+    })
+}

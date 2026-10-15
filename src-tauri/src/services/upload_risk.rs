@@ -27,7 +27,9 @@ use super::upload_risk_proxy::VerificationProxy;
 
 const MEMBER: &str = "https://member.bilibili.com";
 const CALLBACK_PATH: &str = "/__biliup_upload_verification__";
-const CANCELLED: &str = "安全验证失败或已取消，后续上传已暂停；点击开始或重试重新验证";
+fn cancelled() -> &'static str {
+    crate::i18n::text("risk.cancelled")
+}
 // 按实际主机写入，兼容 Windows 的域处理和 macOS 的 Cookie 读回精确匹配。
 #[cfg(not(test))]
 const COOKIE_DOMAINS: &[&str] = &["member.bilibili.com", "api.bilibili.com"];
@@ -110,7 +112,7 @@ impl UploadRiskService {
                 VerificationState::Verified(token, _) => return Ok(token),
                 VerificationState::Failed(message) => return Err(anyhow!(message)),
                 VerificationState::Pending => {
-                    receiver.changed().await.map_err(|_| anyhow!(CANCELLED))?
+                    receiver.changed().await.map_err(|_| anyhow!(cancelled()))?
                 }
             }
         }
@@ -146,13 +148,13 @@ impl UploadRiskService {
                 let result = tokio::select! {
                     _ = sender.closed() => {
                         tracing::warn!(uid, "上传风控：所有等待任务已取消，结束验证");
-                        Err(anyhow!(CANCELLED))
+                        Err(anyhow!(cancelled()))
                     },
                     result = async {
                         let _window_lock = service.window_lock.lock().await;
                         tracing::info!(uid, "上传风控：开始恢复验证挑战");
                         let voucher = recover_voucher(&bili, &line, &path).await?;
-                        let app = service.app.get().ok_or_else(|| anyhow!("应用窗口尚未初始化"))?;
+                        let app = service.app.get().ok_or_else(|| anyhow!(crate::i18n::text("risk.app_unavailable")))?;
                         verify_window(app, uid, &bili, &voucher, proxy.as_deref()).await
                     } => result,
                 };
@@ -184,7 +186,7 @@ async fn recover_voucher(bili: &BiliBili, line: &Line, path: &PathBuf) -> Result
     let serialized = serde_json::to_value(line)?;
     let query = serialized["query"]
         .as_str()
-        .ok_or_else(|| anyhow!("无法读取上传线路"))?;
+        .ok_or_else(|| anyhow!(crate::i18n::text("risk.route_unavailable")))?;
     let request = bili
         .client
         .get(format!("{MEMBER}/preupload?{query}"))
@@ -194,27 +196,36 @@ async fn recover_voucher(bili: &BiliBili, line: &Line, path: &PathBuf) -> Result
         }));
     #[cfg(not(debug_assertions))]
     let request = request.timeout(Duration::from_secs(30));
-    let response = request.send().await.context("恢复验证挑战请求失败")?;
+    let response = request
+        .send()
+        .await
+        .context(crate::i18n::text("risk.challenge_request_failed"))?;
     let status = response.status().as_u16();
-    let response: Value = response.json().await.context("恢复验证挑战响应不是 JSON")?;
+    let response: Value = response
+        .json()
+        .await
+        .context(crate::i18n::text("risk.challenge_invalid_json"))?;
     tracing::info!(status, code = ?response["code"].as_i64(), has_voucher = response["detail"]["v_voucher"].as_str().is_some_and(|v| !v.trim().is_empty()), "上传风控：恢复挑战响应");
     ensure!(
         response["code"].as_i64() == Some(601),
-        "未取得安全验证挑战，请稍后手动重试"
+        crate::i18n::text("risk.challenge_unavailable")
     );
     response["detail"]["v_voucher"]
         .as_str()
         .filter(|value| !value.trim().is_empty())
         .map(str::to_owned)
-        .ok_or_else(|| anyhow!("服务器未提供验证码挑战，请稍后手动重试"))
+        .ok_or_else(|| anyhow!(crate::i18n::text("risk.challenge_missing")))
 }
 
 pub fn verified_line(line: &Line, token: &str) -> Result<Line> {
-    ensure!(!token.trim().is_empty(), "安全验证结果为空");
+    ensure!(
+        !token.trim().is_empty(),
+        crate::i18n::text("risk.token_empty")
+    );
     let mut serialized = serde_json::to_value(line)?;
     let query = serialized["query"]
         .as_str()
-        .ok_or_else(|| anyhow!("无法读取上传线路"))?;
+        .ok_or_else(|| anyhow!(crate::i18n::text("risk.route_unavailable")))?;
     let mut params = url::form_urlencoded::Serializer::new(String::new());
     params.extend_pairs(
         url::form_urlencoded::parse(query.as_bytes()).filter(|(key, _)| key != "gaia_vtoken"),
@@ -279,12 +290,12 @@ fn verification_result(url: &Url, session: &str) -> Option<Result<String>> {
             .ok_or_else(|| {
                 let stage = params.get("stage").map(String::as_str).unwrap_or("");
                 let reason = match stage {
-                    "origin" => "验证页面来源检查失败",
-                    "account" => "验证窗口登录账号检查失败",
-                    "sdk_load" => "官方验证码 SDK 加载失败",
-                    "sdk_verify" => "官方验证码 SDK 验证失败或取消",
-                    "sdk_result" => "官方验证码 SDK 返回无效凭据",
-                    _ => CANCELLED,
+                    "origin" => crate::i18n::text("risk.origin_failed"),
+                    "account" => crate::i18n::text("risk.account_failed"),
+                    "sdk_load" => crate::i18n::text("risk.sdk_load_failed"),
+                    "sdk_verify" => crate::i18n::text("risk.sdk_verify_failed"),
+                    "sdk_result" => crate::i18n::text("risk.sdk_result_invalid"),
+                    _ => cancelled(),
                 };
                 anyhow!(reason)
             }),
@@ -306,16 +317,16 @@ async fn wait_for_verification(
         match timeout {
             Some(timeout) => tokio::time::timeout(timeout, initialize)
                 .await
-                .context("安全验证页面初始化超时，请检查网络或代理后重试")?,
+                .context(crate::i18n::text("risk.initialization_timeout"))?,
             None => initialize.await,
         }
     };
     tokio::select! {
-        result = &mut receiver => result.map_err(|_| anyhow!(CANCELLED))?,
+        result = &mut receiver => result.map_err(|_| anyhow!(cancelled()))?,
         initialized = initialize => {
             initialized?;
             // SDK 已就绪，之后只等待用户完成验证或关闭窗口。
-            receiver.await.map_err(|_| anyhow!(CANCELLED))?
+            receiver.await.map_err(|_| anyhow!(cancelled()))?
         }
     }
 }
@@ -354,7 +365,17 @@ async fn verify_window(
     let callback = format!("{MEMBER}{CALLBACK_PATH}#{session}");
     let ready_callback = serde_json::to_string(&format!("{callback}&ready=1"))?;
     let options = json!({"riskParams": {"v_voucher": voucher}}).to_string();
+    let messages = json!({
+        "origin": crate::i18n::text("risk.script.origin"),
+        "account_invalid": crate::i18n::text("risk.script.account_invalid"),
+        "account_mismatch": crate::i18n::text("risk.script.account_mismatch"),
+        "sdk_load_failed": crate::i18n::text("risk.script.sdk_load_failed"),
+        "sdk_timeout": crate::i18n::text("risk.script.sdk_timeout"),
+        "token_invalid": crate::i18n::text("risk.script.token_invalid"),
+    })
+    .to_string();
     let script = include_str!("upload_risk_verification.js")
+        .replace("__RISK_MESSAGES__", &messages)
         .replace("__RISK_OPTIONS__", &options)
         .replace("__EXPECTED_UID__", &uid.to_string())
         .replace(
@@ -382,7 +403,7 @@ async fn verify_window(
         "upload-risk",
         WebviewUrl::External(Url::parse("about:blank")?),
     )
-    .title(format!("上传安全验证 · {uid}"))
+    .title(crate::tr!("risk.window_title", uid = uid))
     .inner_size(900.0, 720.0)
     .incognito(true)
     .on_navigation(move |url| {
@@ -414,7 +435,7 @@ async fn verify_window(
             tracing::info!(uid, "上传风控：注入验证脚本");
             if let Err(error) = window.eval(&script) {
                 tracing::warn!(uid, error = %error, "上传风控：脚本注入失败");
-                finish(&load_sender, Err(anyhow!("无法启动安全验证脚本")));
+                finish(&load_sender, Err(anyhow!(crate::i18n::text("risk.script_failed"))));
             }
         }
     });
@@ -429,7 +450,11 @@ async fn verify_window(
     } else {
         None
     };
-    let window = VerificationWindow(builder.build().context("创建安全验证窗口失败")?);
+    let window = VerificationWindow(
+        builder
+            .build()
+            .context(crate::i18n::text("risk.window_failed"))?,
+    );
     tracing::info!(uid, "上传风控：验证窗口已创建");
     #[cfg(debug_assertions)]
     window.0.open_devtools();
@@ -440,19 +465,19 @@ async fn verify_window(
             WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed
         ) {
             tracing::info!(uid, event = ?event, "上传风控：窗口关闭事件");
-            finish(&close_sender, Err(anyhow!(CANCELLED)));
+            finish(&close_sender, Err(anyhow!(cancelled())));
         }
     });
     let initialize = async {
         let cookies = bili.login_info.cookie_info["cookies"]
             .as_array()
-            .ok_or_else(|| anyhow!("账号 Cookie 无效"))?;
+            .ok_or_else(|| anyhow!(crate::i18n::text("risk.cookies_invalid")))?;
         let sessdata = cookies
             .iter()
             .find(|cookie| cookie["name"] == "SESSDATA")
             .and_then(|cookie| cookie["value"].as_str())
             .filter(|value| !value.is_empty())
-            .ok_or_else(|| anyhow!("上传账号缺少 SESSDATA，无法初始化验证窗口登录态"))?;
+            .ok_or_else(|| anyhow!(crate::i18n::text("risk.sessdata_missing")))?;
         for cookie in cookies {
             if let (Some(name), Some(value)) = (cookie["name"].as_str(), cookie["value"].as_str()) {
                 for domain in COOKIE_DOMAINS {
@@ -466,7 +491,7 @@ async fn verify_window(
                                 .http_only(name == "SESSDATA")
                                 .build(),
                         )
-                        .context("写入验证窗口 Cookie 失败")?;
+                        .context(crate::i18n::text("risk.cookie_write_failed"))?;
                 }
             }
         }
@@ -476,8 +501,8 @@ async fn verify_window(
             let url = Url::parse(&format!("https://{host}/"))?;
             let stored = tokio::task::spawn_blocking(move || webview.cookies_for_url(url))
                 .await
-                .context("读取验证窗口 Cookie 任务失败")?
-                .context("读取验证窗口 Cookie 失败")?;
+                .context(crate::i18n::text("risk.cookie_task_failed"))?
+                .context(crate::i18n::text("risk.cookie_read_failed"))?;
             let matches = stored
                 .iter()
                 .any(|cookie| cookie.name() == "SESSDATA" && cookie.value() == sessdata);
@@ -488,7 +513,7 @@ async fn verify_window(
                 sessdata_matches = matches,
                 "上传风控：验证窗口 Cookie 读回检查"
             );
-            ensure!(matches, "验证窗口登录 Cookie 未正确写入 {host}");
+            ensure!(matches, crate::tr!("risk.cookie_not_stored", host = host));
         }
         tracing::info!(
             uid,
@@ -500,8 +525,10 @@ async fn verify_window(
             .navigate(Url::parse(&format!(
                 "{MEMBER}/platform/upload/video/frame"
             ))?)
-            .context("导航到安全验证页面失败")?;
-        ready_receiver.await.context("安全验证初始化已中断")
+            .context(crate::i18n::text("risk.navigation_failed"))?;
+        ready_receiver
+            .await
+            .context(crate::i18n::text("risk.initialization_interrupted"))
     };
     let timeout = (!cfg!(debug_assertions)).then_some(Duration::from_secs(60));
     wait_for_verification(receiver, initialize, timeout).await
@@ -551,14 +578,14 @@ mod initialization_tests {
     #[tokio::test]
     async fn closing_window_interrupts_initialization_immediately() {
         let (sender, receiver) = oneshot::channel();
-        sender.send(Err(anyhow!(CANCELLED))).unwrap();
+        sender.send(Err(anyhow!(cancelled()))).unwrap();
         let result = wait_for_verification(
             receiver,
             std::future::pending(),
             Some(Duration::from_secs(60)),
         )
         .await;
-        assert_eq!(result.unwrap_err().to_string(), CANCELLED);
+        assert_eq!(result.unwrap_err().to_string(), cancelled());
     }
 
     #[test]
@@ -591,8 +618,8 @@ mod initialization_tests {
         ));
         tokio::time::sleep(Duration::from_millis(30)).await;
         assert!(!worker.is_finished());
-        sender.send(Err(anyhow!(CANCELLED))).unwrap();
-        assert_eq!(worker.await.unwrap().unwrap_err().to_string(), CANCELLED);
+        sender.send(Err(anyhow!(cancelled()))).unwrap();
+        assert_eq!(worker.await.unwrap().unwrap_err().to_string(), cancelled());
     }
 }
 
@@ -616,7 +643,7 @@ mod tests {
         drop(receiver);
         assert!(service.prepare_retry(1));
         // 旧验证后台随后失败，也不能再阻塞重试任务。
-        sender.send_replace(VerificationState::Failed(CANCELLED.into()));
+        sender.send_replace(VerificationState::Failed(cancelled().into()));
         assert!(!service.is_blocked(1));
     }
 
@@ -689,7 +716,7 @@ mod tests {
         let (sender, receiver) = oneshot::channel();
         let sender = Mutex::new(Some(sender));
         finish(&sender, Ok("token".into()));
-        finish(&sender, Err(anyhow!(CANCELLED)));
+        finish(&sender, Err(anyhow!(cancelled())));
         assert_eq!(receiver.await.unwrap().unwrap(), "token");
     }
 
@@ -699,18 +726,18 @@ mod tests {
         let error = verification_result(&Url::parse(&callback).unwrap(), "session")
             .unwrap()
             .unwrap_err();
-        assert_eq!(error.to_string(), "验证窗口登录账号检查失败");
+        assert_eq!(error.to_string(), crate::i18n::text("risk.account_failed"));
         let callback = callback.replace("stage=account", "stage=secret-voucher");
         let error = verification_result(&Url::parse(&callback).unwrap(), "session")
             .unwrap()
             .unwrap_err();
-        assert_eq!(error.to_string(), CANCELLED);
+        assert_eq!(error.to_string(), cancelled());
     }
 
     #[test]
     fn failure_requires_manual_retry_and_tokens_are_account_scoped_and_expire() {
         let service = UploadRiskService::default();
-        service.hold(1, CANCELLED);
+        service.hold(1, cancelled());
         assert!(service.is_blocked(1));
         assert!(!service.is_blocked(2));
         assert!(service.prepare_retry(1));
