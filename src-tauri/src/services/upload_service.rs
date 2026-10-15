@@ -143,10 +143,10 @@ impl UploadService {
             let task = task_mutex.lock().await;
             (task.is_failed(), task.user.uid)
         };
-        let risk_cleared = self.risk.prepare_retry(uid);
         if failed {
             self.stop_handle(task_id).await;
         }
+        let risk_cleared = self.risk.prepare_retry(uid);
         let mut task = task_mutex.lock().await;
         if task.is_failed() {
             task.cancel();
@@ -201,8 +201,8 @@ impl UploadService {
             }
             task.user.uid
         };
-        self.risk.prepare_retry(uid);
         self.stop_handle(task_id).await;
+        self.risk.prepare_retry(uid);
         let mut task = task_mutex.lock().await;
         task.cancel();
         task.retry();

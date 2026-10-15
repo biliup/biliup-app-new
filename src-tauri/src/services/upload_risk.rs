@@ -86,7 +86,11 @@ impl UploadRiskService {
         let mut sessions = self.sessions.lock().unwrap();
         if sessions
             .get(&uid)
-            .is_some_and(|session| matches!(*session.borrow(), VerificationState::Failed(_)))
+            .is_some_and(|session| match *session.borrow() {
+                VerificationState::Failed(_) => true,
+                VerificationState::Pending => session.receiver_count() == 0,
+                VerificationState::Verified(_, _) => false,
+            })
         {
             sessions.remove(&uid);
             return true;
@@ -559,6 +563,26 @@ mod initialization_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn retry_clears_orphaned_verification_but_preserves_other_waiters() {
+        let service = UploadRiskService::default();
+        let (sender, receiver) = watch::channel(VerificationState::Pending);
+        let sender = Arc::new(sender);
+        service
+            .sessions
+            .lock()
+            .unwrap()
+            .insert(1, Arc::clone(&sender));
+        assert!(!service.prepare_retry(1));
+        assert!(service.is_blocked(1));
+
+        drop(receiver);
+        assert!(service.prepare_retry(1));
+        // 旧验证后台随后失败，也不能再阻塞重试任务。
+        sender.send_replace(VerificationState::Failed(CANCELLED.into()));
+        assert!(!service.is_blocked(1));
+    }
 
     #[test]
     fn token_is_encoded_without_changing_route_or_duplicating_credentials() {
