@@ -377,7 +377,7 @@ async fn upload_impl(
     );
     let uid = task_mutex.lock().await.user.uid;
 
-    let (line, proxy, limit) = {
+    let (line, limit) = {
         let lock = task_mutex.lock().await;
         let config_root = lock.config().lock().await;
         let config = config_root
@@ -385,7 +385,7 @@ async fn upload_impl(
             .get(&uid)
             .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("error.user_not_found")))?;
 
-        (config.line.clone(), config.proxy.clone(), config.limit)
+        (config.line.clone(), config.limit)
     };
 
     anyhow::ensure!(
@@ -393,7 +393,7 @@ async fn upload_impl(
         crate::i18n::text("upload.invalid_concurrency")
     );
 
-    let client = &task_mutex
+    let client = task_mutex
         .lock()
         .await
         .clients()
@@ -401,8 +401,9 @@ async fn upload_impl(
         .await
         .get(&uid)
         .ok_or_else(|| anyhow::anyhow!("{}", crate::tr!("error.user_not_found")))?
-        .bilibili
         .clone();
+    let proxy = client.proxy.clone();
+    let client = &client.bilibili;
 
     let retry_count = task_mutex.lock().await.retry_count();
     wait_for_account_verification(&task_mutex, &risk).await?;

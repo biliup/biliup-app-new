@@ -47,6 +47,7 @@ async fn persist_login_success(
         crate::MyClient {
             bilibili,
             user: user.clone(),
+            proxy,
         },
     );
 }

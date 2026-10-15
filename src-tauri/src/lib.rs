@@ -27,6 +27,7 @@ use crate::{
 pub struct MyClient {
     pub bilibili: BiliBili,
     pub user: User,
+    pub proxy: Option<String>,
 }
 
 pub struct AppData {
@@ -111,6 +112,7 @@ async fn startup() -> Result<AppData> {
                     MyClient {
                         bilibili,
                         user: User::new(fallback_uid, fallback_name, String::new(), false),
+                        proxy: user_config.proxy.clone(),
                     },
                 );
                 continue;
@@ -138,6 +140,7 @@ async fn startup() -> Result<AppData> {
                 MyClient {
                     bilibili,
                     user: User::new(uid, username, avatar, false),
+                    proxy: user_config.proxy.clone(),
                 },
             );
         } else {
@@ -158,6 +161,7 @@ async fn startup() -> Result<AppData> {
                 MyClient {
                     bilibili,
                     user: User::new(fallback_uid, fallback_name, "".to_string(), true),
+                    proxy: user_config.proxy.clone(),
                 },
             );
         }
