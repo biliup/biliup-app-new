@@ -127,13 +127,17 @@ async fn relay(mut browser: TcpStream, upstream: &Url, tls: Option<TlsConnector>
             .await
             .context("连接上游代理失败")?;
         let mut socket: Box<dyn ProxyStream> = if let Some(tls) = tls {
+            let server_name = match upstream.host().unwrap() {
+                url::Host::Domain(host) => {
+                    rustls::pki_types::ServerName::try_from(host.to_owned())?
+                }
+                url::Host::Ipv4(address) => address.into(),
+                url::Host::Ipv6(address) => address.into(),
+            };
             Box::new(
-                tls.connect(
-                    rustls::pki_types::ServerName::try_from(host.to_owned())?,
-                    socket,
-                )
-                .await
-                .context("上游 HTTPS 代理 TLS 握手失败")?,
+                tls.connect(server_name, socket)
+                    .await
+                    .context("上游 HTTPS 代理 TLS 握手失败")?,
             )
         } else {
             Box::new(socket)
@@ -372,9 +376,8 @@ mod tests {
         server.await.unwrap();
     }
 
-    #[tokio::test]
-    async fn https_proxy_uses_tls_before_sending_credentials() {
-        let upstream = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    async fn assert_https_proxy_starts_tls(address: &str) {
+        let upstream = TcpListener::bind(address).await.unwrap();
         let address = upstream.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut stream, _) = upstream.accept().await.unwrap();
@@ -395,6 +398,16 @@ mod tests {
                 .starts_with("HTTP/1.1 502")
         );
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn https_proxy_uses_tls_before_sending_credentials() {
+        assert_https_proxy_starts_tls("127.0.0.1:0").await;
+    }
+
+    #[tokio::test]
+    async fn https_ipv6_proxy_uses_ip_address_for_tls() {
+        assert_https_proxy_starts_tls("[::1]:0").await;
     }
 
     #[tokio::test]
