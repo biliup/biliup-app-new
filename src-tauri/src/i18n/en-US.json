@@ -174,7 +174,7 @@
     "risk.proxy.socks_host_too_long": "The SOCKS5 target hostname is too long",
     "risk.proxy.socks_connect_failed": "The SOCKS5 proxy failed to connect to the target",
     "risk.proxy.socks_address_invalid": "The SOCKS5 proxy returned an invalid address",
-    "risk.window_title": "Upload security verification ? {uid}",
+    "risk.window_title": "Upload security verification · {uid}",
     "risk.cookie_not_stored": "The verification window login cookie was not stored correctly for {host}",
     "risk.script.origin": "Complete verification on the Bilibili upload page signed in to the upload account",
     "risk.script.account_invalid": "The verification window is not signed in; account API returned code=",
