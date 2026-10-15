@@ -406,7 +406,9 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         }
 
         const to_add = templateConfig || createDefaultTemplate()
-        to_add.watermark = userConfig.watermark // 使用用户配置中的水印设置
+        if (!to_add.aid) {
+            to_add.watermark = userConfig.watermark // 新稿使用用户配置，编辑稿件保留远端水印
+        }
         try {
             const server_response: TemplateConfig = await invoke('add_user_template', {
                 uid: userUid,
