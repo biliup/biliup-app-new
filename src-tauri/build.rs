@@ -4,8 +4,8 @@ fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows")
         && std::env::var("CARGO_CFG_TARGET_ENV").as_deref() == Ok("msvc")
     {
-        // Tauri 只给应用二进制嵌入资源；单元测试也需要启用公共控件 v6。
-        println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+        // 为测试生成公共控件 v6 的外部 manifest，避免重复嵌入 Tauri 的应用资源。
+        println!("cargo:rustc-link-arg=/MANIFEST");
         println!(concat!(
             "cargo:rustc-link-arg=/MANIFESTDEPENDENCY:type='win32' ",
             "name='Microsoft.Windows.Common-Controls' version='6.0.0.0' ",
