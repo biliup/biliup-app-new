@@ -408,6 +408,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         const to_add = templateConfig || createDefaultTemplate()
         if (!to_add.aid) {
             to_add.watermark = userConfig.watermark // 新稿使用用户配置，编辑稿件保留远端水印
+            to_add.auto_edit_after_submit = userConfig.auto_edit ? 1 : 0
         }
         try {
             const server_response: TemplateConfig = await invoke('add_user_template', {

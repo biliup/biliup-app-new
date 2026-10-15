@@ -63,7 +63,7 @@ async function freshStore(settings = {}) {
     globalThis.__configInvoke = async (command, args) => {
         if (command === 'load_config') return structuredClone(persisted)
         if (command === 'add_user_template') {
-            const template = structuredClone(args.template)
+            const template = JSON.parse(JSON.stringify(args.template))
             submitted.push(template)
             persisted.config[args.uid].templates[args.templateName] = template
             return structuredClone(template)
@@ -101,5 +101,47 @@ test('空白和复制稿件的新稿模板使用账号默认水印', async () =>
             submitted.map(template => template.watermark),
             [watermark, watermark]
         )
+    }
+})
+
+test('新稿模板的提交后自动编辑选项继承账号设置', async () => {
+    for (const autoEdit of [0, 1]) {
+        const { store, submitted, persisted } = await freshStore({ auto_edit: autoEdit })
+        await store.addUserTemplate(1, '空白模板')
+        await store.addUserTemplate(1, '复制稿件模板', {
+            ...store.createDefaultTemplate(),
+            auto_edit_after_submit: 1 - autoEdit
+        })
+        store.configRoot.config[1].templates['空白模板'].auto_edit_after_submit = 1 - autoEdit
+        await store.duplicateUserTemplate(1, '空白模板', '复制模板')
+        assert.deepEqual(
+            submitted.map(template => template.auto_edit_after_submit),
+            [autoEdit, autoEdit, autoEdit]
+        )
+        for (const name of ['复制稿件模板', '复制模板']) {
+            assert.equal(
+                store.configRoot.config[1].templates[name].auto_edit_after_submit,
+                autoEdit
+            )
+            assert.equal(persisted.config[1].templates[name].auto_edit_after_submit, autoEdit)
+        }
+        // 账号设置仅作为创建时的初始值，后续更改不覆盖已有模板的选择。
+        store.configRoot.config[1].auto_edit = 1 - autoEdit
+        assert.equal(
+            store.configRoot.config[1].templates['复制模板'].auto_edit_after_submit,
+            autoEdit
+        )
+    }
+})
+
+test('导入编辑模板保留自身的提交后自动编辑设置', async () => {
+    for (const autoEdit of [0, 1]) {
+        const { store, submitted } = await freshStore({ auto_edit: 1 - autoEdit })
+        await store.addUserTemplate(1, '编辑模板', {
+            ...store.createDefaultTemplate(),
+            aid: 123,
+            auto_edit_after_submit: autoEdit
+        })
+        assert.equal(submitted[0].auto_edit_after_submit, autoEdit)
     }
 })
