@@ -57,6 +57,14 @@
                     >
                         {{ t('main.submitStats') }}
                     </el-button>
+                    <el-button
+                        type="primary"
+                        size="small"
+                        @click="seasonManagerVisible = true"
+                        :title="t('合集管理')"
+                    >
+                        {{ t('合集管理') }}
+                    </el-button>
                 </div>
                 <div class="header-right">
                     <!-- 上传队列下拉框 -->
@@ -1043,6 +1051,12 @@
             @clear="clearSubmitStats"
         />
 
+        <SeasonManager
+            v-model="seasonManagerVisible"
+            :initial-uid="selectedUser?.uid"
+            :open-archive-editor="openSeasonArchiveEditor"
+        />
+
         <SeparateCoverManager
             v-model="separateCoverManagerVisible"
             :videos="currentForm?.videos || []"
@@ -1097,6 +1111,8 @@ import DatePicker from '../components/DatePicker.vue'
 import StaffView from '../components/StaffView.vue'
 import DescView from '../components/DescView.vue'
 import SubmitStatsPage from '../components/SubmitStatsPage.vue'
+import SeasonManager from '../components/SeasonManager.vue'
+import type { SeasonEpisode } from '../types/season'
 import SeparateCoverManager from '../components/SeparateCoverManager.vue'
 import { selectAndUploadCover } from '../utils/coverUpload'
 import { useI18nState } from '../i18n'
@@ -1157,6 +1173,7 @@ const showNewTemplateDialog = ref(false)
 const showLoginDialog = ref(false)
 const showGlobalConfigDialog = ref(false)
 const submitStatsDialogVisible = ref(false)
+const seasonManagerVisible = ref(false)
 const separateCoverManagerVisible = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
@@ -3187,12 +3204,12 @@ const refreshSeasonList = async () => {
 const selectTemplate = async (user: any, templateName: string) => {
     // 如果正在加载模板，禁止切换
     if (templateLoading.value) {
-        return
+        return false
     }
 
     if (selectedUser.value === user && currentTemplateName.value === templateName) {
         // 如果已经选择了相同的用户和模板，则不需要切换
-        return
+        return true
     }
 
     templateLoading.value = true
@@ -3259,9 +3276,11 @@ const selectTemplate = async (user: any, templateName: string) => {
     } catch (error) {
         console.error(t('切换模板失败:'), error)
         utilsStore.showMessage(t('切换模板失败: {0}', { 0: String(error) }), 'error')
+        return false
     } finally {
         templateLoading.value = false
     }
+    return true
 }
 
 const resetTemplate = async () => {
@@ -3521,6 +3540,29 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
                 }
             }
             break
+    }
+}
+
+const openSeasonArchiveEditor = async (uid: number, episode: SeasonEpisode) => {
+    if (templateLoading.value || submitting.value || getCurrentAutoSubmitting.value) {
+        throw new Error(t('当前正在加载或提交，请稍后再编辑稿件'))
+    }
+    const user = loginUsers.value.find(user => user.uid === uid)
+    if (!user || !newTemplateRef.value) throw new Error(t('请选择用户'))
+    const templates = userConfigStore.configRoot?.config[uid]?.templates || {}
+    let name = Object.keys(templates).find(name => templates[name].aid === episode.aid)
+    if (!name) {
+        const videoId = episode.bvid || `av${episode.aid}`
+        name = videoId
+        let suffix = 2
+        while (templates[name]) name = `${videoId} (${suffix++})`
+        await newTemplateRef.value.createTemplateFromBV(uid, videoId, name, true)
+    }
+    if (autoSubmittingRecord.value[getTemplateKey(uid, name)]) {
+        throw new Error(t('当前正在加载或提交，请稍后再编辑稿件'))
+    }
+    if (!(await selectTemplate(user, name))) {
+        throw new Error(t('切换模板失败'))
     }
 }
 
@@ -4231,6 +4273,7 @@ const checkUpdate = async () => {
 
 .header {
     background: #fff;
+    height: auto;
     border-bottom: 1px solid #e4e7ed;
     padding: 0 20px;
     position: sticky;
@@ -4241,9 +4284,11 @@ const checkUpdate = async () => {
 
 .header-content {
     display: flex;
+    flex-wrap: wrap;
+    gap: 8px 12px;
     justify-content: space-between;
     align-items: center;
-    height: 100%;
+    min-height: 60px;
 }
 
 .header-left {

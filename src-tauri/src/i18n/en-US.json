@@ -184,5 +184,12 @@
     "risk.script.token_invalid": "The captcha SDK did not return a valid token",
     "video.list_invalid_response": "Invalid submission list response",
     "video.list_api_failed": "Failed to load submissions: code={code}, {message}",
-    "video.list_invalid_page": "Invalid submission list pagination"
+    "video.list_invalid_page": "Invalid submission list pagination",
+    "season.manager.section_missing": "Section not found in this collection; refresh and try again",
+    "season.manager.stale_order": "Episode list changed or order is incomplete; refresh and reorder",
+    "season.manager.already_added": "This submission is already in the section",
+    "season.manager.cid_missing": "Unable to find the first video CID",
+    "season.manager.episode_missing": "Episode no longer in this section; refresh and try again",
+    "season.manager.title_empty": "Episode title cannot be empty",
+    "season.manager.csrf_missing": "Missing CSRF token; please log in again"
 }

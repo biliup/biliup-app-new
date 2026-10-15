@@ -1,7 +1,7 @@
 <template>
     <el-dialog
         :model-value="modelValue"
-        :title="t('选择已有稿件')"
+        :title="seasonAddOnly ? t('添加单集') : t('选择已有稿件')"
         width="760px"
         style="max-width: calc(100vw - 32px)"
         append-to-body
@@ -17,8 +17,23 @@
             :data="items"
             row-key="aid"
             :max-height="420"
-            :empty-text="loading ? t('加载中...') : error ? t('请点击刷新重试') : t('暂无稿件')"
+            :empty-text="
+                loading
+                    ? t('加载中...')
+                    : error
+                      ? t('请点击刷新重试')
+                      : seasonAddOnly
+                        ? t('当前页没有可添加的稿件')
+                        : t('暂无稿件')
+            "
+            @selection-change="updateSelection"
         >
+            <el-table-column
+                v-if="seasonAddOnly"
+                type="selection"
+                width="48"
+                :selectable="canSelectVideo"
+            />
             <el-table-column :label="t('封面')" width="112">
                 <template #default="{ row }">
                     <el-image
@@ -39,7 +54,7 @@
                     <div class="video-id">{{ row.bvid || `av${row.aid}` }}</div>
                 </template>
             </el-table-column>
-            <el-table-column :label="t('操作')" width="80" align="center">
+            <el-table-column v-if="!seasonAddOnly" :label="t('操作')" width="80" align="center">
                 <template #default="{ row }">
                     <el-button type="primary" link :disabled="loading" @click="selectVideo(row)">
                         {{ t('选择') }}
@@ -58,13 +73,20 @@
                     @current-change="loadPage"
                 />
                 <el-button @click="emit('update:modelValue', false)">{{ t('取消') }}</el-button>
+                <el-button
+                    v-if="seasonAddOnly"
+                    type="primary"
+                    :disabled="loading || !selectedVideos.length"
+                    @click="confirmSelection"
+                    >{{ t('确定') }}</el-button
+                >
             </div>
         </template>
     </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onBeforeUnmount } from 'vue'
+import { computed, ref, watch, onBeforeUnmount } from 'vue'
 import { t } from '../i18n'
 import { useUtilsStore } from '../stores/utils'
 import type { CreatorVideo } from '../types/creator_video'
@@ -73,10 +95,12 @@ const props = defineProps<{
     modelValue: boolean
     uid: number | null
     username: string
+    seasonAddOnly?: boolean
 }>()
 const emit = defineEmits<{
     'update:modelValue': [value: boolean]
     select: [videoId: string]
+    'select-many': [videoIds: string[]]
 }>()
 const utilsStore = useUtilsStore()
 const items = ref<CreatorVideo[]>([])
@@ -84,20 +108,31 @@ const loading = ref(false)
 const error = ref('')
 const page = ref(1)
 const total = ref(0)
-const pageSize = 10
+const pageSize = computed(() => (props.seasonAddOnly ? 5 : 10))
+const selectedVideos = ref<CreatorVideo[]>([])
 let requestId = 0
 
 const loadPage = async (nextPage: number) => {
     const uid = props.uid
     if (!props.modelValue || !uid) return
     const request = ++requestId
+    const seasonAddOnly = props.seasonAddOnly
     page.value = nextPage
     items.value = []
+    selectedVideos.value = []
     loading.value = true
     error.value = ''
     try {
-        const result = await utilsStore.getVideoList(uid, nextPage, pageSize)
-        if (request !== requestId || !props.modelValue || props.uid !== uid) return
+        const result = seasonAddOnly
+            ? await utilsStore.getVideoList(uid, nextPage, pageSize.value, true)
+            : await utilsStore.getVideoList(uid, nextPage, pageSize.value)
+        if (
+            request !== requestId ||
+            !props.modelValue ||
+            props.uid !== uid ||
+            props.seasonAddOnly !== seasonAddOnly
+        )
+            return
         items.value = result.items
         total.value = result.total
     } catch (cause) {
@@ -111,15 +146,37 @@ const loadPage = async (nextPage: number) => {
 
 const selectVideo = (video: CreatorVideo) => {
     if (loading.value || !props.modelValue || !props.uid || !items.value.includes(video)) return
+    if (props.seasonAddOnly) return
     emit('select', video.bvid || `av${video.aid}`)
     emit('update:modelValue', false)
 }
 
+const canSelectVideo = (video: CreatorVideo) => !loading.value && video.season_add_state === 0
+
+const updateSelection = (videos: CreatorVideo[]) => {
+    if (!props.seasonAddOnly || loading.value) return
+    selectedVideos.value = videos.filter(
+        video => items.value.includes(video) && canSelectVideo(video)
+    )
+}
+
+const confirmSelection = () => {
+    if (loading.value || !props.modelValue || !props.uid || !props.seasonAddOnly) return
+    const selected = new Set(selectedVideos.value.map(video => video.aid))
+    const ids = items.value
+        .filter(video => selected.has(video.aid) && canSelectVideo(video))
+        .map(video => video.bvid || `av${video.aid}`)
+    if (!ids.length) return
+    emit('select-many', ids)
+    emit('update:modelValue', false)
+}
+
 watch(
-    () => [props.modelValue, props.uid] as const,
+    () => [props.modelValue, props.uid, props.seasonAddOnly] as const,
     ([visible, uid]) => {
         requestId += 1
         items.value = []
+        selectedVideos.value = []
         error.value = ''
         loading.value = false
         total.value = 0

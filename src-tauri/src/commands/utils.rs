@@ -498,7 +498,7 @@ pub async fn get_season_list(app: tauri::AppHandle, uid: u64) -> Result<Value, A
     Ok(json!({ "seasons": seasons }))
 }
 
-async fn load_seasons(api: &SeasonApi<'_>) -> Result<Vec<SeasonEntry>, AppError> {
+pub(super) async fn load_seasons(api: &SeasonApi<'_>) -> Result<Vec<SeasonEntry>, AppError> {
     let mut seasons = Vec::new();
     for page_number in 1.. {
         let page = api
@@ -588,6 +588,8 @@ pub struct CreatorVideo {
     title: String,
     #[serde(default)]
     cover: String,
+    #[serde(default)]
+    season_add_state: Option<i64>,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -624,6 +626,8 @@ fn parse_video_list(response: Value) -> Result<CreatorVideoPage, AppError> {
             if video.aid == 0 {
                 return Err(invalid());
             }
+            // 此字段在 arc_audits 条目上，不在 Archive 内；缺失时不能视为可添加。
+            video.season_add_state = entry["season_add_state"].as_i64();
             // 列表接口的封面只有相对路径，补齐图片域名。
             video.cover = if video.cover.is_empty()
                 || video.cover.starts_with("http://")
@@ -671,22 +675,14 @@ async fn download_video_covers(client: &reqwest::Client, page: &mut CreatorVideo
         .await;
 }
 
-#[tauri::command]
-pub async fn get_video_list(
-    app: tauri::AppHandle,
-    uid: u64,
+async fn fetch_video_list_page(
+    client: &reqwest::Client,
+    member: &str,
     page: u32,
     page_size: u32,
 ) -> Result<CreatorVideoPage, AppError> {
-    if page == 0 || !(1..=100).contains(&page_size) {
-        return Err(AppError::Custom(
-            crate::i18n::text("video.list_invalid_page").into(),
-        ));
-    }
-    let bilibili = app.state::<AppData>().get_bilibili(uid).await?;
-    let response = bilibili
-        .client
-        .get("https://member.bilibili.com/x2/creative/web/archives/sp")
+    let response = client
+        .get(format!("{member}/x2/creative/web/archives/sp"))
         .header(
             "Referer",
             "https://member.bilibili.com/platform/upload-manager/article",
@@ -698,7 +694,78 @@ pub async fn get_video_list(
         .error_for_status()?
         .json::<Value>()
         .await?;
-    let mut page = parse_video_list(response)?;
+    parse_video_list(response)
+}
+
+async fn load_creator_video_page(
+    client: &reqwest::Client,
+    member: &str,
+    page: u32,
+    page_size: u32,
+    season_add_only: bool,
+) -> Result<CreatorVideoPage, AppError> {
+    if !season_add_only {
+        return fetch_video_list_page(client, member, page, page_size).await;
+    }
+    // 上游按全部稿件分页：先取完整列表并筛选，再按可添加稿件计算分页和总数。
+    let mut eligible = Vec::new();
+    let mut received = 0_u64;
+    let mut batch_size = 300;
+    for upstream_page in 1.. {
+        let batch = fetch_video_list_page(client, member, upstream_page, batch_size).await?;
+        let count = batch.items.len() as u64;
+        received += count;
+        // 若上游限制每批数量，后续页采用实际批量，避免按较大步长漏查。
+        if upstream_page == 1
+            && count > 0
+            && count < u64::from(batch_size)
+            && received < batch.total
+        {
+            batch_size = count as u32;
+        }
+        eligible.extend(
+            batch
+                .items
+                .into_iter()
+                .filter(|video| video.season_add_state == Some(0)),
+        );
+        if count == 0 || received >= batch.total {
+            break;
+        }
+    }
+    let total = eligible.len() as u64;
+    let offset = usize::try_from(u64::from(page - 1) * u64::from(page_size)).unwrap_or(usize::MAX);
+    let items = eligible
+        .into_iter()
+        .skip(offset)
+        .take(page_size as usize)
+        .collect();
+    Ok(CreatorVideoPage { items, total })
+}
+
+#[tauri::command]
+pub async fn get_video_list(
+    app: tauri::AppHandle,
+    uid: u64,
+    page: u32,
+    page_size: u32,
+    season_add_only: Option<bool>,
+) -> Result<CreatorVideoPage, AppError> {
+    if page == 0 || !(1..=100).contains(&page_size) {
+        return Err(AppError::Custom(
+            crate::i18n::text("video.list_invalid_page").into(),
+        ));
+    }
+    let bilibili = app.state::<AppData>().get_bilibili(uid).await?;
+    let mut page = load_creator_video_page(
+        &bilibili.client,
+        "https://member.bilibili.com",
+        page,
+        page_size,
+        season_add_only.unwrap_or(false),
+    )
+    .await?;
+    // 只下载最终显示的这一页封面。
     download_video_covers(&bilibili.client, &mut page).await;
     Ok(page)
 }
@@ -1135,6 +1202,125 @@ mod video_list_tests {
     use super::*;
 
     #[tokio::test]
+    async fn season_candidates_are_filtered_across_upstream_pages_before_pagination() {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let member = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            for _ in 0..40 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    request.push(socket.read_u8().await.unwrap());
+                }
+                let request = String::from_utf8(request).unwrap();
+                let path = request
+                    .lines()
+                    .next()
+                    .unwrap()
+                    .split_whitespace()
+                    .nth(1)
+                    .unwrap();
+                let url = reqwest::Url::parse(&format!("http://test{path}")).unwrap();
+                let parameter = |name: &str| {
+                    url.query_pairs()
+                        .find(|(key, _)| key == name)
+                        .unwrap()
+                        .1
+                        .parse::<u64>()
+                        .unwrap()
+                };
+                let pn = parameter("pn");
+                let ps = parameter("ps");
+                if url.path().starts_with("/capped/") {
+                    assert_eq!(ps, if pn == 1 { 300 } else { 100 });
+                } else {
+                    assert!(ps == 300 || ps == 10);
+                }
+                let ps = if url.path().starts_with("/capped/") {
+                    ps.min(100)
+                } else {
+                    ps
+                };
+                let total = if url.path().starts_with("/empty/") {
+                    0
+                } else {
+                    1235
+                };
+                let entries: Vec<_> = ((pn - 1) * ps + 1..=(pn * ps).min(total)).map(|aid| {
+                    let state = if !url.path().starts_with("/none/") && aid > 1100 && aid % 3 == 0 { 0 } else { 1 };
+                    json!({"Archive": {"aid": aid, "title": format!("稿件 {aid}")}, "season_add_state": state})
+                }).collect();
+                let body =
+                    json!({"code": 0, "data": {"page": {"count": total}, "arc_audits": entries}})
+                        .to_string();
+                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+            }
+        });
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        for (page, expected) in [
+            (1, (1101..=1128).step_by(3).collect::<Vec<_>>()),
+            (2, (1131..=1158).step_by(3).collect()),
+            (5, (1221..=1233).step_by(3).collect()),
+            (6, vec![]),
+        ] {
+            let result = load_creator_video_page(&client, &member, page, 10, true)
+                .await
+                .unwrap();
+            assert_eq!(result.total, 45);
+            assert_eq!(
+                result
+                    .items
+                    .iter()
+                    .map(|video| video.aid)
+                    .collect::<Vec<_>>(),
+                expected
+            );
+            assert!(
+                result
+                    .items
+                    .iter()
+                    .all(|video| video.season_add_state == Some(0))
+            );
+        }
+        let ordinary = load_creator_video_page(&client, &member, 2, 10, false)
+            .await
+            .unwrap();
+        assert_eq!(ordinary.total, 1235);
+        assert_eq!(
+            ordinary
+                .items
+                .iter()
+                .map(|video| video.aid)
+                .collect::<Vec<_>>(),
+            (11..=20).collect::<Vec<_>>()
+        );
+        for path in ["none", "empty"] {
+            let result = load_creator_video_page(&client, &format!("{member}/{path}"), 1, 10, true)
+                .await
+                .unwrap();
+            assert!(result.items.is_empty());
+            assert_eq!(result.total, 0);
+        }
+        let capped = load_creator_video_page(&client, &format!("{member}/capped"), 1, 5, true)
+            .await
+            .unwrap();
+        assert_eq!(capped.total, 45);
+        assert_eq!(
+            capped
+                .items
+                .iter()
+                .map(|video| video.aid)
+                .collect::<Vec<_>>(),
+            vec![1101, 1104, 1107, 1110, 1113]
+        );
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn downloads_covers_as_base64_and_keeps_list_when_one_download_fails() {
         use tokio::{
             io::{AsyncReadExt, AsyncWriteExt},
@@ -1175,18 +1361,21 @@ mod video_list_tests {
                     aid: 1,
                     bvid: String::new(),
                     title: "封面成功".into(),
+                    season_add_state: None,
                     cover: format!("http://{address}/cover.jpg"),
                 },
                 CreatorVideo {
                     aid: 2,
                     bvid: String::new(),
                     title: "封面失败".into(),
+                    season_add_state: None,
                     cover: format!("http://{address}/missing.jpg"),
                 },
                 CreatorVideo {
                     aid: 3,
                     bvid: String::new(),
                     title: "无封面".into(),
+                    season_add_state: None,
                     cover: String::new(),
                 },
             ],
@@ -1207,6 +1396,33 @@ mod video_list_tests {
         assert_eq!(serialized["items"][0]["cover"], encode_base64(image));
         assert_eq!(page.total, 3);
         assert_eq!(page.items.len(), 3);
+    }
+
+    #[test]
+    fn season_add_state_is_read_from_audit_entry_without_defaulting_to_zero() {
+        let page = parse_video_list(json!({
+            "code": 0,
+            "data": {
+                "arc_audits": [
+                    {"Archive": {"aid": 1, "title": "可加入"}, "season_add_state": 0},
+                    {"Archive": {"aid": 2, "title": "不可加入"}, "season_add_state": 1},
+                    {"Archive": {"aid": 3, "title": "字段缺失", "season_add_state": 0}},
+                    {"Archive": {"aid": 4, "title": "字段为空"}, "season_add_state": null}
+                ], "page": {"count": 4}
+            }
+        }))
+        .unwrap();
+        assert_eq!(
+            page.items
+                .iter()
+                .map(|video| video.season_add_state)
+                .collect::<Vec<_>>(),
+            vec![Some(0), Some(1), None, None]
+        );
+        assert_eq!(
+            serde_json::to_value(&page).unwrap()["items"][0]["season_add_state"],
+            0
+        );
     }
 
     #[test]

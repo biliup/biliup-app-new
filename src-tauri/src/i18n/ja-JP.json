@@ -184,5 +184,12 @@
     "risk.script.token_invalid": "CAPTCHA SDK から有効な認証トークンが返されませんでした",
     "video.list_invalid_response": "投稿一覧の応答形式が無効です",
     "video.list_api_failed": "投稿一覧の取得に失敗: code={code}, {message}",
-    "video.list_invalid_page": "投稿一覧のページ指定が無効です"
+    "video.list_invalid_page": "投稿一覧のページ指定が無効です",
+    "season.manager.section_missing": "このコレクションにセクションがありません。更新して再試行してください",
+    "season.manager.stale_order": "投稿一覧が変更されたか、順序が不完全です。更新して並べ替えてください",
+    "season.manager.already_added": "この投稿はすでにセクションに含まれています",
+    "season.manager.cid_missing": "最初の動画の CID を取得できません",
+    "season.manager.episode_missing": "投稿はこのセクションに存在しません。更新して再試行してください",
+    "season.manager.title_empty": "エピソードタイトルは空にできません",
+    "season.manager.csrf_missing": "CSRF トークンがありません。再ログインしてください"
 }

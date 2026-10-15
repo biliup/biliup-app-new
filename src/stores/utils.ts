@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { ElMessage } from 'element-plus'
 import type { MentionUserGroup } from '../types/mention'
 import type { CreatorVideoPage } from '../types/creator_video'
+import type { ManagedSeason, ManagedSection } from '../types/season'
 
 const originalConsoleError = console.error.bind(console)
 
@@ -160,6 +161,37 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
+    const listManagedSeasons = (uid: number) =>
+        invoke<ManagedSeason[]>('list_managed_seasons', { uid })
+
+    const getManagedSection = (uid: number, seasonId: number, sectionId: number) =>
+        invoke<ManagedSection>('get_managed_section', { uid, seasonId, sectionId })
+
+    const addSeasonEpisode = (uid: number, seasonId: number, sectionId: number, videoId: string) =>
+        invoke<void>('add_season_episode', { uid, seasonId, sectionId, videoId })
+
+    const removeSeasonEpisode = (
+        uid: number,
+        seasonId: number,
+        sectionId: number,
+        episodeId: number
+    ) => invoke<void>('remove_season_episode', { uid, seasonId, sectionId, episodeId })
+
+    const reorderSeasonEpisodes = (
+        uid: number,
+        seasonId: number,
+        sectionId: number,
+        episodeIds: number[]
+    ) => invoke<void>('reorder_season_episodes', { uid, seasonId, sectionId, episodeIds })
+
+    const editSeasonEpisodeTitle = (
+        uid: number,
+        seasonId: number,
+        sectionId: number,
+        episodeId: number,
+        title: string
+    ) => invoke<void>('edit_season_episode_title', { uid, seasonId, sectionId, episodeId, title })
+
     const uploadCover = async (uid: number, file: string) => {
         if (!file) {
             return undefined
@@ -175,8 +207,8 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
-    const getVideoList = (uid: number, page: number, pageSize: number) =>
-        invoke<CreatorVideoPage>('get_video_list', { uid, page, pageSize })
+    const getVideoList = (uid: number, page: number, pageSize: number, seasonAddOnly = false) =>
+        invoke<CreatorVideoPage>('get_video_list', { uid, page, pageSize, seasonAddOnly })
 
     const getVideoDetail = async (uid: number, videoId: string) => {
         try {
@@ -266,6 +298,12 @@ export const useUtilsStore = defineStore('template', () => {
         common_staff_conf,
         topiclist: computed(() => topiclist.value),
         getCachedSeasons,
+        listManagedSeasons,
+        getManagedSection,
+        addSeasonEpisode,
+        removeSeasonEpisode,
+        reorderSeasonEpisodes,
+        editSeasonEpisodeTitle,
         getCurrentVersion,
         getFileSize,
         getAvatarCacheDir,

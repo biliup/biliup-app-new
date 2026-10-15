@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
-import { nextTick, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 
 // 运行组件的真实 setup 逻辑，用可控 IPC 验证异步请求与选择事件。
 const component = readFileSync(
@@ -44,6 +44,7 @@ function harness(initial = {}) {
     const stops = []
     let unmount
     const context = {
+        computed,
         ref,
         watch: (...args) => {
             const stop = watch(...args)
@@ -68,7 +69,7 @@ function harness(initial = {}) {
     }
     vm.runInNewContext(
         ts.transpile(source) +
-            '\nglobalThis.picker = { items, page, total, loading, error, loadPage, selectVideo }',
+            '\nglobalThis.picker = { items, page, total, loading, error, loadPage, selectVideo, selectedVideos, updateSelection, confirmSelection, canSelectVideo }',
         context
     )
     return {
@@ -166,4 +167,70 @@ test('连续翻页仅使用最新页，加载期间不能选中旧稿件', async
     await settle()
     assert.equal(h.picker.items.value[0].aid, 222)
     assert.equal(h.picker.page.value, 2)
+})
+
+test('添加单集请求筛选后的分页与总数，翻页清空选择，普通编辑列表不筛选', async context => {
+    const h = harness({ seasonAddOnly: true })
+    context.after(() => h.dispose())
+    const videos = [
+        { ...video(1), season_add_state: 0 },
+        { ...video(2), season_add_state: 1 },
+        video(3),
+        { ...video(4), season_add_state: null },
+        { ...video(5), season_add_state: '0' }
+    ]
+    assert.deepEqual(h.requests[0].args, [1, 1, 5, true])
+    h.requests[0].resolve({ items: [videos[0]], total: 1 })
+    await settle()
+    assert.deepEqual(Array.from(h.picker.items.value, row => row.aid), [1])
+    h.picker.updateSelection([videos[1]])
+    h.picker.confirmSelection()
+    assert.equal(h.events.length, 0)
+    h.picker.updateSelection([h.picker.items.value[0]])
+    h.picker.confirmSelection()
+    assert.equal(JSON.stringify(h.events), JSON.stringify([['select-many', ['av1']], ['update:modelValue', false]]))
+    h.events.length = 0
+    const pending = h.picker.loadPage(2)
+    assert.deepEqual(h.requests[1].args, [1, 2, 5, true])
+    assert.equal(h.picker.selectedVideos.value.length, 0)
+    h.picker.confirmSelection()
+    assert.equal(h.events.length, 0)
+    h.requests[1].resolve({ items: [], total: 1 })
+    await pending
+    assert.equal(h.picker.items.value.length, 0)
+    assert.equal(h.picker.total.value, 1)
+    h.props.seasonAddOnly = false
+    await nextTick()
+    h.requests[2].resolve({ items: videos, total: 25 })
+    assert.deepEqual(h.requests[2].args, [1, 1, 10])
+    await settle()
+    assert.equal(h.picker.items.value.length, 5)
+})
+
+test('复选框多选按列表顺序统一确认，每页请求五条，刷新清空旧选择', async context => {
+    const h = harness({ seasonAddOnly: true })
+    context.after(() => h.dispose())
+    assert.deepEqual(h.requests[0].args, [1, 1, 5, true])
+    h.requests[0].resolve({ items: [
+        { ...video(1, 'BVone'), season_add_state: 0 },
+        { ...video(2), season_add_state: 0 }
+    ], total: 12 })
+    await settle()
+    const [first, second] = h.picker.items.value
+    h.picker.updateSelection([second, first])
+    assert.equal(h.events.length, 0)
+    h.picker.confirmSelection()
+    assert.equal(JSON.stringify(h.events), JSON.stringify([
+        ['select-many', ['BVone', 'av2']], ['update:modelValue', false]
+    ]))
+    h.events.length = 0
+    const refresh = h.picker.loadPage(1)
+    assert.equal(h.picker.selectedVideos.value.length, 0)
+    assert.equal(h.picker.canSelectVideo(first), false)
+    h.picker.updateSelection([first])
+    h.picker.confirmSelection()
+    assert.equal(h.events.length, 0)
+    h.requests[1].resolve({ items: [], total: 0 })
+    await refresh
+    assert.equal(h.picker.selectedVideos.value.length, 0)
 })

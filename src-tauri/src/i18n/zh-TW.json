@@ -184,5 +184,12 @@
     "risk.script.token_invalid": "驗證碼 SDK 未返回有效憑據",
     "video.list_invalid_response": "稿件列表回應格式錯誤",
     "video.list_api_failed": "取得稿件列表失敗：code={code}，{message}",
-    "video.list_invalid_page": "稿件列表分頁參數無效"
+    "video.list_invalid_page": "稿件列表分頁參數無效",
+    "season.manager.section_missing": "小節不存在或不屬於目前合集，請重新整理後再試",
+    "season.manager.stale_order": "稿件列表已變更或排序不完整，請重新整理後重新排序",
+    "season.manager.already_added": "該稿件已在目前小節中",
+    "season.manager.cid_missing": "無法取得稿件首個分 P 的 CID",
+    "season.manager.episode_missing": "稿件已不在目前小節中，請重新整理後再試",
+    "season.manager.title_empty": "單集標題不能為空",
+    "season.manager.csrf_missing": "登入資訊缺少 CSRF，請重新登入"
 }
