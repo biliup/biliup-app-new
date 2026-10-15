@@ -957,7 +957,7 @@
     "globalConfig.section.global": "全体設定",
     "globalConfig.section.user": "ユーザー設定",
     "globalConfig.language.label": "表示言語",
-    "globalConfig.language.zh": "中文",
+    "globalConfig.language.zh": "简体中文",
     "globalConfig.language.en": "English",
     "globalConfig.language.ja": "日本語",
     "globalConfig.language.tip": "保存後に反映され、次回起動時も選択した言語を使用します",
@@ -1006,5 +1006,6 @@
     "main.globalConfig": "全体設定",
     "main.drag.title": "動画ファイルをここにドロップ",
     "main.drag.formats": "対応形式: MP4、AVI、MOV、MKV、WMV、FLV、M4V、WEBM",
-    "main.drag.needSelection": "ユーザーとテンプレートを選択してください"
+    "main.drag.needSelection": "ユーザーとテンプレートを選択してください",
+    "globalConfig.language.zhTw": "繁體中文"
 }

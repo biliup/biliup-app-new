@@ -811,7 +811,7 @@ mod persistence_tests {
         config.add_user_template(1, "中文模板", template);
         // 使用真实持久化路径验证语言字段，账号及模板数据不参与翻译。
         let original_users = serde_json::to_value(&config.config).unwrap();
-        for language in ["en-US", "ja-JP"] {
+        for language in ["en-US", "ja-JP", "zh-TW"] {
             config.save_global_config(2, true, true, "info".to_string(), language.to_string());
             config.save_to_file(&path).unwrap();
             let restored = ConfigRoot::from_file(&path).unwrap();

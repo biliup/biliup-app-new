@@ -942,5 +942,7 @@
     "乌兹别克斯坦": "Uzbekistan",
     "启用自动提交后，连续 {count} 次检测，无小于1KB且无大小持续改变的文件后自动提交稿件": "With auto submission enabled, submit after {count} consecutive scans without files smaller than 1KB or changing file sizes",
     "启用后，连续 {count} 次检测无变化后将自动提交到“{template}”": "When enabled, submit to \"{template}\" after {count} consecutive scans without changes",
-    "连续 {count} 次检测无变化后将自动提交到“{template}”（{mode}）": "Submit to \"{template}\" after {count} consecutive scans without changes ({mode})"
+    "连续 {count} 次检测无变化后将自动提交到“{template}”（{mode}）": "Submit to \"{template}\" after {count} consecutive scans without changes ({mode})",
+    "globalConfig.language.zh": "简体中文",
+    "globalConfig.language.zhTw": "繁體中文"
 }

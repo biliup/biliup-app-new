@@ -188,7 +188,7 @@ test('SDK 加载失败明确报错', async () => {
     )
 })
 
-for (const language of ['en-US', 'ja-JP']) {
+for (const language of ['en-US', 'ja-JP', 'zh-TW']) {
     test('风控脚本使用所选语言并保留账号检查 (' + language + ')', async () => {
         const catalog = JSON.parse(readFileSync(new URL('../src-tauri/src/i18n/' + language + '.json', import.meta.url), 'utf8'))
         await assert.rejects(run({ language, mid: 99 }), error => error.message === catalog['risk.script.account_mismatch'])

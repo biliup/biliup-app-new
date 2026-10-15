@@ -2,6 +2,8 @@
 
 后端文本集中在本目录的语言 JSON 文件中，字典通过 `include_str!` 编译到程序内。
 
+目前支持简体中文（`zh-CN`）、繁体中文（`zh-TW`）、英语（`en-US`）和日语（`ja-JP`）。
+
 业务代码使用稳定的语义键：
 
 `crate::i18n::text("auth.login_success")`

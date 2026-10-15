@@ -27,6 +27,7 @@
                         @change="handleLanguageChange"
                     >
                         <el-option :label="t('globalConfig.language.zh')" value="zh-CN" />
+                        <el-option :label="t('globalConfig.language.zhTw')" value="zh-TW" />
                         <el-option :label="t('globalConfig.language.en')" value="en-US" />
                         <el-option :label="t('globalConfig.language.ja')" value="ja-JP" />
                     </el-select>

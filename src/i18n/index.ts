@@ -1,16 +1,18 @@
 import english from './en-US.json'
 import japanese from './ja-JP.json'
+import traditionalChinese from './zh-TW.json'
 import { computed, ref } from 'vue'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
+import zhTw from 'element-plus/es/locale/lang/zh-tw'
 import en from 'element-plus/es/locale/lang/en'
 import ja from 'element-plus/es/locale/lang/ja'
 
-export type AppLanguage = 'zh-CN' | 'en-US' | 'ja-JP'
+export type AppLanguage = 'zh-CN' | 'zh-TW' | 'en-US' | 'ja-JP'
 
 type TranslationMap = Record<string, string>
 
-const SUPPORTED_LANGUAGES: AppLanguage[] = ['zh-CN', 'en-US', 'ja-JP']
-const elementLocales = { 'zh-CN': zhCn, 'en-US': en, 'ja-JP': ja }
+const SUPPORTED_LANGUAGES: AppLanguage[] = ['zh-CN', 'zh-TW', 'en-US', 'ja-JP']
+const elementLocales = { 'zh-CN': zhCn, 'zh-TW': zhTw, 'en-US': en, 'ja-JP': ja }
 
 const messages: Record<AppLanguage, TranslationMap> = {
     'zh-CN': {
@@ -30,7 +32,8 @@ const messages: Record<AppLanguage, TranslationMap> = {
         'globalConfig.section.global': '全局设置',
         'globalConfig.section.user': '用户配置',
         'globalConfig.language.label': '界面语言',
-        'globalConfig.language.zh': '中文',
+        'globalConfig.language.zh': '简体中文',
+        'globalConfig.language.zhTw': '繁體中文',
         'globalConfig.language.en': 'English',
         'globalConfig.language.ja': '日本語',
         'globalConfig.language.tip': '点击保存后生效，下次启动会恢复所选语言',
@@ -100,7 +103,7 @@ const messages: Record<AppLanguage, TranslationMap> = {
         'globalConfig.section.global': 'Global Settings',
         'globalConfig.section.user': 'User Settings',
         'globalConfig.language.label': 'Language',
-        'globalConfig.language.zh': '中文',
+        'globalConfig.language.zh': '简体中文',
         'globalConfig.language.en': 'English',
         'globalConfig.language.ja': '日本語',
         'globalConfig.language.tip': 'Applies after saving; your choice is restored on next launch',
@@ -151,7 +154,8 @@ const messages: Record<AppLanguage, TranslationMap> = {
         'main.drag.formats': 'Supports MP4, AVI, MOV, MKV, WMV, FLV, M4V, WEBM',
         'main.drag.needSelection': 'Please select user and template first'
     },
-    'ja-JP': japanese
+    'ja-JP': japanese,
+    'zh-TW': traditionalChinese
 }
 
 const language = ref<AppLanguage>('zh-CN')

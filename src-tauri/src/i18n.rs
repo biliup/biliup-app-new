@@ -11,6 +11,7 @@ const SOURCES: &[(&str, &str)] = &[
     ("zh-CN", include_str!("i18n/zh-CN.json")),
     ("en-US", include_str!("i18n/en-US.json")),
     ("ja-JP", include_str!("i18n/ja-JP.json")),
+    ("zh-TW", include_str!("i18n/zh-TW.json")),
 ];
 static CATALOGS: LazyLock<Vec<(&str, HashMap<String, String>)>> = LazyLock::new(|| {
     SOURCES
@@ -136,10 +137,20 @@ mod tests {
     fn unsupported_languages_and_unknown_keys_have_stable_fallbacks() {
         assert_eq!(super::normalize_language("en-US"), "en-US");
         assert_eq!(super::normalize_language("ja-JP"), "ja-JP");
+        assert_eq!(super::normalize_language("zh-TW"), "zh-TW");
         assert_eq!(super::normalize_language("unsupported"), "zh-CN");
         assert_eq!(super::lookup(0, "missing.key"), "missing.key");
         assert_eq!(super::lookup(1, "missing.key"), "missing.key");
         assert_eq!(super::lookup(2, "missing.key"), "missing.key");
+        assert_eq!(super::lookup(3, "missing.key"), "missing.key");
+        assert_eq!(super::lookup(3, "auth.login_success"), "登入成功");
+        assert_eq!(
+            super::render(
+                super::lookup(3, "risk.window_title"),
+                &[("uid", "42".into())]
+            ),
+            "上傳安全驗證 · 42"
+        );
     }
 
     #[test]

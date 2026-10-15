@@ -91,6 +91,9 @@ test('界面文本和 Element Plus 语言随切换刷新', () => {
     setLanguage('ja-JP')
     assert.equal(label.value, '動画タイトル')
     assert.equal(elementLocale.value.name, 'ja')
+    setLanguage('zh-TW')
+    assert.equal(label.value, '影片標題')
+    assert.equal(elementLocale.value.name, 'zh-tw')
     setLanguage('zh-CN')
     assert.equal(label.value, '视频标题')
 })
@@ -117,7 +120,7 @@ test('旧配置及不支持的语言回退到中文', async () => {
     assert.equal(t('视频标题'), '视频标题')
 })
 
-for (const selectedLanguage of ['en-US', 'ja-JP']) {
+for (const selectedLanguage of ['en-US', 'ja-JP', 'zh-TW']) {
     test('保存等待期间和失败后保持语言、配置和未保存内容 (' + selectedLanguage + ')', async () => {
         const store = await freshStore()
         store.configRoot.config[1].templates['中文模板'].title = '未保存的修改'
@@ -140,7 +143,7 @@ for (const selectedLanguage of ['en-US', 'ja-JP']) {
     })
 }
 
-for (const selectedLanguage of ['en-US', 'ja-JP']) {
+for (const selectedLanguage of ['en-US', 'ja-JP', 'zh-TW']) {
     test(
         '成功保存并重新加载语言，保留投稿内容和未保存模板状态 (' + selectedLanguage + ')',
         async () => {
@@ -161,7 +164,7 @@ for (const selectedLanguage of ['en-US', 'ja-JP']) {
             await store.updateGlobalConfig({ language: selectedLanguage, max_curr: 4 })
             assert.equal(
                 t('视频标题'),
-                selectedLanguage === 'ja-JP' ? '動画タイトル' : 'Video title'
+                { 'en-US': 'Video title', 'ja-JP': '動画タイトル', 'zh-TW': '影片標題' }[selectedLanguage]
             )
             assert.equal(store.configRoot.language, selectedLanguage)
             assert.equal(store.configRoot.config[1].templates['中文模板'].title, '未保存的修改')
@@ -170,7 +173,7 @@ for (const selectedLanguage of ['en-US', 'ja-JP']) {
             const restarted = await freshStore(persisted)
             assert.equal(
                 t('视频标题'),
-                selectedLanguage === 'ja-JP' ? '動画タイトル' : 'Video title'
+                { 'en-US': 'Video title', 'ja-JP': '動画タイトル', 'zh-TW': '影片標題' }[selectedLanguage]
             )
             assert.equal(restarted.configRoot.language, selectedLanguage)
             assert.deepEqual(restarted.configRoot.config, persisted.config)
@@ -178,7 +181,7 @@ for (const selectedLanguage of ['en-US', 'ja-JP']) {
     )
 }
 
-for (const selectedLanguage of ['en-US', 'ja-JP']) {
+for (const selectedLanguage of ['en-US', 'ja-JP', 'zh-TW']) {
     test('多语言模式下 API 返回仍保持原样 (' + selectedLanguage + ')', async () => {
         setActivePinia(createPinia())
         setLanguage(selectedLanguage)
@@ -191,7 +194,7 @@ for (const selectedLanguage of ['en-US', 'ja-JP']) {
     })
 }
 
-for (const selectedLanguage of ['en-US', 'ja-JP']) {
+for (const selectedLanguage of ['en-US', 'ja-JP', 'zh-TW']) {
     test('词典保留插值参数，国家选项都有翻译 (' + selectedLanguage + ')', () => {
         const catalog = JSON.parse(
             readFileSync(resolve(root, 'src/i18n/' + selectedLanguage + '.json'), 'utf8')
@@ -211,22 +214,28 @@ for (const selectedLanguage of ['en-US', 'ja-JP']) {
     })
 }
 
-test('日语词典覆盖全部界面文本及命名消息', () => {
-    const japanese = JSON.parse(readFileSync(resolve(root, 'src/i18n/ja-JP.json'), 'utf8'))
-    const source = readFileSync(resolve(root, 'src/i18n/index.ts'), 'utf8')
-    const placeholders = value => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort()
-    for (const match of source.matchAll(/'([a-zA-Z]\w*(?:\.\w+)+)':\s*'([^']*)'/g)) {
-        assert.ok(japanese[match[1]], match[1])
-        assert.deepEqual(placeholders(japanese[match[1]]), placeholders(match[2]), match[1])
-    }
-})
+for (const selectedLanguage of ['ja-JP', 'zh-TW']) {
+    test('词典覆盖全部界面文本及命名消息 (' + selectedLanguage + ')', () => {
+        const catalog = JSON.parse(
+            readFileSync(resolve(root, 'src/i18n/' + selectedLanguage + '.json'), 'utf8')
+        )
+        const source = readFileSync(resolve(root, 'src/i18n/index.ts'), 'utf8')
+        const placeholders = value => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort()
+        for (const match of source.matchAll(/'([a-zA-Z]\w*(?:\.\w+)+)':\s*'([^']*)'/g)) {
+            assert.ok(catalog[match[1]], match[1])
+            assert.deepEqual(placeholders(catalog[match[1]]), placeholders(match[2]), match[1])
+        }
+    })
+}
 
-test('文档语言随日语切换更新', () => {
+test('文档语言随日语和繁体中文切换更新', () => {
     const originalDocument = globalThis.document
     globalThis.document = { documentElement: { lang: '' } }
     try {
         setLanguage('ja-JP')
         assert.equal(globalThis.document.documentElement.lang, 'ja-JP')
+        setLanguage('zh-TW')
+        assert.equal(globalThis.document.documentElement.lang, 'zh-TW')
         setLanguage('zh-CN')
         assert.equal(globalThis.document.documentElement.lang, 'zh-CN')
     } finally {
