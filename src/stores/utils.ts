@@ -4,6 +4,7 @@ import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { ElMessage } from 'element-plus'
 import type { MentionUserGroup } from '../types/mention'
+import type { CreatorVideoPage } from '../types/creator_video'
 
 const originalConsoleError = console.error.bind(console)
 
@@ -174,6 +175,9 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
+    const getVideoList = (uid: number, page: number, pageSize: number) =>
+        invoke<CreatorVideoPage>('get_video_list', { uid, page, pageSize })
+
     const getVideoDetail = async (uid: number, videoId: string) => {
         try {
             const detail = await invoke('get_video_detail', { uid, videoId })
@@ -273,6 +277,7 @@ export const useUtilsStore = defineStore('template', () => {
         searchTopics,
         searchMention,
         getVideoDetail,
+        getVideoList,
         getSeasonList,
         getVideoSeason,
         switchSeason,

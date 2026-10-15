@@ -181,5 +181,8 @@
     "risk.script.account_mismatch": "驗證視窗帳號與上傳帳號不一致",
     "risk.script.sdk_load_failed": "驗證碼 SDK 載入失敗",
     "risk.script.sdk_timeout": "驗證碼 SDK 載入逾時",
-    "risk.script.token_invalid": "驗證碼 SDK 未返回有效憑據"
+    "risk.script.token_invalid": "驗證碼 SDK 未返回有效憑據",
+    "video.list_invalid_response": "稿件列表回應格式錯誤",
+    "video.list_api_failed": "取得稿件列表失敗：code={code}，{message}",
+    "video.list_invalid_page": "稿件列表分頁參數無效"
 }

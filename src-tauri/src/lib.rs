@@ -341,6 +341,7 @@ pub async fn run() {
             search_mention,
             get_season_list,
             get_video_detail,
+            get_video_list,
             get_video_season,
             switch_season,
             export_logs,

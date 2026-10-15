@@ -181,5 +181,8 @@
     "risk.script.account_mismatch": "認証ウィンドウのアカウントがアップロードアカウントと一致しません",
     "risk.script.sdk_load_failed": "CAPTCHA SDK の読み込みに失敗しました",
     "risk.script.sdk_timeout": "CAPTCHA SDK の読み込みがタイムアウトしました",
-    "risk.script.token_invalid": "CAPTCHA SDK から有効な認証トークンが返されませんでした"
+    "risk.script.token_invalid": "CAPTCHA SDK から有効な認証トークンが返されませんでした",
+    "video.list_invalid_response": "投稿一覧の応答形式が無効です",
+    "video.list_api_failed": "投稿一覧の取得に失敗: code={code}, {message}",
+    "video.list_invalid_page": "投稿一覧のページ指定が無効です"
 }

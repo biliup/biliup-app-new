@@ -181,5 +181,8 @@
     "risk.script.account_mismatch": "The verification window account does not match the upload account",
     "risk.script.sdk_load_failed": "Failed to load the captcha SDK",
     "risk.script.sdk_timeout": "Loading the captcha SDK timed out",
-    "risk.script.token_invalid": "The captcha SDK did not return a valid token"
+    "risk.script.token_invalid": "The captcha SDK did not return a valid token",
+    "video.list_invalid_response": "Invalid submission list response",
+    "video.list_api_failed": "Failed to load submissions: code={code}, {message}",
+    "video.list_invalid_page": "Invalid submission list pagination"
 }

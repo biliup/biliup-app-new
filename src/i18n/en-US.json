@@ -944,5 +944,14 @@
     "启用后，连续 {count} 次检测无变化后将自动提交到“{template}”": "When enabled, submit to \"{template}\" after {count} consecutive scans without changes",
     "连续 {count} 次检测无变化后将自动提交到“{template}”（{mode}）": "Submit to \"{template}\" after {count} consecutive scans without changes ({mode})",
     "globalConfig.language.zh": "简体中文",
-    "globalConfig.language.zhTw": "繁體中文"
+    "globalConfig.language.zhTw": "繁體中文",
+    "选择已有稿件": "Select an existing submission",
+    "刷新": "Refresh",
+    "加载中...": "Loading...",
+    "请点击刷新重试": "Click Refresh to try again",
+    "暂无稿件": "No submissions",
+    "暂无封面": "No cover",
+    "操作": "Actions",
+    "选择": "Select",
+    "获取稿件列表失败: {0}": "Failed to load submissions: {0}"
 }

@@ -2,6 +2,7 @@ use biliup::{
     bilibili::{BiliBili, Vid},
     uploader::season::{Episode, EpisodeAdd, SeasonApi, SeasonEntry},
 };
+use futures::{StreamExt, stream};
 use serde_json::{Value, json};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
@@ -579,6 +580,129 @@ async fn find_video_season(
     ))
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct CreatorVideo {
+    aid: u64,
+    #[serde(default)]
+    bvid: String,
+    title: String,
+    #[serde(default)]
+    cover: String,
+}
+
+#[derive(Debug, serde::Serialize)]
+pub struct CreatorVideoPage {
+    items: Vec<CreatorVideo>,
+    total: u64,
+}
+
+fn parse_video_list(response: Value) -> Result<CreatorVideoPage, AppError> {
+    let invalid = || AppError::Custom(crate::i18n::text("video.list_invalid_response").into());
+    match response["code"].as_i64() {
+        Some(0) => {}
+        Some(code) => {
+            return Err(AppError::Custom(crate::tr!(
+                "video.list_api_failed",
+                code = code,
+                message = response["message"].as_str().unwrap_or_default()
+            )));
+        }
+        None => return Err(invalid()),
+    }
+    let data = &response["data"];
+    let total = data["page"]["count"].as_u64().ok_or_else(invalid)?;
+    let entries = match data["arc_audits"].as_array() {
+        Some(entries) => entries.as_slice(),
+        None if total == 0 && data["arc_audits"].is_null() => &[],
+        None => return Err(invalid()),
+    };
+    let items = entries
+        .iter()
+        .map(|entry| {
+            let mut video: CreatorVideo =
+                serde_json::from_value(entry["Archive"].clone()).map_err(|_| invalid())?;
+            if video.aid == 0 {
+                return Err(invalid());
+            }
+            // 列表接口的封面只有相对路径，补齐图片域名。
+            video.cover = if video.cover.is_empty()
+                || video.cover.starts_with("http://")
+                || video.cover.starts_with("https://")
+            {
+                video.cover
+            } else if video.cover.starts_with("//") {
+                format!("http:{}", video.cover)
+            } else {
+                format!(
+                    "http://i1.hdslb.com/{}",
+                    video.cover.trim_start_matches('/')
+                )
+            };
+            Ok(video)
+        })
+        .collect::<Result<Vec<_>, AppError>>()?;
+    Ok(CreatorVideoPage { items, total })
+}
+
+async fn download_video_covers(client: &reqwest::Client, page: &mut CreatorVideoPage) {
+    stream::iter(page.items.iter_mut())
+        .for_each_concurrent(4, |video| async move {
+            let url = std::mem::take(&mut video.cover);
+            if url.is_empty() {
+                return;
+            }
+            let result = async {
+                let bytes = client
+                    .get(&url)
+                    .timeout(Duration::from_secs(10))
+                    .send()
+                    .await?
+                    .error_for_status()?
+                    .bytes()
+                    .await?;
+                Ok::<_, reqwest::Error>(encode_base64(&bytes))
+            }
+            .await;
+            match result {
+                Ok(cover) => video.cover = cover,
+                Err(error) => warn!(aid = video.aid, %error, "下载稿件封面失败"),
+            }
+        })
+        .await;
+}
+
+#[tauri::command]
+pub async fn get_video_list(
+    app: tauri::AppHandle,
+    uid: u64,
+    page: u32,
+    page_size: u32,
+) -> Result<CreatorVideoPage, AppError> {
+    if page == 0 || !(1..=100).contains(&page_size) {
+        return Err(AppError::Custom(
+            crate::i18n::text("video.list_invalid_page").into(),
+        ));
+    }
+    let bilibili = app.state::<AppData>().get_bilibili(uid).await?;
+    let response = bilibili
+        .client
+        .get("https://member.bilibili.com/x2/creative/web/archives/sp")
+        .header(
+            "Referer",
+            "https://member.bilibili.com/platform/upload-manager/article",
+        )
+        .query(&[("pn", page), ("ps", page_size)])
+        .timeout(Duration::from_secs(30))
+        .send()
+        .await?
+        .error_for_status()?
+        .json::<Value>()
+        .await?;
+    let mut page = parse_video_list(response)?;
+    download_video_covers(&bilibili.client, &mut page).await;
+    Ok(page)
+}
+
 #[tauri::command]
 pub async fn get_video_detail(
     app: tauri::AppHandle,
@@ -1004,6 +1128,165 @@ pub async fn console_log(
         _ => info!("Webconsole: {}", message),
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod video_list_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn downloads_covers_as_base64_and_keeps_list_when_one_download_fails() {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let image = b"\xff\xd8\xff\xe0test-cover";
+        let server = tokio::spawn(async move {
+            for _ in 0..2 {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request = [0; 2048];
+                let size = socket.read(&mut request).await.unwrap();
+                if request[..size].starts_with(b"GET /cover.jpg ") {
+                    socket
+                        .write_all(
+                            format!(
+                                "HTTP/1.1 200 OK\r\nContent-Type: image/jpeg\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                                image.len()
+                            )
+                            .as_bytes(),
+                        )
+                        .await
+                        .unwrap();
+                    socket.write_all(image).await.unwrap();
+                } else {
+                    socket
+                        .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n")
+                        .await
+                        .unwrap();
+                }
+            }
+        });
+        let mut page = CreatorVideoPage {
+            items: vec![
+                CreatorVideo {
+                    aid: 1,
+                    bvid: String::new(),
+                    title: "封面成功".into(),
+                    cover: format!("http://{address}/cover.jpg"),
+                },
+                CreatorVideo {
+                    aid: 2,
+                    bvid: String::new(),
+                    title: "封面失败".into(),
+                    cover: format!("http://{address}/missing.jpg"),
+                },
+                CreatorVideo {
+                    aid: 3,
+                    bvid: String::new(),
+                    title: "无封面".into(),
+                    cover: String::new(),
+                },
+            ],
+            total: 3,
+        };
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        tokio::time::timeout(
+            Duration::from_secs(5),
+            download_video_covers(&client, &mut page),
+        )
+        .await
+        .unwrap();
+        server.await.unwrap();
+        assert_eq!(page.items[0].cover, encode_base64(image));
+        assert!(page.items[1].cover.is_empty());
+        assert!(page.items[2].cover.is_empty());
+        let serialized = serde_json::to_value(&page).unwrap();
+        assert_eq!(serialized["items"][0]["cover"], encode_base64(image));
+        assert_eq!(page.total, 3);
+        assert_eq!(page.items.len(), 3);
+    }
+
+    #[test]
+    fn parses_documented_archive_shape_and_pagination() {
+        let page = parse_video_list(json!({
+            "code": 0,
+            "data": {
+                "arc_audits": [
+                    {"Archive": {"aid": 123, "bvid": "BVtest", "title": "测试稿件", "cover": "/bfs/archive/test.jpg"}},
+                    {"Archive": {"aid": 456, "title": "无 BV 号稿件", "cover": "//i1.hdslb.com/test.jpg"}}
+                ],
+                "page": {"pn": 2, "ps": 10, "count": 25}
+            }
+        }))
+        .unwrap();
+        assert_eq!(page.total, 25);
+        assert_eq!(page.items.len(), 2);
+        assert_eq!(page.items[0].aid, 123);
+        assert_eq!(page.items[0].title, "测试稿件");
+        assert_eq!(
+            page.items[0].cover,
+            "http://i1.hdslb.com/bfs/archive/test.jpg"
+        );
+        assert_eq!(page.items[1].bvid, "");
+        assert_eq!(page.items[1].cover, "http://i1.hdslb.com/test.jpg");
+    }
+
+    #[test]
+    fn cover_paths_use_image_domain_and_preserve_absolute_urls() {
+        for (cover, expected) in [
+            (
+                "bfs/archive/test.jpg",
+                "http://i1.hdslb.com/bfs/archive/test.jpg",
+            ),
+            (
+                "http://i1.hdslb.com/test.jpg",
+                "http://i1.hdslb.com/test.jpg",
+            ),
+            (
+                "https://i2.hdslb.com/test.jpg",
+                "https://i2.hdslb.com/test.jpg",
+            ),
+            ("", ""),
+        ] {
+            let page = parse_video_list(json!({
+                "code": 0,
+                "data": {
+                    "arc_audits": [{"Archive": {"aid": 123, "title": "测试稿件", "cover": cover}}],
+                    "page": {"count": 1}
+                }
+            }))
+            .unwrap();
+            assert_eq!(page.items[0].cover, expected);
+        }
+    }
+
+    #[test]
+    fn empty_list_is_allowed_but_api_errors_and_invalid_lists_are_rejected() {
+        for entries in [json!([]), Value::Null] {
+            let page = parse_video_list(json!({
+                "code": 0, "data": {"arc_audits": entries, "page": {"count": 0}}
+            }))
+            .unwrap();
+            assert!(page.items.is_empty());
+            assert_eq!(page.total, 0);
+        }
+        let error = parse_video_list(json!({"code": -101, "message": "账号未登录"}))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("-101"));
+        assert!(error.contains("账号未登录"));
+        for response in [
+            json!({}),
+            json!({"code": 0, "data": {}}),
+            json!({"code": 0, "data": {"page": {"count": 1}, "arc_audits": null}}),
+            json!({"code": 0, "data": {"page": {"count": 1}, "arc_audits": [{"Archive": {"aid": 0, "title": "无效稿件"}}]}}),
+        ] {
+            assert!(parse_video_list(response).is_err());
+        }
+    }
 }
 
 #[cfg(test)]

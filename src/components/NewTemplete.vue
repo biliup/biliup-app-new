@@ -66,6 +66,19 @@
                     </div>
                 </el-form-item>
                 <el-form-item
+                    v-if="
+                        newTemplateForm.templateType === 'bv' &&
+                        newTemplateForm.actionType === 'edit'
+                    "
+                >
+                    <el-button
+                        :disabled="!newTemplateForm.userUid"
+                        @click="videoPickerVisible = true"
+                    >
+                        {{ t('选择已有稿件') }}
+                    </el-button>
+                </el-form-item>
+                <el-form-item
                     :label="t('模板名称')"
                     required
                     v-if="
@@ -87,6 +100,14 @@
                 </span>
             </template>
         </el-dialog>
+        <CreatorVideoPicker
+            v-model="videoPickerVisible"
+            :uid="newTemplateForm.userUid"
+            :username="
+                loginUsers.find(user => user.uid === newTemplateForm.userUid)?.username || ''
+            "
+            @select="newTemplateForm.bvNumber = $event"
+        />
     </div>
 </template>
 
@@ -96,6 +117,7 @@ import { ref, computed, watch } from 'vue'
 import { useAuthStore } from '../stores/auth'
 import { useUserConfigStore } from '../stores/user_config'
 import { useUtilsStore } from '../stores/utils'
+import CreatorVideoPicker from './CreatorVideoPicker.vue'
 
 // Props
 const props = defineProps<{
@@ -123,12 +145,25 @@ const showDialog = computed({
 })
 
 const newTemplateForm = ref({
-    userUid: null,
+    userUid: null as number | null,
     name: '',
     templateType: 'blank', // 'blank' | 'bv'
     bvNumber: '',
     actionType: 'copy' // 'edit' | 'copy'
 })
+const videoPickerVisible = ref(false)
+
+watch(
+    () => [
+        props.modelValue,
+        newTemplateForm.value.userUid,
+        newTemplateForm.value.templateType,
+        newTemplateForm.value.actionType
+    ],
+    () => {
+        videoPickerVisible.value = false
+    }
+)
 
 // localStorage key for storing user preferences
 const STORAGE_KEY = 'new-template-preferences'
