@@ -23,7 +23,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-biliup = { git = "https://github.com/biliup/biliup.git", rev = "7c923122fe822475a7599423d969d709f1c1e678" }
+biliup = { git = "https://github.com/HsuJv/biliup.git", rev = "3fc1cd4bb0eec2a7987a68be4392deb2ab863802" }
 
 tauri = { version = "2", features = ["devtools", "macos-proxy"] }
 tauri-plugin-opener = "2"
