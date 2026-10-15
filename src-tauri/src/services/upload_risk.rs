@@ -264,6 +264,27 @@ fn verification_result(url: &Url, session: &str) -> Option<Result<String>> {
     )
 }
 
+fn verification_ready(url: &Url, session: &str) -> bool {
+    url.origin().ascii_serialization() == MEMBER
+        && url.path() == CALLBACK_PATH
+        && url.fragment() == Some(format!("{session}&ready=1").as_str())
+}
+
+async fn wait_for_verification(
+    mut receiver: oneshot::Receiver<Result<String>>,
+    initialize: impl std::future::Future<Output = Result<()>>,
+    timeout: Duration,
+) -> Result<String> {
+    tokio::select! {
+        result = &mut receiver => result.map_err(|_| anyhow!(CANCELLED))?,
+        initialized = tokio::time::timeout(timeout, initialize) => {
+            initialized.context("安全验证页面初始化超时，请检查网络或代理后重试")??;
+            // SDK 已就绪，之后只等待用户完成验证或关闭窗口。
+            receiver.await.map_err(|_| anyhow!(CANCELLED))?
+        }
+    }
+}
+
 #[cfg(test)]
 async fn verify_window(
     _: &AppHandle,
@@ -288,15 +309,19 @@ async fn verify_window(
         chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
     );
     let callback = format!("{MEMBER}{CALLBACK_PATH}#{session}");
+    let ready_callback = serde_json::to_string(&format!("{callback}&ready=1"))?;
     let options = json!({"riskParams": {"v_voucher": voucher}}).to_string();
     let script = include_str!("upload_risk_verification.js")
         .replace("__RISK_OPTIONS__", &options)
-        .replace("__EXPECTED_UID__", &uid.to_string());
+        .replace("__EXPECTED_UID__", &uid.to_string())
+        .replace("__RISK_READY_CALLBACK__", &ready_callback);
     let callback_json = serde_json::to_string(&callback)?;
     let script = format!(
         "{script}.then(token => {{ location.href = {callback_json} + '&token=' + encodeURIComponent(token) }}, error => {{ console.error('[上传风控] 验证失败，阶段：', window.__biliupRiskStage, error); location.href = {callback_json} + '&cancelled=1&stage=' + encodeURIComponent(window.__biliupRiskStage || '') }})"
     );
     let (sender, receiver) = oneshot::channel();
+    let (ready_sender, ready_receiver) = oneshot::channel();
+    let ready_sender = Mutex::new(Some(ready_sender));
     let sender = Arc::new(Mutex::new(Some(sender)));
     let nav_sender = Arc::clone(&sender);
     let load_sender = Arc::clone(&sender);
@@ -311,7 +336,11 @@ async fn verify_window(
     .incognito(true)
     .on_navigation(move |url| {
         if url.origin().ascii_serialization() == MEMBER && url.path() == CALLBACK_PATH {
-            if let Some(result) = verification_result(url, &session) {
+            if verification_ready(url, &session) {
+                if let Some(sender) = ready_sender.lock().unwrap().take() {
+                    let _ = sender.send(());
+                }
+            } else if let Some(result) = verification_result(url, &session) {
                 if let Err(error) = &result {
                     tracing::warn!(uid, error = %error, "上传风控：收到脚本失败回传");
                 } else {
@@ -349,10 +378,6 @@ async fn verify_window(
     tracing::info!(uid, "上传风控：验证窗口已创建");
     #[cfg(debug_assertions)]
     window.0.open_devtools();
-    #[cfg(debug_assertions)]
-    let (closed_sender, closed_receiver) = oneshot::channel();
-    #[cfg(debug_assertions)]
-    let closed_sender = Mutex::new(Some(closed_sender));
     let close_sender = Arc::clone(&sender);
     window.0.on_window_event(move |event| {
         if matches!(
@@ -360,16 +385,10 @@ async fn verify_window(
             WindowEvent::CloseRequested { .. } | WindowEvent::Destroyed
         ) {
             tracing::info!(uid, event = ?event, "上传风控：窗口关闭事件");
-            #[cfg(debug_assertions)]
-            {
-                if let Some(sender) = closed_sender.lock().unwrap().take() {
-                    let _ = sender.send(());
-                }
-            }
             finish(&close_sender, Err(anyhow!(CANCELLED)));
         }
     });
-    let result: Result<String> = async {
+    let initialize = async {
         let cookies = bili.login_info.cookie_info["cookies"]
             .as_array()
             .ok_or_else(|| anyhow!("账号 Cookie 无效"))?;
@@ -427,18 +446,80 @@ async fn verify_window(
                 "{MEMBER}/platform/upload/video/frame"
             ))?)
             .context("导航到安全验证页面失败")?;
-        receiver.await.map_err(|_| anyhow!(CANCELLED))?
+        ready_receiver.await.context("安全验证初始化已中断")
+    };
+    wait_for_verification(receiver, initialize, Duration::from_secs(60)).await
+}
+
+#[cfg(test)]
+mod initialization_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn initialization_timeout_releases_the_window_lock() {
+        let lock = Arc::new(AsyncMutex::new(()));
+        let guard = lock.lock().await;
+        let (_sender, receiver) = oneshot::channel();
+        let result = wait_for_verification(
+            receiver,
+            async move {
+                let _guard = guard;
+                std::future::pending::<Result<()>>().await
+            },
+            Duration::from_millis(10),
+        )
+        .await;
+        assert!(result.unwrap_err().to_string().contains("初始化超时"));
+        assert!(lock.try_lock().is_ok());
     }
-    .await;
-    #[cfg(debug_assertions)]
-    if let Err(error) = &result {
-        tracing::warn!(uid, error = %error, "上传风控：调试模式保留失败窗口，请收集 Console 和 Network 后手动关闭");
-        let _ = window
-            .0
-            .set_title("上传安全验证失败 · 请收集 Console / Network 后关闭窗口");
-        let _ = closed_receiver.await;
+
+    #[tokio::test]
+    async fn initialized_verification_has_no_human_timeout() {
+        let (sender, receiver) = oneshot::channel();
+        let (ready, initialized) = oneshot::channel();
+        let worker = tokio::spawn(wait_for_verification(
+            receiver,
+            async move {
+                ready.send(()).unwrap();
+                Ok(())
+            },
+            Duration::from_millis(10),
+        ));
+        initialized.await.unwrap();
+        tokio::time::sleep(Duration::from_millis(30)).await;
+        assert!(!worker.is_finished());
+        sender.send(Ok("token".into())).unwrap();
+        assert_eq!(worker.await.unwrap().unwrap(), "token");
     }
-    result
+
+    #[tokio::test]
+    async fn closing_window_interrupts_initialization_immediately() {
+        let (sender, receiver) = oneshot::channel();
+        sender.send(Err(anyhow!(CANCELLED))).unwrap();
+        let result =
+            wait_for_verification(receiver, std::future::pending(), Duration::from_secs(60)).await;
+        assert_eq!(result.unwrap_err().to_string(), CANCELLED);
+    }
+
+    #[test]
+    fn readiness_callback_is_bound_to_origin_path_and_session() {
+        let callback = format!("{MEMBER}{CALLBACK_PATH}#session&ready=1");
+        assert!(verification_ready(
+            &Url::parse(&callback).unwrap(),
+            "session"
+        ));
+        for invalid in [
+            callback.replace(MEMBER, "https://evil.invalid"),
+            callback.replace(CALLBACK_PATH, "/other"),
+            callback.replace("#session", "#other"),
+            callback.replace("ready=1", "token=value"),
+        ] {
+            assert!(!verification_ready(
+                &Url::parse(&invalid).unwrap(),
+                "session"
+            ));
+        }
+    }
 }
 
 #[cfg(test)]

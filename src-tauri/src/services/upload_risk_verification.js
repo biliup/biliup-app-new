@@ -6,8 +6,18 @@
     window.__biliupRiskStage = 'account'
     const expectedUid = __EXPECTED_UID__
     console.info('[上传风控] 检查验证窗口登录账号')
-    const response = await fetch('https://api.bilibili.com/x/web-interface/nav', { credentials: 'include' })
-    const user = await response.json()
+    const controller = new AbortController()
+    const accountTimer = setTimeout(() => controller.abort(), 30000)
+    let response, user
+    try {
+        response = await fetch('https://api.bilibili.com/x/web-interface/nav', {
+            credentials: 'include',
+            signal: controller.signal
+        })
+        user = await response.json()
+    } finally {
+        clearTimeout(accountTimer)
+    }
     console.info('[上传风控] 账号检查', { status: response.status, code: user.code, matches: user.data?.mid === expectedUid })
     if (user.code !== 0) {
         throw new Error('验证窗口登录态无效，账号接口返回 code=' + user.code)
@@ -37,6 +47,8 @@
         const timer = setTimeout(() => reject(new Error('验证码 SDK 加载超时')), 30000)
         loadSdk().then(resolve, reject).finally(() => clearTimeout(timer))
     })
+    // SDK 就绪后通知后端结束初始化计时，人工验证不设超时。
+    location.href = __RISK_READY_CALLBACK__
     window.__biliupRiskStage = 'sdk_verify'
     console.info('[上传风控] 开始 SDK 验证')
     const token = await useCaptcha(options)
