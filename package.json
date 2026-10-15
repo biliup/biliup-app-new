@@ -4,6 +4,7 @@
   "version": "1.4.0",
   "type": "module",
   "scripts": {
+    "test:upload-queue": "node --test tests/uploadQueue.test.mjs",
     "test:i18n": "node --test tests/i18n.test.mjs",
     "test:description": "node --experimental-strip-types --test tests/descriptionClipboard.test.mjs",
     "dev": "vite",

@@ -2066,7 +2066,8 @@ const selectedCategory = ref<any>(null)
 const selectedSubCategory = ref<any>(null)
 const categoryPopoverVisible = ref(false)
 let generalUpdateTimer: number | null = null
-let queueRefreshRunning = false
+let queuePollingActive = false
+let queuePollingDisposed = false
 
 const currentTemplate = computed(() => {
     if (!selectedUser.value || !currentTemplateName.value || !userConfigStore.configRoot?.config) {
@@ -2488,8 +2489,10 @@ onUnmounted(() => {
         keyboardCleanup()
     }
 
-    if (generalUpdateTimer) {
-        clearInterval(generalUpdateTimer)
+    queuePollingDisposed = true
+    queuePollingActive = false
+    if (generalUpdateTimer !== null) {
+        clearTimeout(generalUpdateTimer)
         generalUpdateTimer = null
     }
 
@@ -2501,12 +2504,14 @@ onUnmounted(() => {
 })
 
 const startQueueUpdates = () => {
-    if (!generalUpdateTimer) {
-        generalUpdateTimer = setInterval(async () => {
-            if (authStore.loginUsers.length === 0 || queueRefreshRunning) return
-            queueRefreshRunning = true
-            try {
+    if (queuePollingActive || queuePollingDisposed) return
+    queuePollingActive = true
+    const refresh = async () => {
+        generalUpdateTimer = null
+        try {
+            if (authStore.loginUsers.length > 0) {
                 await uploadStore.getUploadQueue()
+                if (!queuePollingActive) return
                 for (const task of uploadStore.uploadQueue) {
                     if (task.status === 'Completed') {
                         const templateName = task.template
@@ -2524,13 +2529,22 @@ const startQueueUpdates = () => {
                         }
                     }
                 }
-            } catch (error) {
-                console.error(t('刷新上传队列失败:'), error)
-            } finally {
-                queueRefreshRunning = false
             }
-        }, 666) // 更新上传队列
+        } catch (error) {
+            console.error(t('刷新上传队列失败:'), error)
+        } finally {
+            // 等本轮请求和完成状态同步结束再计时，卸载后不再启动下一轮。
+            if (queuePollingActive) {
+                const hasActiveTasks =
+                    authStore.loginUsers.length > 0 &&
+                    uploadStore.uploadQueue.some(task =>
+                        ['Pending', 'Running', 'AwaitingVerification'].includes(task.status)
+                    )
+                generalUpdateTimer = window.setTimeout(refresh, hasActiveTasks ? 666 : 3000)
+            }
+        }
     }
+    generalUpdateTimer = window.setTimeout(refresh, 666)
 }
 
 // 初始化数据

@@ -28,8 +28,12 @@ interface BatchTaskActionResult {
 
 export const useUploadStore = defineStore('upload', () => {
     const uploadQueue = ref<UploadTask[]>([])
-    const speedSamples = new Map<string, { bytes: number; at: number }>()
-    let queueRequestId = 0
+    const speedSamples = new Map<
+        string,
+        { bytes: number; at: number; status: string; retryCount: number; startedAt?: number }
+    >()
+    let queueRefresh: { version: number; promise: Promise<void> } | null = null
+    let queueVersion = 0
     const submitInvokeIntervalMs = 5000
     const submitCancelCode = 'SUBMIT_CANCELLED'
     const submitRequestQueue: Array<{
@@ -185,7 +189,7 @@ export const useUploadStore = defineStore('upload', () => {
                 videos: pendingVideos
             })
 
-            await getUploadQueue() // 刷新队列
+            await getUploadQueue(true) // 操作完成后必须读取新的队列快照
             return createdCount
         } catch (error) {
             console.error(t('创建上传任务失败:'), error)
@@ -203,7 +207,7 @@ export const useUploadStore = defineStore('upload', () => {
             const startedResult = await invoke<BatchTaskActionResult>('start_upload', {
                 taskIds: normalizeTaskIds(taskIds)
             })
-            await getUploadQueue()
+            await getUploadQueue(true)
 
             return startedResult
         } catch (error) {
@@ -218,7 +222,7 @@ export const useUploadStore = defineStore('upload', () => {
             const pausedResult = await invoke<BatchTaskActionResult>('pause_upload', {
                 taskIds: normalizeTaskIds(taskIds)
             })
-            await getUploadQueue()
+            await getUploadQueue(true)
 
             return pausedResult
         } catch (error) {
@@ -233,7 +237,7 @@ export const useUploadStore = defineStore('upload', () => {
             const cancelledResult = await invoke<BatchTaskActionResult>('cancel_upload', {
                 taskIds: normalizeTaskIds(taskIds)
             })
-            await getUploadQueue()
+            await getUploadQueue(true)
 
             return cancelledResult
         } catch (error) {
@@ -242,32 +246,91 @@ export const useUploadStore = defineStore('upload', () => {
         }
     }
 
-    // 获取上传队列
-    const getUploadQueue = async () => {
-        const requestId = ++queueRequestId
-        try {
-            const queue = await invoke<UploadTask[]>('get_upload_queue')
-            if (requestId !== queueRequestId) return uploadQueue.value
-            const now = Date.now()
-            const taskIds = new Set(queue.map(task => task.id))
-            for (const id of speedSamples.keys()) {
-                if (!taskIds.has(id)) speedSamples.delete(id)
-            }
-            for (const task of queue) {
-                const previous = speedSamples.get(task.id)
-                task.speed =
-                    task.status === 'Running' && previous && now > previous.at
-                        ? (Math.max(0, task.total_transmit_bytes - previous.bytes) * 1000) /
-                          (now - previous.at)
-                        : 0
-                speedSamples.set(task.id, { bytes: task.total_transmit_bytes, at: now })
-            }
-            uploadQueue.value = queue
-            return queue
-        } catch (error) {
-            console.error(t('获取上传队列失败:'), error)
-            throw error
+    const updateQueue = (queue: UploadTask[]) => {
+        const now = Date.now()
+        const currentTasks = new Map(uploadQueue.value.map(task => [task.id, task]))
+        const taskIds = new Set(queue.map(task => task.id))
+        for (const id of speedSamples.keys()) {
+            if (!taskIds.has(id)) speedSamples.delete(id)
         }
+        const nextQueue = queue.map(task => {
+            const previous = speedSamples.get(task.id)
+            // 暂停、重试或计数归零后重新采样，避免把不同传输阶段的字节差算作速度。
+            task.speed =
+                task.status === 'Running' &&
+                previous?.status === 'Running' &&
+                previous.retryCount === task.retry_count &&
+                previous.startedAt === task.started_at &&
+                task.total_transmit_bytes >= previous.bytes &&
+                now > previous.at
+                    ? ((task.total_transmit_bytes - previous.bytes) * 1000) / (now - previous.at)
+                    : 0
+            speedSamples.set(task.id, {
+                bytes: task.total_transmit_bytes,
+                at: now,
+                status: task.status,
+                retryCount: task.retry_count,
+                startedAt: task.started_at
+            })
+            const current = currentTasks.get(task.id)
+            if (!current) return task
+
+            // user/video 都是平面数据；保留对象引用，只更新变化的字段。
+            for (const key of ['user', 'video'] as const) {
+                const source = task[key]
+                const target = current[key]
+                if (!source || !target) continue
+                for (const field of Object.keys(target)) {
+                    if (!(field in source)) delete target[field]
+                }
+                for (const field of Object.keys(source)) {
+                    if (target[field] !== source[field]) target[field] = source[field]
+                }
+                task[key] = target
+            }
+            for (const key of Object.keys(current) as Array<keyof UploadTask>) {
+                if (!(key in task)) delete current[key]
+            }
+            Object.assign(current, task)
+            return current
+        })
+        // 仅任务增删或排序变化时替换数组，稳定队列无需触发整表更新。
+        if (
+            nextQueue.length !== uploadQueue.value.length ||
+            nextQueue.some((task, index) => task.id !== uploadQueue.value[index].id)
+        ) {
+            uploadQueue.value = nextQueue
+        }
+        return uploadQueue.value
+    }
+
+    // 普通查询共享进行中的请求；操作完成后使旧快照失效，串行补查最新状态。
+    const getUploadQueue = (afterMutation = false): Promise<UploadTask[]> => {
+        if (afterMutation) queueVersion += 1
+        if (!queueRefresh) {
+            const version = queueVersion
+            const promise = (async () => {
+                try {
+                    const queue = await invoke<UploadTask[]>('get_upload_queue')
+                    if (version === queueVersion) updateQueue(queue)
+                } catch (error) {
+                    if (version === queueVersion) console.error(t('获取上传队列失败:'), error)
+                    throw error
+                }
+            })().finally(() => {
+                queueRefresh = null
+            })
+            queueRefresh = { version, promise }
+        }
+        const request = queueRefresh
+        // 在 Promise 收尾期间发生操作也要补查；所有等待者均等待操作后的快照。
+        return request.promise.then(
+            () => (request.version === queueVersion ? uploadQueue.value : getUploadQueue()),
+            error => {
+                if (request.version !== queueVersion) return getUploadQueue()
+                throw error
+            }
+        )
     }
 
     // 重试上传
@@ -277,7 +340,10 @@ export const useUploadStore = defineStore('upload', () => {
                 taskIds: normalizeTaskIds(taskIds)
             })
             if (refresh) {
-                await getUploadQueue()
+                await getUploadQueue(true)
+            } else {
+                // 批量重试可以不立即查询，但进行中的查询不能发布重试前的快照。
+                queueVersion += 1
             }
             return retriedResult
         } catch (error) {
