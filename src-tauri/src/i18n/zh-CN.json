@@ -191,5 +191,7 @@
     "season.manager.cid_missing": "无法获取稿件首个分 P 的 CID",
     "season.manager.episode_missing": "稿件已不在当前小节中，请刷新后重试",
     "season.manager.title_empty": "单集标题不能为空",
-    "season.manager.csrf_missing": "登录信息缺少 CSRF，请重新登录"
+    "season.manager.csrf_missing": "登录信息缺少 CSRF，请重新登录",
+    "season.manager.no_selection": "请选择要添加的稿件",
+    "video.list_snapshot_expired": "稿件列表已过期，请重新打开"
 }

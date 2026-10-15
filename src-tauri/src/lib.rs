@@ -276,6 +276,7 @@ pub async fn run() {
     }
 
     tauri::Builder::default()
+        .manage(CreatorVideoSnapshots::default())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -342,12 +343,14 @@ pub async fn run() {
             get_season_list,
             list_managed_seasons,
             get_managed_section,
-            add_season_episode,
+            add_season_episodes,
             remove_season_episode,
             reorder_season_episodes,
             edit_season_episode_title,
             get_video_detail,
             get_video_list,
+            open_video_list_snapshot,
+            close_video_list_snapshot,
             get_video_season,
             switch_season,
             export_logs,

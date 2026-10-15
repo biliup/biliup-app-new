@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { ElMessage } from 'element-plus'
 import type { MentionUserGroup } from '../types/mention'
 import type { CreatorVideoPage } from '../types/creator_video'
+import type { TemplateConfig } from './user_config'
 import type { ManagedSeason, ManagedSection } from '../types/season'
 
 const originalConsoleError = console.error.bind(console)
@@ -167,8 +168,12 @@ export const useUtilsStore = defineStore('template', () => {
     const getManagedSection = (uid: number, seasonId: number, sectionId: number) =>
         invoke<ManagedSection>('get_managed_section', { uid, seasonId, sectionId })
 
-    const addSeasonEpisode = (uid: number, seasonId: number, sectionId: number, videoId: string) =>
-        invoke<void>('add_season_episode', { uid, seasonId, sectionId, videoId })
+    const addSeasonEpisodes = (
+        uid: number,
+        seasonId: number,
+        sectionId: number,
+        videoIds: string[]
+    ) => invoke<void>('add_season_episodes', { uid, seasonId, sectionId, videoIds })
 
     const removeSeasonEpisode = (
         uid: number,
@@ -207,8 +212,24 @@ export const useUtilsStore = defineStore('template', () => {
         }
     }
 
-    const getVideoList = (uid: number, page: number, pageSize: number, seasonAddOnly = false) =>
-        invoke<CreatorVideoPage>('get_video_list', { uid, page, pageSize, seasonAddOnly })
+    const openVideoListSnapshot = (uid: number) =>
+        invoke<string>('open_video_list_snapshot', { uid })
+    const closeVideoListSnapshot = (uid: number, snapshotId: string) =>
+        invoke<void>('close_video_list_snapshot', { uid, snapshotId })
+    const getVideoList = (
+        uid: number,
+        page: number,
+        pageSize: number,
+        seasonAddOnly = false,
+        snapshotId?: string
+    ) =>
+        invoke<CreatorVideoPage>('get_video_list', {
+            uid,
+            page,
+            pageSize,
+            seasonAddOnly,
+            snapshotId
+        })
 
     const getVideoDetail = async (uid: number, videoId: string) => {
         try {
@@ -231,6 +252,23 @@ export const useUtilsStore = defineStore('template', () => {
             console.error(t('获取视频合集失败:'), error)
             throw error
         }
+    }
+
+    const getVideoTemplate = async (uid: number, videoId: string, isEdit = true) => {
+        const template = (await getVideoDetail(uid, videoId)) as TemplateConfig
+        for (const video of template.videos || []) {
+            video.id = video.filename
+            video.path = ''
+        }
+        if (template.aid && (await getSeasonList(uid))) {
+            const membership = await getVideoSeason(uid, template.aid)
+            if (membership.season_id !== 0) {
+                template.season_id = membership.season_id
+                template.section_id = membership.section_id
+            }
+        }
+        if (!isEdit) template.aid = undefined
+        return template
     }
 
     const switchSeason = async (uid: number, aid: number, seasonId: number, sectionId: number) => {
@@ -300,7 +338,7 @@ export const useUtilsStore = defineStore('template', () => {
         getCachedSeasons,
         listManagedSeasons,
         getManagedSection,
-        addSeasonEpisode,
+        addSeasonEpisodes,
         removeSeasonEpisode,
         reorderSeasonEpisodes,
         editSeasonEpisodeTitle,
@@ -315,7 +353,10 @@ export const useUtilsStore = defineStore('template', () => {
         searchTopics,
         searchMention,
         getVideoDetail,
+        getVideoTemplate,
         getVideoList,
+        openVideoListSnapshot,
+        closeVideoListSnapshot,
         getSeasonList,
         getVideoSeason,
         switchSeason,

@@ -191,5 +191,7 @@
     "season.manager.cid_missing": "最初の動画の CID を取得できません",
     "season.manager.episode_missing": "投稿はこのセクションに存在しません。更新して再試行してください",
     "season.manager.title_empty": "エピソードタイトルは空にできません",
-    "season.manager.csrf_missing": "CSRF トークンがありません。再ログインしてください"
+    "season.manager.csrf_missing": "CSRF トークンがありません。再ログインしてください",
+    "season.manager.no_selection": "追加する投稿を選択してください",
+    "video.list_snapshot_expired": "投稿一覧の有効期限が切れました。開き直してください"
 }

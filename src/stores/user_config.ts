@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { useAuthStore } from './auth'
+import { useUtilsStore } from './utils'
 import { normalizeLanguage, setLanguage } from '../i18n'
 
 // 用户信息接口
@@ -470,6 +471,23 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         }
     }
 
+    const createTemplateFromVideo = async (
+        uid: number,
+        videoId: string,
+        templateName: string,
+        isEdit = true
+    ) => {
+        const utilsStore = useUtilsStore()
+        try {
+            const template = await utilsStore.getVideoTemplate(uid, videoId, isEdit)
+            await addUserTemplate(uid, templateName, template)
+        } catch (error) {
+            console.error(t('从BV号创建模板失败: '), error)
+            utilsStore.showMessage(t('从BV号创建模板失败: {0}', { 0: String(error) }), 'error')
+            throw error
+        }
+    }
+
     // 更新指定用户的模板
     const updateUserTemplate = async (
         userUid: number,
@@ -726,6 +744,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         getUserTemplates,
         getUserTemplate,
         addUserTemplate,
+        createTemplateFromVideo,
         removeUserTemplate,
         updateUserTemplate,
         duplicateUserTemplate,

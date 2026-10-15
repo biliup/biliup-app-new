@@ -6,8 +6,16 @@ use futures::{StreamExt, stream};
 use serde_json::{Value, json};
 use std::str::FromStr;
 use std::time::{Duration, SystemTime};
+use std::{
+    collections::HashMap,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+};
 use std::{fs::File, io::Read, path::Path};
 use tauri::Manager;
+use tokio::sync::Mutex;
 
 use tracing::{debug, error, info, warn};
 
@@ -580,7 +588,7 @@ async fn find_video_season(
     ))
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CreatorVideo {
     aid: u64,
     #[serde(default)]
@@ -596,6 +604,68 @@ pub struct CreatorVideo {
 pub struct CreatorVideoPage {
     items: Vec<CreatorVideo>,
     total: u64,
+}
+
+type CandidateSnapshot = Arc<Mutex<Option<Vec<CreatorVideo>>>>;
+
+#[derive(Default)]
+pub struct CreatorVideoSnapshots {
+    next_id: AtomicU64,
+    entries: Mutex<HashMap<(u64, String), CandidateSnapshot>>,
+}
+
+impl CreatorVideoSnapshots {
+    async fn open(&self, uid: u64) -> String {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed).to_string();
+        self.entries
+            .lock()
+            .await
+            .insert((uid, id.clone()), Arc::default());
+        id
+    }
+
+    async fn close(&self, uid: u64, id: String) {
+        self.entries.lock().await.remove(&(uid, id));
+    }
+
+    async fn page(
+        &self,
+        client: &reqwest::Client,
+        member: &str,
+        uid: u64,
+        id: String,
+        page: u32,
+        page_size: u32,
+    ) -> Result<CreatorVideoPage, AppError> {
+        let snapshot = self
+            .entries
+            .lock()
+            .await
+            .get(&(uid, id))
+            .cloned()
+            .ok_or_else(|| {
+                AppError::Custom(crate::i18n::text("video.list_snapshot_expired").into())
+            })?;
+        // 同一弹窗的并发翻页共享一次初始化；关闭只移除入口，不会被旧请求重新创建。
+        let mut videos = snapshot.lock().await;
+        if videos.is_none() {
+            *videos = Some(load_season_candidates(client, member).await?);
+        }
+        Ok(candidate_page(videos.as_ref().unwrap(), page, page_size))
+    }
+}
+
+#[tauri::command]
+pub async fn open_video_list_snapshot(app: tauri::AppHandle, uid: u64) -> Result<String, AppError> {
+    app.state::<AppData>().get_bilibili(uid).await?;
+    Ok(app.state::<CreatorVideoSnapshots>().open(uid).await)
+}
+
+#[tauri::command]
+pub async fn close_video_list_snapshot(app: tauri::AppHandle, uid: u64, snapshot_id: String) {
+    app.state::<CreatorVideoSnapshots>()
+        .close(uid, snapshot_id)
+        .await;
 }
 
 fn parse_video_list(response: Value) -> Result<CreatorVideoPage, AppError> {
@@ -707,6 +777,14 @@ async fn load_creator_video_page(
     if !season_add_only {
         return fetch_video_list_page(client, member, page, page_size).await;
     }
+    let eligible = load_season_candidates(client, member).await?;
+    Ok(candidate_page(&eligible, page, page_size))
+}
+
+async fn load_season_candidates(
+    client: &reqwest::Client,
+    member: &str,
+) -> Result<Vec<CreatorVideo>, AppError> {
     // 上游按全部稿件分页：先取完整列表并筛选，再按可添加稿件计算分页和总数。
     let mut eligible = Vec::new();
     let mut received = 0_u64;
@@ -733,14 +811,19 @@ async fn load_creator_video_page(
             break;
         }
     }
+    Ok(eligible)
+}
+
+fn candidate_page(eligible: &[CreatorVideo], page: u32, page_size: u32) -> CreatorVideoPage {
     let total = eligible.len() as u64;
     let offset = usize::try_from(u64::from(page - 1) * u64::from(page_size)).unwrap_or(usize::MAX);
     let items = eligible
-        .into_iter()
+        .iter()
         .skip(offset)
         .take(page_size as usize)
+        .cloned()
         .collect();
-    Ok(CreatorVideoPage { items, total })
+    CreatorVideoPage { items, total }
 }
 
 #[tauri::command]
@@ -750,6 +833,7 @@ pub async fn get_video_list(
     page: u32,
     page_size: u32,
     season_add_only: Option<bool>,
+    snapshot_id: Option<String>,
 ) -> Result<CreatorVideoPage, AppError> {
     if page == 0 || !(1..=100).contains(&page_size) {
         return Err(AppError::Custom(
@@ -757,14 +841,27 @@ pub async fn get_video_list(
         ));
     }
     let bilibili = app.state::<AppData>().get_bilibili(uid).await?;
-    let mut page = load_creator_video_page(
-        &bilibili.client,
-        "https://member.bilibili.com",
-        page,
-        page_size,
-        season_add_only.unwrap_or(false),
-    )
-    .await?;
+    let mut page = if let Some(id) = snapshot_id.filter(|_| season_add_only.unwrap_or(false)) {
+        app.state::<CreatorVideoSnapshots>()
+            .page(
+                &bilibili.client,
+                "https://member.bilibili.com",
+                uid,
+                id,
+                page,
+                page_size,
+            )
+            .await?
+    } else {
+        load_creator_video_page(
+            &bilibili.client,
+            "https://member.bilibili.com",
+            page,
+            page_size,
+            season_add_only.unwrap_or(false),
+        )
+        .await?
+    };
     // 只下载最终显示的这一页封面。
     download_video_covers(&bilibili.client, &mut page).await;
     Ok(page)
@@ -1202,6 +1299,110 @@ mod video_list_tests {
     use super::*;
 
     #[tokio::test]
+    async fn snapshot_reuses_metadata_across_pages_and_rejects_closed_or_foreign_sessions() {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let member = format!("http://{}", listener.local_addr().unwrap());
+        let requests = Arc::new(AtomicU64::new(0));
+        let requests_for_server = requests.clone();
+        let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(async move {
+            loop {
+                let (mut socket, _) = tokio::select! {
+                    result = listener.accept() => result.unwrap(),
+                    _ = &mut stopped => break,
+                };
+                let mut request = Vec::new();
+                while !request.ends_with(b"\r\n\r\n") {
+                    request.push(socket.read_u8().await.unwrap());
+                }
+                requests_for_server.fetch_add(1, Ordering::SeqCst);
+                let request = String::from_utf8(request).unwrap();
+                let url = reqwest::Url::parse(&format!(
+                    "http://test{}",
+                    request.split_whitespace().nth(1).unwrap()
+                ))
+                .unwrap();
+                let pn = url
+                    .query_pairs()
+                    .find(|(key, _)| key == "pn")
+                    .unwrap()
+                    .1
+                    .parse::<u64>()
+                    .unwrap();
+                let ps = url
+                    .query_pairs()
+                    .find(|(key, _)| key == "ps")
+                    .unwrap()
+                    .1
+                    .parse::<u64>()
+                    .unwrap();
+                let entries: Vec<_> = ((pn - 1) * ps + 1..=(pn * ps).min(650)).map(|aid|
+                    json!({"Archive": {"aid": aid, "title": format!("稿件 {aid}")}, "season_add_state": aid % 2})
+                ).collect();
+                let body =
+                    json!({"code": 0, "data": {"page": {"count": 650}, "arc_audits": entries}})
+                        .to_string();
+                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+            }
+        });
+        let client = reqwest::Client::builder().no_proxy().build().unwrap();
+        let snapshots = CreatorVideoSnapshots::default();
+        let id = snapshots.open(1).await;
+        let (first, second) = tokio::join!(
+            snapshots.page(&client, &member, 1, id.clone(), 1, 5),
+            snapshots.page(&client, &member, 1, id.clone(), 2, 5)
+        );
+        assert_eq!(
+            first
+                .unwrap()
+                .items
+                .iter()
+                .map(|video| video.aid)
+                .collect::<Vec<_>>(),
+            vec![2, 4, 6, 8, 10]
+        );
+        let second = second.unwrap();
+        assert_eq!(second.total, 325);
+        assert_eq!(
+            second
+                .items
+                .iter()
+                .map(|video| video.aid)
+                .collect::<Vec<_>>(),
+            vec![12, 14, 16, 18, 20]
+        );
+        let initial_requests = requests.load(Ordering::SeqCst);
+        assert_eq!(initial_requests, 650_u64.div_ceil(300));
+        assert!(
+            snapshots
+                .page(&client, &member, 2, id.clone(), 1, 5)
+                .await
+                .is_err()
+        );
+        snapshots.close(1, id.clone()).await;
+        assert!(snapshots.page(&client, &member, 1, id, 1, 5).await.is_err());
+        assert_eq!(requests.load(Ordering::SeqCst), initial_requests);
+        let refreshed = snapshots.open(1).await;
+        assert_eq!(
+            snapshots
+                .page(&client, &member, 1, refreshed.clone(), 1, 5)
+                .await
+                .unwrap()
+                .total,
+            325
+        );
+        assert_eq!(requests.load(Ordering::SeqCst), initial_requests * 2);
+        snapshots.close(1, refreshed).await;
+        assert!(snapshots.entries.lock().await.is_empty());
+        let _ = stop.send(());
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
     async fn season_candidates_are_filtered_across_upstream_pages_before_pagination() {
         use tokio::{
             io::{AsyncReadExt, AsyncWriteExt},
@@ -1209,9 +1410,13 @@ mod video_list_tests {
         };
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let member = format!("http://{}", listener.local_addr().unwrap());
+        let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
         let server = tokio::spawn(async move {
-            for _ in 0..40 {
-                let (mut socket, _) = listener.accept().await.unwrap();
+            loop {
+                let (mut socket, _) = tokio::select! {
+                    connection = listener.accept() => connection.unwrap(),
+                    _ = &mut stopped => break,
+                };
                 let mut request = Vec::new();
                 while !request.ends_with(b"\r\n\r\n") {
                     request.push(socket.read_u8().await.unwrap());
@@ -1317,6 +1522,7 @@ mod video_list_tests {
                 .collect::<Vec<_>>(),
             vec![1101, 1104, 1107, 1110, 1113]
         );
+        let _ = stop.send(());
         server.await.unwrap();
     }
 

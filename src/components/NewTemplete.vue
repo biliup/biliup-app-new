@@ -269,7 +269,12 @@ const createNewTemplate = async () => {
             const templateName = newTemplateForm.value.name.trim() || `${bvNumber}`
 
             const isEdit = actionType === 'edit'
-            await createTemplateFromBV(targetUserUid, bvNumber, templateName, isEdit)
+            await userConfigStore.createTemplateFromVideo(
+                targetUserUid,
+                bvNumber,
+                templateName,
+                isEdit
+            )
 
             utilsStore.showMessage(t('基于稿件创建模板成功'), 'success')
             emit('template-created', targetUserUid, templateName)
@@ -288,52 +293,6 @@ const createNewTemplate = async () => {
         utilsStore.showMessage(errorMessage, 'error')
     }
 }
-
-// 根据BV号创建模板
-const createTemplateFromBV = async (
-    userUid: number,
-    bvNumber: string,
-    templateName: string,
-    isEdit: boolean
-) => {
-    try {
-        console.log(t('从BV号 {0} 创建模板: {1}', { 0: String(bvNumber), 1: String(templateName) }))
-
-        const newTemplate = (await utilsStore.getVideoDetail(userUid, bvNumber)) as any
-
-        // 处理视频列表
-        if (newTemplate.videos && Array.isArray(newTemplate.videos)) {
-            for (const video of newTemplate.videos) {
-                video.id = video.filename
-                video.path = ''
-            }
-        }
-
-        if (newTemplate.aid && (await utilsStore.getSeasonList(userUid))) {
-            const membership = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
-
-            if (membership.season_id !== 0) {
-                newTemplate.season_id = membership.season_id
-                newTemplate.section_id = membership.section_id
-            }
-        }
-
-        if (!isEdit) {
-            newTemplate.aid = undefined
-        }
-
-        await userConfigStore.addUserTemplate(userUid, templateName, newTemplate)
-    } catch (error) {
-        console.error(t('从BV号创建模板失败: '), error)
-        utilsStore.showMessage(t('从BV号创建模板失败: {0}', { 0: String(error) }), 'error')
-        throw error
-    }
-}
-
-// 暴露函数供父组件调用
-defineExpose({
-    createTemplateFromBV
-})
 </script>
 
 <style scoped>

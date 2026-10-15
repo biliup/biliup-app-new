@@ -203,37 +203,61 @@ pub async fn edit_season_episode_title(
 }
 
 #[tauri::command]
-pub async fn add_season_episode(
+pub async fn add_season_episodes(
     app: tauri::AppHandle,
     uid: u64,
     season_id: u64,
     section_id: u64,
-    video_id: String,
+    video_ids: Vec<String>,
 ) -> Result<(), AppError> {
-    let vid = Vid::from_str(video_id.trim())
-        .map_err(|error| AppError::Custom(crate::tr!("video.id_parse_failed", error = error)))?;
     let bili = app.state::<AppData>().get_bilibili(uid).await?;
-    let api = bili.season_api();
-    let detail = checked_section(&api, season_id, section_id).await?;
-    let view = api
-        .archive_view_by_vid(&vid)
-        .await
-        .map_err(|error| AppError::Biliup(error.to_string()))?;
-    if detail
-        .episodes
+    add_episodes(&bili.season_api(), season_id, section_id, &video_ids).await
+}
+
+async fn add_episodes(
+    api: &SeasonApi<'_>,
+    season_id: u64,
+    section_id: u64,
+    video_ids: &[String],
+) -> Result<(), AppError> {
+    if video_ids.is_empty() {
+        return Err(AppError::Custom(
+            crate::i18n::text("season.manager.no_selection").into(),
+        ));
+    }
+    let vids = video_ids
         .iter()
-        .any(|episode| episode.aid == view.aid)
-    {
-        return Err(AppError::Custom(
-            crate::i18n::text("season.manager.already_added").into(),
-        ));
+        .map(|id| {
+            Vid::from_str(id.trim()).map_err(|error| {
+                AppError::Custom(crate::tr!("video.id_parse_failed", error = error))
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let detail = checked_section(api, season_id, section_id).await?;
+    let existing: HashSet<_> = detail.episodes.iter().map(|episode| episode.aid).collect();
+    let mut seen = HashSet::new();
+    let mut episodes = Vec::new();
+    for vid in vids {
+        let view = api
+            .archive_view_by_vid(&vid)
+            .await
+            .map_err(|error| AppError::Biliup(error.to_string()))?;
+        if existing.contains(&view.aid) {
+            return Err(AppError::Custom(
+                crate::i18n::text("season.manager.already_added").into(),
+            ));
+        }
+        if view.first_cid() == 0 {
+            return Err(AppError::Custom(
+                crate::i18n::text("season.manager.cid_missing").into(),
+            ));
+        }
+        if seen.insert(view.aid) {
+            episodes.push(EpisodeAdd::from(&view));
+        }
     }
-    if view.first_cid() == 0 {
-        return Err(AppError::Custom(
-            crate::i18n::text("season.manager.cid_missing").into(),
-        ));
-    }
-    api.add_to_season(section_id, &[EpisodeAdd::from(&view)])
+    // 全部稿件校验通过后只发一次添加请求；接口报错仍由前端刷新确认远端结果。
+    api.add_to_season(section_id, &episodes)
         .await
         .map_err(|error| AppError::Biliup(error.to_string()))
 }
@@ -284,6 +308,103 @@ pub async fn reorder_season_episodes(
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[tokio::test]
+    async fn batch_add_validates_all_videos_before_one_write_and_reports_api_failure() {
+        use biliup::bilibili::BiliBili;
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let host = format!("http://{}", listener.local_addr().unwrap());
+        let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
+        let server = tokio::spawn(async move {
+            let mut writes = Vec::new();
+            let mut reads = 0;
+            loop {
+                let (mut socket, _) = tokio::select! {
+                    result = listener.accept() => result.unwrap(),
+                    _ = &mut stopped => break,
+                };
+                let mut header = Vec::new();
+                while !header.ends_with(b"\r\n\r\n") {
+                    header.push(socket.read_u8().await.unwrap());
+                }
+                let header = String::from_utf8(header).unwrap();
+                let path = header.split_whitespace().nth(1).unwrap();
+                let url = reqwest::Url::parse(&format!("http://test{path}")).unwrap();
+                let data = if header.starts_with("POST ") {
+                    let length: usize = header
+                        .lines()
+                        .find_map(|line| {
+                            line.to_lowercase()
+                                .strip_prefix("content-length: ")
+                                .map(str::to_owned)
+                        })
+                        .unwrap()
+                        .parse()
+                        .unwrap();
+                    let mut body = vec![0; length];
+                    socket.read_exact(&mut body).await.unwrap();
+                    let body: Value = serde_json::from_slice(&body).unwrap();
+                    assert!(url.path().ends_with("/episodes/add"));
+                    assert_eq!(body["sectionId"], 11);
+                    assert_eq!(body["episodes"].as_array().unwrap().len(), 2);
+                    assert_eq!(body["episodes"][0]["aid"], 123);
+                    assert_eq!(body["episodes"][1]["aid"], 125);
+                    writes.push(body);
+                    Value::Null
+                } else if url.path().ends_with("/seasons") {
+                    reads += 1;
+                    json!({"total": 1, "seasons": [{"season": {"id": 1}, "sections": {"sections": [{"id": 11}]}}]})
+                } else if url.path().ends_with("/section") {
+                    reads += 1;
+                    json!({"section": {"id": 11, "seasonId": 1}, "episodes": []})
+                } else {
+                    let aid = url
+                        .query_pairs()
+                        .find(|(key, _)| key == "aid")
+                        .unwrap()
+                        .1
+                        .parse::<u64>()
+                        .unwrap();
+                    json!({"aid": aid, "cid": if aid == 124 { 0 } else { aid + 1000 }, "title": format!("稿件 {aid}")})
+                };
+                let response = if header.starts_with("POST /fail/") {
+                    json!({"code": -400, "message": "写入失败"})
+                } else {
+                    json!({"code": 0, "data": data})
+                };
+                let body = response.to_string();
+                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+            }
+            (reads, writes.len())
+        });
+        let bili = BiliBili {
+            client: reqwest::Client::builder().no_proxy().build().unwrap(),
+            login_info: serde_json::from_value(json!({
+                "cookie_info": {"cookies": [{"name": "bili_jct", "value": "test-csrf"}]}, "sso": [],
+                "token_info": {"access_token": "", "expires_in": 0, "mid": 1, "refresh_token": ""}, "platform": "bilibili"
+            })).unwrap(),
+        };
+        let api = SeasonApi::with_hosts(&bili, &host, &host);
+        assert!(add_episodes(&api, 1, 11, &[]).await.is_err());
+        assert!(
+            add_episodes(&api, 1, 11, &["av123".into(), "av124".into()])
+                .await
+                .is_err()
+        );
+        let ids = vec!["av123".into(), "av125".into(), "av123".into()];
+        assert!(add_episodes(&api, 1, 11, &ids).await.is_ok());
+        let failing_host = format!("{host}/fail");
+        let api = SeasonApi::with_hosts(&bili, &failing_host, &host);
+        assert!(add_episodes(&api, 1, 11, &ids).await.is_err());
+        let _ = stop.send(());
+        let (reads, writes) = server.await.unwrap();
+        assert_eq!(reads, 6); // 每批只查一次合集、一次小节。
+        assert_eq!(writes, 2); // CID 缺失的批次完全不写入，成功与 API 失败各一次请求。
+    }
 
     #[test]
     fn title_edit_preserves_archive_identity_and_current_order() {

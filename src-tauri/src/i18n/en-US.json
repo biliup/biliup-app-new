@@ -191,5 +191,7 @@
     "season.manager.cid_missing": "Unable to find the first video CID",
     "season.manager.episode_missing": "Episode no longer in this section; refresh and try again",
     "season.manager.title_empty": "Episode title cannot be empty",
-    "season.manager.csrf_missing": "Missing CSRF token; please log in again"
+    "season.manager.csrf_missing": "Missing CSRF token; please log in again",
+    "season.manager.no_selection": "Select submissions to add",
+    "video.list_snapshot_expired": "The submission list has expired; reopen it"
 }

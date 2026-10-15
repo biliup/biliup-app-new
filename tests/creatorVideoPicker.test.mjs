@@ -35,12 +35,14 @@ const video = (aid, bvid = '') => ({ aid, bvid, title: `稿件 ${aid}`, cover: '
 const settle = async () => {
     await Promise.resolve()
     await nextTick()
+    await Promise.resolve()
 }
 
-function harness(initial = {}) {
+function harness(initial = {}, options = {}) {
     const props = reactive({ modelValue: true, uid: 1, username: '测试账号', ...initial })
     const requests = []
     const events = []
+    const snapshots = []
     const stops = []
     let unmount
     const context = {
@@ -60,6 +62,11 @@ function harness(initial = {}) {
             (...args) =>
                 events.push(args),
         useUtilsStore: () => ({
+            openVideoListSnapshot: uid => {
+                snapshots.push(['open', uid])
+                return options.openSnapshot?.(uid) || Promise.resolve(`snapshot-${snapshots.length}`)
+            },
+            closeVideoListSnapshot: async (uid, id) => { snapshots.push(['close', uid, id]) },
             getVideoList: (...args) =>
                 new Promise((resolve, reject) => {
                     requests.push({ args, resolve, reject })
@@ -68,7 +75,7 @@ function harness(initial = {}) {
         t: (key, values) => (values ? key.replace('{0}', values[0]) : key)
     }
     vm.runInNewContext(
-        ts.transpile(source) +
+        ts.transpile(source, { target: ts.ScriptTarget.ES2020 }) +
             '\nglobalThis.picker = { items, page, total, loading, error, loadPage, selectVideo, selectedVideos, updateSelection, confirmSelection, canSelectVideo }',
         context
     )
@@ -76,6 +83,7 @@ function harness(initial = {}) {
         props,
         requests,
         events,
+        snapshots,
         picker: context.picker,
         dispose() {
             unmount()
@@ -179,7 +187,8 @@ test('添加单集请求筛选后的分页与总数，翻页清空选择，普�
         { ...video(4), season_add_state: null },
         { ...video(5), season_add_state: '0' }
     ]
-    assert.deepEqual(h.requests[0].args, [1, 1, 5, true])
+    await settle()
+    assert.deepEqual(h.requests[0].args, [1, 1, 5, true, 'snapshot-1'])
     h.requests[0].resolve({ items: [videos[0]], total: 1 })
     await settle()
     assert.deepEqual(Array.from(h.picker.items.value, row => row.aid), [1])
@@ -191,7 +200,8 @@ test('添加单集请求筛选后的分页与总数，翻页清空选择，普�
     assert.equal(JSON.stringify(h.events), JSON.stringify([['select-many', ['av1']], ['update:modelValue', false]]))
     h.events.length = 0
     const pending = h.picker.loadPage(2)
-    assert.deepEqual(h.requests[1].args, [1, 2, 5, true])
+    await settle()
+    assert.deepEqual(h.requests[1].args, [1, 2, 5, true, 'snapshot-1'])
     assert.equal(h.picker.selectedVideos.value.length, 0)
     h.picker.confirmSelection()
     assert.equal(h.events.length, 0)
@@ -210,7 +220,8 @@ test('添加单集请求筛选后的分页与总数，翻页清空选择，普�
 test('复选框多选按列表顺序统一确认，每页请求五条，刷新清空旧选择', async context => {
     const h = harness({ seasonAddOnly: true })
     context.after(() => h.dispose())
-    assert.deepEqual(h.requests[0].args, [1, 1, 5, true])
+    await settle()
+    assert.deepEqual(h.requests[0].args, [1, 1, 5, true, 'snapshot-1'])
     h.requests[0].resolve({ items: [
         { ...video(1, 'BVone'), season_add_state: 0 },
         { ...video(2), season_add_state: 0 }
@@ -230,7 +241,52 @@ test('复选框多选按列表顺序统一确认，每页请求五条，刷新�
     h.picker.updateSelection([first])
     h.picker.confirmSelection()
     assert.equal(h.events.length, 0)
+    await settle()
     h.requests[1].resolve({ items: [], total: 0 })
     await refresh
     assert.equal(h.picker.selectedVideos.value.length, 0)
+})
+
+test('同次弹窗翻页复用快照，刷新、换账号和关闭都会释放快照', async context => {
+    const h = harness({ seasonAddOnly: true })
+    context.after(() => h.dispose())
+    await settle()
+    h.requests[0].resolve({ items: [], total: 12 })
+    await settle()
+    const second = h.picker.loadPage(2)
+    await settle()
+    assert.equal(h.snapshots.filter(call => call[0] === 'open').length, 1)
+    assert.equal(h.requests[1].args[4], h.requests[0].args[4])
+    h.requests[1].resolve({ items: [], total: 12 })
+    await second
+    const refresh = h.picker.loadPage(1, true)
+    await settle()
+    assert.ok(h.snapshots.some(call => call[0] === 'close' && call[2] === 'snapshot-1'))
+    assert.notEqual(h.requests[2].args[4], 'snapshot-1')
+    h.requests[2].resolve({ items: [], total: 3 })
+    await refresh
+    h.props.uid = 2
+    await settle()
+    assert.equal(h.requests[3].args[0], 2)
+    assert.equal(h.snapshots.filter(call => call[0] === 'close').length, 2)
+    const currentId = h.requests[3].args[4]
+    h.props.modelValue = false
+    await settle()
+    assert.ok(h.snapshots.some(call => call[0] === 'close' && call[1] === 2 && call[2] === currentId))
+    h.requests[3].resolve({ items: [video(99)], total: 1 })
+    await settle()
+    assert.equal(h.picker.items.value.length, 0)
+})
+
+test('关闭后才创建完成的快照仍被释放，不继续发起稿件查询', async context => {
+    let resolve
+    const pending = new Promise(yes => { resolve = yes })
+    const h = harness({ seasonAddOnly: true }, { openSnapshot: () => pending })
+    context.after(() => h.dispose())
+    h.props.modelValue = false
+    await settle()
+    resolve('late-snapshot')
+    await settle()
+    assert.equal(h.requests.length, 0)
+    assert.ok(h.snapshots.some(call => call[0] === 'close' && call[2] === 'late-snapshot'))
 })

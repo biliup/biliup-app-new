@@ -1008,11 +1008,7 @@
         </el-container>
 
         <!-- 新建模板组件 -->
-        <NewTemplete
-            ref="newTemplateRef"
-            v-model="showNewTemplateDialog"
-            @template-created="handleTemplateCreated"
-        />
+        <NewTemplete v-model="showNewTemplateDialog" @template-created="handleTemplateCreated" />
 
         <!-- 登录对话框 -->
         <el-dialog
@@ -1187,7 +1183,6 @@ const interactiveDialogOpening = ref(false)
 const onlySelfDialogOpening = ref(false)
 
 // 组件引用
-const newTemplateRef = ref<InstanceType<typeof NewTemplete> | null>(null)
 const tagViewRef = ref<InstanceType<typeof TagView> | null>(null)
 const seasonViewRef = ref<InstanceType<typeof SeasonView> | null>(null)
 // 自动提交状态记录 - 记录每个模板的自动提交状态
@@ -1609,9 +1604,9 @@ const handleAutoEditAfterSubmit = async (
             ? templateAutoEdit || Boolean(userConfig?.auto_edit)
             : templateAutoEdit
 
-        if (shouldAutoEdit && newTemplateRef.value) {
+        if (shouldAutoEdit) {
             // 新增稿件且auto_edit开启，创建编辑模板
-            await newTemplateRef.value.createTemplateFromBV(uid, resp.bvid, resp.bvid, true)
+            await userConfigStore.createTemplateFromVideo(uid, resp.bvid, resp.bvid, true)
             utilsStore.showMessage(t('从BV号创建模板成功'), 'success')
         }
     } else {
@@ -3244,7 +3239,10 @@ const selectTemplate = async (user: any, templateName: string) => {
                         selectedUser.value?.uid === user.uid &&
                         currentTemplateName.value === templateName
                     ) {
-                        const newTemplate = await getNewTemplateFromAv(user.uid, aid)
+                        const newTemplate = await utilsStore.getVideoTemplate(
+                            user.uid,
+                            aid.toString()
+                        )
                         const currentTemplateData =
                             userConfigStore.configRoot?.config[user.uid].templates[templateName]
                         if (
@@ -3323,34 +3321,6 @@ const resetTemplate = async () => {
     }
 }
 
-const getNewTemplateFromAv = async (userUid: number, aid: number) => {
-    try {
-        const newTemplate = (await utilsStore.getVideoDetail(userUid, aid.toString())) as any
-
-        // 处理视频列表
-        if (newTemplate.videos && Array.isArray(newTemplate.videos)) {
-            for (const video of newTemplate.videos) {
-                video.id = video.filename
-                video.path = ''
-            }
-        }
-
-        if (newTemplate.aid && (await utilsStore.getSeasonList(userUid))) {
-            const membership = await utilsStore.getVideoSeason(userUid, newTemplate.aid)
-
-            if (membership.season_id !== 0) {
-                newTemplate.season_id = membership.season_id
-                newTemplate.section_id = membership.section_id
-            }
-        }
-
-        return newTemplate
-    } catch (error) {
-        console.error(t('获取新模板失败: '), error)
-        throw error
-    }
-}
-
 const reloadTemplateFromAV = async (userUid: number, aid: number) => {
     // 如果正在加载模板，禁止重新加载
     if (templateLoading.value) {
@@ -3367,7 +3337,7 @@ const reloadTemplateFromAV = async (userUid: number, aid: number) => {
 
     templateLoading.value = true
     try {
-        const newTemplate = await getNewTemplateFromAv(userUid, aid)
+        const newTemplate = await utilsStore.getVideoTemplate(userUid, aid.toString())
         currentForm.value = newTemplate
         utilsStore.showMessage(t('模板数据已刷新'), 'success')
         return true
@@ -3548,7 +3518,7 @@ const openSeasonArchiveEditor = async (uid: number, episode: SeasonEpisode) => {
         throw new Error(t('当前正在加载或提交，请稍后再编辑稿件'))
     }
     const user = loginUsers.value.find(user => user.uid === uid)
-    if (!user || !newTemplateRef.value) throw new Error(t('请选择用户'))
+    if (!user) throw new Error(t('请选择用户'))
     const templates = userConfigStore.configRoot?.config[uid]?.templates || {}
     let name = Object.keys(templates).find(name => templates[name].aid === episode.aid)
     if (!name) {
@@ -3556,7 +3526,7 @@ const openSeasonArchiveEditor = async (uid: number, episode: SeasonEpisode) => {
         name = videoId
         let suffix = 2
         while (templates[name]) name = `${videoId} (${suffix++})`
-        await newTemplateRef.value.createTemplateFromBV(uid, videoId, name, true)
+        await userConfigStore.createTemplateFromVideo(uid, videoId, name, true)
     }
     if (autoSubmittingRecord.value[getTemplateKey(uid, name)]) {
         throw new Error(t('当前正在加载或提交，请稍后再编辑稿件'))

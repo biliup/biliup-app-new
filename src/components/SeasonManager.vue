@@ -55,65 +55,47 @@
                     <strong>{{ entry.season.title }}</strong>
                 </button>
                 <div v-if="expandedSeasonId === entry.season.id" class="season-content">
-                    <template v-if="hasSections(entry)">
-                        <div
-                            v-for="section in entry.sections.sections"
-                            :key="section.id"
-                            class="section-group"
+                    <div
+                        v-for="section in entry.sections.sections"
+                        :key="section.id"
+                        class="section-group"
+                    >
+                        <button
+                            v-if="hasSections(entry)"
+                            type="button"
+                            class="section-heading"
+                            :aria-expanded="sectionVisible && target?.sectionId === section.id"
+                            :disabled="busy"
+                            @click="toggleSection(entry, section)"
                         >
-                            <button
-                                type="button"
-                                class="section-heading"
-                                :aria-expanded="sectionVisible && target?.sectionId === section.id"
-                                :disabled="busy"
-                                @click="toggleSection(entry, section)"
+                            <span
+                                class="expand-arrow"
+                                :class="{
+                                    expanded: sectionVisible && target?.sectionId === section.id
+                                }"
+                                aria-hidden="true"
+                                >▸</span
                             >
-                                <span
-                                    class="expand-arrow"
-                                    :class="{
-                                        expanded: sectionVisible && target?.sectionId === section.id
-                                    }"
-                                    aria-hidden="true"
-                                    >▸</span
-                                >
-                                <span>{{ section.title }}</span>
-                            </button>
-                            <SeasonEpisodeRows
-                                v-if="sectionVisible && target?.sectionId === section.id"
-                                :episodes="episodes"
-                                :loading="sectionLoading"
-                                :busy="busy"
-                                :error="sectionError"
-                                :dirty="orderDirty"
-                                :ready="Boolean(detail)"
-                                @add="addEpisode"
-                                @refresh="loadSection"
-                                @save="saveOrder"
-                                @reset="resetOrder"
-                                @position="setEpisodePosition"
-                                @title="editEpisodeTitle"
-                                @edit="editArchive"
-                                @remove="removeEpisode"
-                            />
-                        </div>
-                    </template>
-                    <SeasonEpisodeRows
-                        v-else-if="sectionVisible"
-                        :episodes="episodes"
-                        :loading="sectionLoading"
-                        :busy="busy"
-                        :error="sectionError"
-                        :dirty="orderDirty"
-                        :ready="Boolean(detail)"
-                        @add="addEpisode"
-                        @refresh="loadSection"
-                        @save="saveOrder"
-                        @reset="resetOrder"
-                        @position="setEpisodePosition"
-                        @title="editEpisodeTitle"
-                        @edit="editArchive"
-                        @remove="removeEpisode"
-                    />
+                            <span>{{ section.title }}</span>
+                        </button>
+                        <SeasonEpisodeRows
+                            v-if="sectionVisible && target?.sectionId === section.id"
+                            :episodes="episodes"
+                            :loading="sectionLoading"
+                            :busy="busy"
+                            :error="sectionError"
+                            :dirty="orderDirty"
+                            :ready="Boolean(detail)"
+                            @add="addEpisode"
+                            @refresh="loadSection"
+                            @save="saveOrder"
+                            @reset="resetOrder"
+                            @position="setEpisodePosition"
+                            @title="editEpisodeTitle"
+                            @edit="editArchive"
+                            @remove="removeEpisode"
+                        />
+                    </div>
                     <el-empty v-if="!entry.sections.sections.length" :description="t('暂无稿件')" />
                 </div>
             </article>
@@ -169,8 +151,6 @@ const episodes = ref<SeasonEpisode[]>([])
 const target = ref<{
     seasonId: number
     sectionId: number
-    seasonTitle: string
-    title: string
 } | null>(null)
 let listRequest = 0
 let sectionRequest = 0
@@ -239,9 +219,7 @@ const openSection = async (entry: ManagedSeason, section?: SeasonSection) => {
     expandedSeasonId.value = entry.season.id
     target.value = {
         seasonId: entry.season.id,
-        seasonTitle: entry.season.title,
-        sectionId: section.id,
-        title: section.title
+        sectionId: section.id
     }
     sectionVisible.value = true
     await loadSection()
@@ -367,16 +345,13 @@ const selectEpisodes = async (videoIds: string[]) => {
     )
         return
     episodePickerVisible.value = false
-    await runMutation(async () => {
-        for (const videoId of new Set(videoIds)) {
-            await utilsStore.addSeasonEpisode(
-                context.uid,
-                context.seasonId,
-                context.sectionId,
-                videoId
-            )
-        }
-    }, true)
+    await runMutation(
+        () =>
+            utilsStore.addSeasonEpisodes(context.uid, context.seasonId, context.sectionId, [
+                ...new Set(videoIds)
+            ]),
+        true
+    )
 }
 
 const removeEpisode = async (episode: SeasonEpisode) => {

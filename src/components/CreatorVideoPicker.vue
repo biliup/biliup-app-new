@@ -9,7 +9,7 @@
     >
         <div class="picker-toolbar">
             <span>{{ username }}</span>
-            <el-button :disabled="loading" @click="loadPage(page)">{{ t('刷新') }}</el-button>
+            <el-button :disabled="loading" @click="loadPage(page, true)">{{ t('刷新') }}</el-button>
         </div>
         <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
         <el-table
@@ -111,10 +111,22 @@ const total = ref(0)
 const pageSize = computed(() => (props.seasonAddOnly ? 5 : 10))
 const selectedVideos = ref<CreatorVideo[]>([])
 let requestId = 0
+let snapshot: { uid: number; pending: Promise<string> } | null = null
 
-const loadPage = async (nextPage: number) => {
+const releaseSnapshot = () => {
+    const previous = snapshot
+    snapshot = null
+    if (previous) {
+        void previous.pending
+            .then(id => utilsStore.closeVideoListSnapshot(previous.uid, id))
+            .catch(() => {})
+    }
+}
+
+const loadPage = async (nextPage: number, refresh = false) => {
     const uid = props.uid
     if (!props.modelValue || !uid) return
+    if (refresh) releaseSnapshot()
     const request = ++requestId
     const seasonAddOnly = props.seasonAddOnly
     page.value = nextPage
@@ -123,8 +135,15 @@ const loadPage = async (nextPage: number) => {
     loading.value = true
     error.value = ''
     try {
+        let snapshotId: string | undefined
+        if (seasonAddOnly) {
+            if (snapshot && snapshot.uid !== uid) releaseSnapshot()
+            snapshot ??= { uid, pending: utilsStore.openVideoListSnapshot(uid) }
+            snapshotId = await snapshot.pending
+            if (request !== requestId || !props.modelValue || props.uid !== uid) return
+        }
         const result = seasonAddOnly
-            ? await utilsStore.getVideoList(uid, nextPage, pageSize.value, true)
+            ? await utilsStore.getVideoList(uid, nextPage, pageSize.value, true, snapshotId)
             : await utilsStore.getVideoList(uid, nextPage, pageSize.value)
         if (
             request !== requestId ||
@@ -174,6 +193,7 @@ const confirmSelection = () => {
 watch(
     () => [props.modelValue, props.uid, props.seasonAddOnly] as const,
     ([visible, uid]) => {
+        releaseSnapshot()
         requestId += 1
         items.value = []
         selectedVideos.value = []
@@ -188,6 +208,7 @@ watch(
 
 onBeforeUnmount(() => {
     requestId += 1
+    releaseSnapshot()
 })
 </script>
 

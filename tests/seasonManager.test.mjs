@@ -67,11 +67,13 @@ function harness(options = {}) {
                 calls.push(['section', ...args])
                 return structuredClone(remote)
             }),
-        addSeasonEpisode: async (...args) => {
+        addSeasonEpisodes: async (...args) => {
             calls.push(['add', ...args])
             if (options.add) await options.add(...args)
-            const id = Math.max(...remote.episodes.map(episode => episode.id)) + 1
-            remote.episodes.push({ id, aid: id + 100, title: '新增稿件' })
+            for (const videoId of args[3]) {
+                const id = Math.max(...remote.episodes.map(episode => episode.id)) + 1
+                remote.episodes.push({ id, aid: id + 100, title: videoId })
+            }
         },
         editSeasonEpisodeTitle: async (...args) => {
             calls.push(['title', ...args])
@@ -195,10 +197,8 @@ test('添加、移出与排序使用正确账号、合集、小节及 episode ID
     assert.equal(h.manager.episodePickerVisible.value, true)
     assert.equal(h.calls.some(call => call[0] === 'add'), false)
     await h.manager.selectEpisodes(['BVtest'])
-    assert.deepEqual(
-        h.calls.find(call => call[0] === 'add'),
-        ['add', 1, 10, 11, 'BVtest']
-    )
+    assert.equal(JSON.stringify(h.calls.find(call => call[0] === 'add')),
+        JSON.stringify(['add', 1, 10, 11, ['BVtest']]))
     assert.equal(h.manager.episodes.value.length, 3)
     await h.manager.removeEpisode(h.manager.episodes.value[0])
     assert.deepEqual(
@@ -474,21 +474,23 @@ test('添加单集取消不提交，切换小节或账号后不能添加到旧�
     assert.equal(h.calls.some(call => call[0] === 'add'), false)
 })
 
-test('多选稿件统一添加，部分失败后刷新已成功添加的结果', async context => {
+test('多选稿件只发一次批量命令，失败后仍刷新远端结果', async context => {
     const h = harness({ add: async (...args) => {
-        if (args[3] === 'BVfail') throw new Error('添加失败')
+        if (args[3].includes('BVfail')) throw new Error('添加失败')
     } })
     context.after(() => h.dispose())
     await h.manager.openSection(entry(), entry().sections.sections[0])
     await h.manager.addEpisode()
     await h.manager.selectEpisodes(['BVone', 'BVtwo', 'BVone'])
-    assert.deepEqual(h.calls.filter(call => call[0] === 'add').map(call => call[4]), ['BVone', 'BVtwo'])
+    assert.equal(h.calls.filter(call => call[0] === 'add').length, 1)
+    assert.equal(JSON.stringify(h.calls.find(call => call[0] === 'add')[4]), JSON.stringify(['BVone', 'BVtwo']))
     assert.equal(h.manager.episodes.value.length, 4)
     assert.equal(h.manager.episodePickerVisible.value, false)
     await h.manager.addEpisode()
     await h.manager.selectEpisodes(['BVthree', 'BVfail', 'BVfour'])
-    assert.equal(h.manager.episodes.value.length, 5)
-    assert.equal(h.calls.some(call => call[4] === 'BVfour'), false)
+    assert.equal(h.manager.episodes.value.length, 4)
+    assert.equal(h.calls.filter(call => call[0] === 'add').length, 2)
+    assert.equal(h.calls.at(-2)[0], 'section')
     assert.equal(h.messages.at(-1)[1], 'error')
     assert.equal(h.manager.busy.value, false)
 })
@@ -510,8 +512,10 @@ test('稿件编辑复用已有模板，名称冲突时新建独立模板，加�
         autoSubmittingRecord: ref({}),
         getTemplateKey: (uid, name) => `${uid}:${name}`,
         loginUsers: ref([user]),
-        newTemplateRef: ref({ createTemplateFromBV: async (...args) => calls.push(['create', ...args]) }),
-        userConfigStore: { configRoot: { config: { 1: { templates } } } },
+        userConfigStore: {
+            configRoot: { config: { 1: { templates } } },
+            createTemplateFromVideo: async (...args) => calls.push(['create', ...args])
+        },
         selectTemplate: async (...args) => { calls.push(['select', ...args]); return true },
         t: key => key
     }
