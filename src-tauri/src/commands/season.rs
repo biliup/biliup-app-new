@@ -209,7 +209,7 @@ pub async fn add_season_episodes(
     season_id: u64,
     section_id: u64,
     video_ids: Vec<String>,
-) -> Result<(), AppError> {
+) -> Result<Vec<u64>, AppError> {
     let bili = app.state::<AppData>().get_bilibili(uid).await?;
     add_episodes(&bili.season_api(), season_id, section_id, &video_ids).await
 }
@@ -219,7 +219,7 @@ async fn add_episodes(
     season_id: u64,
     section_id: u64,
     video_ids: &[String],
-) -> Result<(), AppError> {
+) -> Result<Vec<u64>, AppError> {
     if video_ids.is_empty() {
         return Err(AppError::Custom(
             crate::i18n::text("season.manager.no_selection").into(),
@@ -259,7 +259,8 @@ async fn add_episodes(
     // 全部稿件校验通过后只发一次添加请求；接口报错仍由前端刷新确认远端结果。
     api.add_to_season(section_id, &episodes)
         .await
-        .map_err(|error| AppError::Biliup(error.to_string()))
+        .map_err(|error| AppError::Biliup(error.to_string()))?;
+    Ok(episodes.iter().map(|episode| episode.aid).collect())
 }
 
 #[tauri::command]

@@ -173,7 +173,7 @@ export const useUtilsStore = defineStore('template', () => {
         seasonId: number,
         sectionId: number,
         videoIds: string[]
-    ) => invoke<void>('add_season_episodes', { uid, seasonId, sectionId, videoIds })
+    ) => invoke<number[]>('add_season_episodes', { uid, seasonId, sectionId, videoIds })
 
     const removeSeasonEpisode = (
         uid: number,

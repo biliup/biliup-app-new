@@ -75,3 +75,24 @@ test('创建模板调用共享转换并保存到指定账号，失败不会保�
     assert.equal(calls.filter(call => call[0] === 'save').length, 1)
     assert.equal(messages.at(-1)[1], 'error')
 })
+
+const syncSeason = storeMethod('../src/stores/user_config.ts', 'syncVideoSeason')
+test('同步合集归属保留本地编辑，并隔离账号与稿件', async () => {
+    const template = { aid: 123, title: 'local draft', videos: [{ path: '/draft' }], season_id: 0 }
+    const other = { aid: 999, season_id: 20 }
+    const account = { aid: 123, season_id: 30 }
+    const context = { invoke: async () => {}, configRoot: { value: { config: {
+        1: { templates: { a: template, b: other } }, 2: { templates: { a: account } }
+    } } } }
+    vm.runInNewContext(syncSeason, context)
+    const videos = template.videos
+    for (const season of [{ season_id: 10, section_id: 11 }, { season_id: 10, section_id: 12 }, { season_id: 0, section_id: 0 }]) {
+        await context.run(1, [123], season)
+        assert.equal(template.season_id, season.season_id)
+        assert.equal(template.section_id, season.section_id)
+        assert.equal(template.title, 'local draft')
+        assert.equal(template.videos, videos)
+    }
+    assert.equal(other.season_id, 20)
+    assert.equal(account.season_id, 30)
+})

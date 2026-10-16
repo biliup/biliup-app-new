@@ -488,6 +488,26 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         }
     }
 
+    const syncVideoSeason = async (
+        uid: number,
+        aids: number[],
+        season: { season_id: number; section_id: number }
+    ) => {
+        const ids = new Set(aids)
+        for (const template of Object.values(configRoot.value?.config[uid]?.templates || {})) {
+            if (template.aid && ids.has(template.aid)) {
+                template.season_id = season.season_id
+                template.section_id = season.section_id
+            }
+        }
+        await invoke('sync_template_season', {
+            uid,
+            aids,
+            seasonId: season.season_id,
+            sectionId: season.section_id
+        })
+    }
+
     // 更新指定用户的模板
     const updateUserTemplate = async (
         userUid: number,
@@ -745,6 +765,7 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         getUserTemplate,
         addUserTemplate,
         createTemplateFromVideo,
+        syncVideoSeason,
         removeUserTemplate,
         updateUserTemplate,
         duplicateUserTemplate,

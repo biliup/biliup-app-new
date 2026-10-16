@@ -122,6 +122,7 @@ import { ElMessageBox, type ElScrollbar } from 'element-plus'
 import { t } from '../i18n'
 import { useAuthStore } from '../stores/auth'
 import { useUtilsStore } from '../stores/utils'
+import { useUserConfigStore } from '../stores/user_config'
 import SeasonEpisodeRows from './SeasonEpisodeRows.vue'
 import CreatorVideoPicker from './CreatorVideoPicker.vue'
 import type { ManagedSeason, ManagedSection, SeasonEpisode, SeasonSection } from '../types/season'
@@ -134,6 +135,7 @@ const props = defineProps<{
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
 const authStore = useAuthStore()
 const utilsStore = useUtilsStore()
+const userConfigStore = useUserConfigStore()
 const uid = ref<number>()
 const seasons = ref<ManagedSeason[]>([])
 const loading = ref(false)
@@ -345,13 +347,18 @@ const selectEpisodes = async (videoIds: string[]) => {
     )
         return
     episodePickerVisible.value = false
-    await runMutation(
-        () =>
-            utilsStore.addSeasonEpisodes(context.uid, context.seasonId, context.sectionId, [
-                ...new Set(videoIds)
-            ]),
-        true
-    )
+    await runMutation(async () => {
+        const aids = await utilsStore.addSeasonEpisodes(
+            context.uid,
+            context.seasonId,
+            context.sectionId,
+            [...new Set(videoIds)]
+        )
+        await userConfigStore.syncVideoSeason(context.uid, aids, {
+            season_id: context.seasonId,
+            section_id: context.sectionId
+        })
+    }, true)
 }
 
 const removeEpisode = async (episode: SeasonEpisode) => {
@@ -372,9 +379,18 @@ const removeEpisode = async (episode: SeasonEpisode) => {
         return
     }
     if (uid.value !== account || target.value !== context || !sectionVisible.value) return
-    await runMutation(() =>
-        utilsStore.removeSeasonEpisode(account, context.seasonId, context.sectionId, episode.id)
-    )
+    await runMutation(async () => {
+        await utilsStore.removeSeasonEpisode(
+            account,
+            context.seasonId,
+            context.sectionId,
+            episode.id
+        )
+        await userConfigStore.syncVideoSeason(account, [episode.aid], {
+            season_id: 0,
+            section_id: 0
+        })
+    })
 }
 
 const saveOrder = async () => {

@@ -109,6 +109,28 @@ pub async fn delete_user_template(
 }
 
 #[tauri::command]
+pub async fn sync_template_season(
+    app: AppHandle,
+    uid: u64,
+    aids: Vec<u64>,
+    season_id: u64,
+    section_id: u64,
+) -> Result<(), AppError> {
+    let app_data = app.state::<AppData>();
+    persist_update(&mut *app_data.config.lock().await, |config| {
+        if let Some(user) = config.config.get_mut(&uid) {
+            for template in user.templates.values_mut() {
+                if template.aid.is_some_and(|aid| aids.contains(&aid)) {
+                    template.season_id = Some(season_id);
+                    template.section_id = Some(section_id);
+                }
+            }
+        }
+        Ok(())
+    })
+}
+
+#[tauri::command]
 pub async fn update_user_template(
     app: AppHandle,
     uid: u64,

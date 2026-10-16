@@ -325,6 +325,7 @@ pub async fn run() {
             save_global_config,
             add_user_template,
             update_user_template,
+            sync_template_season,
             delete_user_template,
             rename_user_template,
             save_template_order,

@@ -3531,6 +3531,8 @@ const openSeasonArchiveEditor = async (uid: number, episode: SeasonEpisode) => {
     if (autoSubmittingRecord.value[getTemplateKey(uid, name)]) {
         throw new Error(t('当前正在加载或提交，请稍后再编辑稿件'))
     }
+    const season = await utilsStore.getVideoSeason(uid, episode.aid)
+    await userConfigStore.syncVideoSeason(uid, [episode.aid], season)
     if (!(await selectTemplate(user, name))) {
         throw new Error(t('切换模板失败'))
     }

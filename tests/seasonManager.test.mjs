@@ -74,6 +74,7 @@ function harness(options = {}) {
                 const id = Math.max(...remote.episodes.map(episode => episode.id)) + 1
                 remote.episodes.push({ id, aid: id + 100, title: videoId })
             }
+            return remote.episodes.slice(-args[3].length).map(episode => episode.aid)
         },
         editSeasonEpisodeTitle: async (...args) => {
             calls.push(['title', ...args])
@@ -120,6 +121,7 @@ function harness(options = {}) {
                 events.push(args),
         useAuthStore: () => auth,
         useUtilsStore: () => utils,
+        useUserConfigStore: () => ({ syncVideoSeason: (...args) => calls.push(['sync', ...args]) }),
         ElMessageBox: box,
         t: (key, params) => key.replace(/\{(\w+)\}/g, (match, name) => params?.[name] ?? match)
     }
@@ -200,7 +202,11 @@ test('添加、移出与排序使用正确账号、合集、小节及 episode ID
     assert.equal(JSON.stringify(h.calls.find(call => call[0] === 'add')),
         JSON.stringify(['add', 1, 10, 11, ['BVtest']]))
     assert.equal(h.manager.episodes.value.length, 3)
+    assert.equal(JSON.stringify(h.calls.find(call => call[0] === 'sync')),
+        JSON.stringify(['sync', 1, [123], { season_id: 10, section_id: 11 }]))
     await h.manager.removeEpisode(h.manager.episodes.value[0])
+    assert.equal(JSON.stringify(h.calls.filter(call => call[0] === 'sync').at(-1)),
+        JSON.stringify(['sync', 1, [121], { season_id: 0, section_id: 0 }]))
     assert.deepEqual(
         h.calls.find(call => call[0] === 'remove'),
         ['remove', 1, 10, 11, 21]
@@ -514,13 +520,16 @@ test('稿件编辑复用已有模板，名称冲突时新建独立模板，加�
         loginUsers: ref([user]),
         userConfigStore: {
             configRoot: { config: { 1: { templates } } },
-            createTemplateFromVideo: async (...args) => calls.push(['create', ...args])
+            createTemplateFromVideo: async (...args) => calls.push(['create', ...args]),
+            syncVideoSeason: (...args) => { Object.assign(templates.existing, args[2]) }
         },
+        utilsStore: { getVideoSeason: async () => ({ season_id: 10, section_id: 11 }) },
         selectTemplate: async (...args) => { calls.push(['select', ...args]); return true },
         t: key => key
     }
     vm.runInNewContext(ts.transpile(handler) + '\nglobalThis.edit = openSeasonArchiveEditor', context)
     await context.edit(1, { aid: 121 })
+    assert.equal(templates.existing.season_id, 10)
     assert.equal(calls.length, 1)
     assert.deepEqual(calls[0], ['select', context.loginUsers.value[0], 'existing'])
     await context.edit(1, { aid: 122 })
@@ -532,6 +541,10 @@ test('稿件编辑复用已有模板，名称冲突时新建独立模板，加�
     context.templateLoading.value = true
     await assert.rejects(context.edit(1, { aid: 121 }), /稍后再编辑/)
     context.templateLoading.value = false
+    context.utilsStore.getVideoSeason = async () => { throw new Error('查询归属失败') }
+    const beforeFailure = structuredClone(templates.existing)
+    await assert.rejects(context.edit(1, { aid: 121 }), /查询归属失败/)
+    assert.deepEqual(templates.existing, beforeFailure)
     context.autoSubmittingRecord.value['1:existing'] = true
     await assert.rejects(context.edit(1, { aid: 121 }), /稍后再编辑/)
 })
