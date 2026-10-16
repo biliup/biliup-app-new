@@ -244,6 +244,9 @@ export const useUtilsStore = defineStore('template', () => {
     const getVideoTranscode = (uid: number, bvid: string, cid: number) =>
         invoke<TranscodeDetail>('get_video_transcode', { uid, bvid, cid })
 
+    const deleteCreatorVideo = (uid: number, aid: number) =>
+        invoke<void>('delete_creator_video', { uid, aid })
+
     const getVideoDetail = async (uid: number, videoId: string) => {
         try {
             const detail = await invoke('get_video_detail', { uid, videoId })
@@ -369,6 +372,7 @@ export const useUtilsStore = defineStore('template', () => {
         getVideoDetail,
         getArchiveProcessing,
         getVideoTranscode,
+        deleteCreatorVideo,
         getVideoTemplate,
         getVideoList,
         openVideoListSnapshot,

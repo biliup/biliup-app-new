@@ -194,5 +194,22 @@
     "season.manager.csrf_missing": "CSRF トークンがありません。再ログインしてください",
     "season.manager.no_selection": "追加する投稿を選択してください",
     "video.list_snapshot_expired": "投稿一覧の有効期限が切れました。開き直してください",
-    "video.processing_invalid_response": "投稿処理進捗の応答形式が不正です"
+    "video.processing_invalid_response": "投稿処理進捗の応答形式が不正です",
+    "delete.window_title": "投稿削除の安全確認 · {uid}",
+    "delete.invalid_response": "削除または認証の応答形式が不正です",
+    "delete.busy": "別の削除確認が進行中です。完了または閉じてから再試行してください",
+    "delete.cancelled": "削除確認をキャンセルしました。削除リクエストは送信されていません",
+    "delete.uncertain": "削除結果を確認できません。連続して再試行せず、一覧を更新して確認してください",
+    "delete.script.title": "認証して投稿を削除",
+    "delete.script.warning": "認証完了後、この投稿は完全に削除されます。ウィンドウを閉じるとキャンセルできます。",
+    "delete.script.send_sms": "確認コードを送信",
+    "delete.script.confirm_sms": "確認コードを検証",
+    "delete.script.sms_placeholder": "6桁のSMS確認コードを入力",
+    "delete.script.sms_invalid": "有効な6桁のSMS確認コードを入力してください",
+    "delete.script.sms_failed": "SMS認証に失敗しました。再試行してください",
+    "delete.script.sms_sent": "確認コードを送信しました。SMSを確認してください",
+    "delete.script.captcha": "投稿を削除するには、以下の認証を完了してください",
+    "delete.script.failed": "認証に失敗しました。再試行するかウィンドウを閉じてください",
+    "delete.script.cancel": "削除をキャンセル",
+    "delete.script.language": "ja"
 }

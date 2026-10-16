@@ -1003,5 +1003,8 @@
     "1080P 高码率": "1080P High bitrate",
     "1080P 60帧": "1080P 60fps",
     "4K 超高清": "4K UHD",
-    "杜比视界": "Dolby Vision"
+    "杜比视界": "Dolby Vision",
+    "确定删除稿件“{0}”吗？删除后无法恢复，本地模板将保留。": "Delete submission “{0}”? This cannot be undone. Local templates will be kept.",
+    "删除稿件": "Delete submission",
+    "稿件已删除，本地模板已保留": "Submission deleted; local templates kept"
 }

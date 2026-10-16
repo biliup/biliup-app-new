@@ -350,6 +350,7 @@ pub async fn run() {
             reorder_season_episodes,
             edit_season_episode_title,
             get_video_detail,
+            delete_creator_video,
             get_archive_processing,
             get_video_transcode,
             get_video_list,

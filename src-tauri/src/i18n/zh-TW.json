@@ -194,5 +194,22 @@
     "season.manager.csrf_missing": "登入資訊缺少 CSRF，請重新登入",
     "season.manager.no_selection": "請選擇要加入的稿件",
     "video.list_snapshot_expired": "稿件清單已過期，請重新開啟",
-    "video.processing_invalid_response": "稿件處理進度回應格式錯誤"
+    "video.processing_invalid_response": "稿件處理進度回應格式錯誤",
+    "delete.window_title": "刪除稿件安全驗證 · {uid}",
+    "delete.invalid_response": "刪除介面或驗證回應格式錯誤",
+    "delete.busy": "已有稿件正在進行刪除驗證，請完成或關閉驗證視窗後重試",
+    "delete.cancelled": "刪除驗證已取消，未提交刪除請求",
+    "delete.uncertain": "刪除結果未確認，請重新整理稿件列表核對後再操作，請勿連續重試",
+    "delete.script.title": "驗證並刪除稿件",
+    "delete.script.warning": "完成驗證後將刪除此稿件，刪除後無法復原。可關閉視窗取消。",
+    "delete.script.send_sms": "傳送驗證碼",
+    "delete.script.confirm_sms": "驗證簡訊",
+    "delete.script.sms_placeholder": "請輸入六位簡訊驗證碼",
+    "delete.script.sms_invalid": "請輸入有效的六位簡訊驗證碼",
+    "delete.script.sms_failed": "簡訊驗證失敗，請重試",
+    "delete.script.sms_sent": "驗證碼已傳送，請查收簡訊",
+    "delete.script.captcha": "請完成下方驗證以刪除稿件",
+    "delete.script.failed": "驗證請求失敗，請重試或關閉視窗",
+    "delete.script.cancel": "取消刪除",
+    "delete.script.language": "zh-tw"
 }

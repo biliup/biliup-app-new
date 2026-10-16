@@ -194,5 +194,22 @@
     "season.manager.csrf_missing": "Missing CSRF token; please log in again",
     "season.manager.no_selection": "Select submissions to add",
     "video.list_snapshot_expired": "The submission list has expired; reopen it",
-    "video.processing_invalid_response": "Invalid submission processing response"
+    "video.processing_invalid_response": "Invalid submission processing response",
+    "delete.window_title": "Submission deletion verification · {uid}",
+    "delete.invalid_response": "Invalid deletion or verification response",
+    "delete.busy": "Another deletion verification is in progress; complete or close it first",
+    "delete.cancelled": "Deletion verification cancelled; no deletion request was submitted",
+    "delete.uncertain": "Deletion result is unconfirmed. Refresh the list to check before retrying",
+    "delete.script.title": "Verify and delete submission",
+    "delete.script.warning": "Completing verification will delete this submission permanently. Close this window to cancel.",
+    "delete.script.send_sms": "Send code",
+    "delete.script.confirm_sms": "Verify code",
+    "delete.script.sms_placeholder": "Enter the six-digit SMS code",
+    "delete.script.sms_invalid": "Enter a valid six-digit SMS code",
+    "delete.script.sms_failed": "SMS verification failed. Try again",
+    "delete.script.sms_sent": "Code sent. Check your SMS messages",
+    "delete.script.captcha": "Complete the verification below to delete the submission",
+    "delete.script.failed": "Verification failed. Retry or close this window",
+    "delete.script.cancel": "Cancel deletion",
+    "delete.script.language": "en"
 }

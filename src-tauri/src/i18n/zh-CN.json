@@ -194,5 +194,22 @@
     "season.manager.csrf_missing": "登录信息缺少 CSRF，请重新登录",
     "season.manager.no_selection": "请选择要添加的稿件",
     "video.list_snapshot_expired": "稿件列表已过期，请重新打开",
-    "video.processing_invalid_response": "稿件处理进度响应格式错误"
+    "video.processing_invalid_response": "稿件处理进度响应格式错误",
+    "delete.window_title": "删除稿件安全验证 · {uid}",
+    "delete.invalid_response": "删除接口或验证响应格式错误",
+    "delete.busy": "已有稿件正在进行删除验证，请完成或关闭验证窗口后重试",
+    "delete.cancelled": "删除验证已取消，未提交删除请求",
+    "delete.uncertain": "删除结果未确认，请刷新稿件列表核对后再操作，请勿连续重试",
+    "delete.script.title": "验证并删除稿件",
+    "delete.script.warning": "完成验证后将删除此稿件，删除后无法恢复。可关闭窗口取消。",
+    "delete.script.send_sms": "发送验证码",
+    "delete.script.confirm_sms": "验证短信",
+    "delete.script.sms_placeholder": "请输入六位短信验证码",
+    "delete.script.sms_invalid": "请输入有效的六位短信验证码",
+    "delete.script.sms_failed": "短信验证失败，请重试",
+    "delete.script.sms_sent": "验证码已发送，请查收短信",
+    "delete.script.captcha": "请完成下方验证以删除稿件",
+    "delete.script.failed": "验证请求失败，请重试或关闭窗口",
+    "delete.script.cancel": "取消删除",
+    "delete.script.language": "zh-cn"
 }

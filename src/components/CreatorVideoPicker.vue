@@ -90,7 +90,13 @@
                         @click="selectVideo(row, 'copy')"
                         >{{ t('复制') }}</el-button
                     >
-                    <el-button type="danger" link disabled>{{ t('删除') }}</el-button>
+                    <el-button
+                        type="danger"
+                        link
+                        :disabled="loading || actionLoading"
+                        @click="deleteVideo(row)"
+                        >{{ t('删除') }}</el-button
+                    >
                 </template>
             </el-table-column>
         </el-table>
@@ -121,6 +127,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch, onBeforeUnmount } from 'vue'
+import { ElMessageBox } from 'element-plus'
 import { t } from '../i18n'
 import { useUtilsStore } from '../stores/utils'
 import type { CreatorVideo } from '../types/creator_video'
@@ -224,6 +231,55 @@ const selectVideo = async (video: CreatorVideo, action: 'edit' | 'copy' = 'edit'
     } finally {
         actionLoading.value = false
         if (props.modelValue && props.uid !== uid) void loadPage(1)
+    }
+}
+
+const deleteVideo = async (video: CreatorVideo) => {
+    if (
+        loading.value ||
+        actionLoading.value ||
+        !props.modelValue ||
+        !props.uid ||
+        props.seasonAddOnly ||
+        !items.value.includes(video)
+    )
+        return
+    const uid = props.uid
+    const request = requestId
+    let attempted = false
+    let deletionError = ''
+    actionLoading.value = true
+    error.value = ''
+    try {
+        await ElMessageBox.confirm(
+            t('确定删除稿件“{0}”吗？删除后无法恢复，本地模板将保留。', { 0: video.title }),
+            t('删除稿件'),
+            { type: 'warning', confirmButtonText: t('删除'), cancelButtonText: t('取消') }
+        )
+        if (request !== requestId || !props.modelValue || props.uid !== uid) return
+        attempted = true
+        await utilsStore.deleteCreatorVideo(uid, video.aid)
+        utilsStore.showMessage(t('稿件已删除，本地模板已保留'), 'success')
+    } catch (cause) {
+        if (cause !== 'cancel' && cause !== 'close')
+            deletionError = t('稿件操作失败: {0}', { 0: String(cause) })
+    } finally {
+        actionLoading.value = false
+        if (props.modelValue && props.uid !== uid) void loadPage(1)
+        else if (attempted && request === requestId && props.modelValue) {
+            const refreshRequest = requestId + 1
+            await loadPage(page.value, true)
+            if (
+                requestId === refreshRequest &&
+                !error.value &&
+                !items.value.length &&
+                page.value > 1
+            ) {
+                await loadPage(Math.max(1, Math.ceil(total.value / pageSize.value)))
+            }
+        }
+        if (props.modelValue && props.uid === uid && deletionError)
+            error.value = deletionError + (error.value ? `\n${error.value}` : '')
     }
 }
 

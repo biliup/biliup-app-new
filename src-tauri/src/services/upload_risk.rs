@@ -343,6 +343,44 @@ async fn verify_window(
 }
 
 #[cfg(not(test))]
+enum VerificationAction<'a> {
+    Upload(&'a str),
+    Delete { sms_required: bool },
+}
+
+pub(crate) async fn verify_delete_window(
+    app: &AppHandle,
+    uid: u64,
+    bili: &BiliBili,
+    proxy: Option<&str>,
+    sms_required: bool,
+) -> Result<String> {
+    #[cfg(test)]
+    {
+        let _ = (app, uid, bili, proxy, sms_required);
+        Err(anyhow!(cancelled()))
+    }
+    #[cfg(not(test))]
+    {
+        verify_action_window(
+            app,
+            uid,
+            bili,
+            proxy,
+            VerificationAction::Delete { sms_required },
+        )
+        .await
+        .map_err(|error| {
+            if error.to_string() == cancelled() {
+                anyhow!(crate::i18n::text("delete.cancelled"))
+            } else {
+                error
+            }
+        })
+    }
+}
+
+#[cfg(not(test))]
 async fn verify_window(
     app: &AppHandle,
     uid: u64,
@@ -350,33 +388,78 @@ async fn verify_window(
     voucher: &str,
     proxy: Option<&str>,
 ) -> Result<String> {
+    verify_action_window(app, uid, bili, proxy, VerificationAction::Upload(voucher)).await
+}
+
+#[cfg(not(test))]
+async fn verify_action_window(
+    app: &AppHandle,
+    uid: u64,
+    bili: &BiliBili,
+    proxy: Option<&str>,
+    action: VerificationAction<'_>,
+) -> Result<String> {
+    let (label, source, options, title) = match action {
+        VerificationAction::Upload(voucher) => (
+            "upload-risk",
+            include_str!("upload_risk_verification.js"),
+            json!({"riskParams": {"v_voucher": voucher}}),
+            crate::tr!("risk.window_title", uid = uid),
+        ),
+        VerificationAction::Delete { sms_required } => (
+            "archive-delete",
+            include_str!("archive_delete_verification.js"),
+            json!({"smsRequired": sms_required}),
+            crate::tr!("delete.window_title", uid = uid),
+        ),
+    };
     let session = format!(
-        "{uid}-{}",
+        "{label}-{uid}-{}",
         chrono::Utc::now().timestamp_nanos_opt().unwrap_or_default()
     );
     // 每次本地代理的端口不同，不能复用主窗口或上一次验证的 WebView2 环境。
     // 在窗口 guard 之前创建，保证先关闭窗口再清理目录；创建窗口失败也会清理。
     #[cfg(target_os = "windows")]
-    let data_directory = proxy.map(|_| {
+    let data_directory = (proxy.is_some() || label == "archive-delete").then(|| {
         VerificationDataDirectory(
-            std::env::temp_dir().join(format!("biliup-upload-risk-{session}")),
+            std::env::temp_dir().join(format!("biliup-verification-{session}")),
         )
     });
     let callback = format!("{MEMBER}{CALLBACK_PATH}#{session}");
     let ready_callback = serde_json::to_string(&format!("{callback}&ready=1"))?;
-    let options = json!({"riskParams": {"v_voucher": voucher}}).to_string();
-    let messages = json!({
+    let mut messages = json!({
         "origin": crate::i18n::text("risk.script.origin"),
         "account_invalid": crate::i18n::text("risk.script.account_invalid"),
         "account_mismatch": crate::i18n::text("risk.script.account_mismatch"),
         "sdk_load_failed": crate::i18n::text("risk.script.sdk_load_failed"),
         "sdk_timeout": crate::i18n::text("risk.script.sdk_timeout"),
         "token_invalid": crate::i18n::text("risk.script.token_invalid"),
-    })
-    .to_string();
-    let script = include_str!("upload_risk_verification.js")
-        .replace("__RISK_MESSAGES__", &messages)
-        .replace("__RISK_OPTIONS__", &options)
+    });
+    for key in [
+        "delete.script.title",
+        "delete.script.warning",
+        "delete.script.send_sms",
+        "delete.script.confirm_sms",
+        "delete.script.sms_placeholder",
+        "delete.script.sms_invalid",
+        "delete.script.sms_failed",
+        "delete.script.sms_sent",
+        "delete.script.captcha",
+        "delete.script.failed",
+        "delete.script.cancel",
+    ] {
+        messages.as_object_mut().unwrap().insert(
+            key.trim_start_matches("delete.script.").into(),
+            json!(crate::i18n::text(key)),
+        );
+    }
+    messages.as_object_mut().unwrap().insert(
+        "language".into(),
+        json!(crate::i18n::text("delete.script.language")),
+    );
+    let script = source
+        .replace("__RISK_MESSAGES__", &messages.to_string())
+        .replace("__RISK_OPTIONS__", &options.to_string())
         .replace("__EXPECTED_UID__", &uid.to_string())
         .replace(
             "__RISK_TIMEOUT_MS__",
@@ -400,10 +483,10 @@ async fn verify_window(
     let started = AtomicBool::new(false);
     let mut builder = WebviewWindowBuilder::new(
         app,
-        "upload-risk",
+        label,
         WebviewUrl::External(Url::parse("about:blank")?),
     )
-    .title(crate::tr!("risk.window_title", uid = uid))
+    .title(title)
     .inner_size(900.0, 720.0)
     .incognito(true)
     .on_navigation(move |url| {

@@ -37,6 +37,10 @@ const settle = async () => {
     await nextTick()
     await Promise.resolve()
 }
+const waitForRequests = async (h, count) => {
+    for (let i = 0; i < 10 && h.requests.length < count; i++) await settle()
+    assert.equal(h.requests.length, count)
+}
 
 function harness(initial = {}, options = {}) {
     const props = reactive({ modelValue: true, uid: 1, username: '测试账号',
@@ -44,6 +48,8 @@ function harness(initial = {}, options = {}) {
     const requests = []
     const events = []
     const snapshots = []
+    const deletions = []
+    const messages = []
     const stops = []
     let unmount
     const context = {
@@ -58,11 +64,14 @@ function harness(initial = {}, options = {}) {
             unmount = fn
         },
         defineProps: () => props,
+        ElMessageBox: { confirm: options.confirm || (async () => {}) },
         defineEmits:
             () =>
             (...args) =>
                 events.push(args),
         useUtilsStore: () => ({
+            deleteCreatorVideo: async (...args) => { deletions.push(args); return options.delete?.(...args) },
+            showMessage: (...args) => messages.push(args),
             openVideoListSnapshot: uid => {
                 snapshots.push(['open', uid])
                 return options.openSnapshot?.(uid) || Promise.resolve(`snapshot-${snapshots.length}`)
@@ -77,7 +86,7 @@ function harness(initial = {}, options = {}) {
     }
     vm.runInNewContext(
         ts.transpile(source, { target: ts.ScriptTarget.ES2020 }) +
-            '\nglobalThis.picker = { items, page, total, loading, actionLoading, error, loadPage, selectVideo, selectedVideos, updateSelection, confirmSelection, canSelectVideo }',
+            '\nglobalThis.picker = { items, page, total, loading, actionLoading, error, loadPage, selectVideo, deleteVideo, selectedVideos, updateSelection, confirmSelection, canSelectVideo }',
         context
     )
     return {
@@ -85,6 +94,8 @@ function harness(initial = {}, options = {}) {
         requests,
         events,
         snapshots,
+        deletions,
+        messages,
         picker: context.picker,
         dispose() {
             unmount()
@@ -171,6 +182,79 @@ test('操作期间账号失效后重新加载新账号，旧操作完成不会�
     await settle()
     assert.equal(h.picker.items.value[0].aid, 456)
     assert.equal(h.picker.actionLoading.value, false)
+})
+
+test('删除需要确认，取消不请求；成功保留管理窗口并刷新当前页', async context => {
+    const cancelled = harness({}, { confirm: async () => { throw 'cancel' } })
+    context.after(() => cancelled.dispose())
+    cancelled.requests[0].resolve({ items: [video(123)], total: 1 })
+    await settle()
+    await cancelled.picker.deleteVideo(cancelled.picker.items.value[0])
+    assert.equal(cancelled.deletions.length, 0)
+    assert.equal(cancelled.picker.actionLoading.value, false)
+    const h = harness()
+    context.after(() => h.dispose())
+    h.requests[0].resolve({ items: [video(123), video(456)], total: 2 })
+    await settle()
+    const pending = h.picker.deleteVideo(h.picker.items.value[0])
+    await h.picker.deleteVideo(h.picker.items.value[0])
+    await settle()
+    assert.deepEqual(h.deletions, [[1, 123]])
+    assert.deepEqual(h.requests[1].args, [1, 1, 10])
+    h.requests[1].resolve({ items: [video(456)], total: 1 })
+    await pending
+    assert.equal(h.picker.items.value[0].aid, 456)
+    assert.equal(h.events.length, 0)
+    assert.equal(h.messages[0][1], 'success')
+})
+
+test('删除最后一页的最后一条后回到有效页', async context => {
+    const h = harness()
+    context.after(() => h.dispose())
+    h.requests[0].resolve({ items: [], total: 11 })
+    await settle()
+    const second = h.picker.loadPage(2)
+    h.requests[1].resolve({ items: [video(123)], total: 11 })
+    await second
+    const pending = h.picker.deleteVideo(h.picker.items.value[0])
+    await waitForRequests(h, 3)
+    h.requests[2].resolve({ items: [], total: 10 })
+    await waitForRequests(h, 4)
+    assert.deepEqual(h.requests[3].args, [1, 1, 10])
+    h.requests[3].resolve({ items: [video(456)], total: 10 })
+    await pending
+    assert.equal(h.picker.page.value, 1)
+    assert.equal(h.deletions.length, 1)
+})
+
+test('删除结果异常仍刷新核对，保留错误且不自动重发删除', async context => {
+    const h = harness({}, { delete: async () => { throw new Error('结果未确认') } })
+    context.after(() => h.dispose())
+    h.requests[0].resolve({ items: [video(123)], total: 1 })
+    await settle()
+    const pending = h.picker.deleteVideo(h.picker.items.value[0])
+    await waitForRequests(h, 2)
+    h.requests[1].resolve({ items: [video(123)], total: 1 })
+    await pending
+    assert.equal(h.deletions.length, 1)
+    assert.equal(h.picker.items.value.length, 1)
+    assert.match(h.picker.error.value, /结果未确认/)
+    assert.equal(h.messages.length, 0)
+})
+
+test('删除确认期间换账号不会删除旧账号稿件', async context => {
+    let confirm
+    const h = harness({}, { confirm: () => new Promise(resolve => { confirm = resolve }) })
+    context.after(() => h.dispose())
+    h.requests[0].resolve({ items: [video(123)], total: 1 })
+    await settle()
+    const pending = h.picker.deleteVideo(h.picker.items.value[0])
+    h.props.uid = 2
+    await settle()
+    confirm()
+    await pending
+    assert.equal(h.deletions.length, 0)
+    assert.deepEqual(h.requests[1].args, [2, 1, 10])
 })
 
 test('切换账号后丢弃旧结果，旧请求结束不影响新请求的加载状态', async context => {
