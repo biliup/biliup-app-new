@@ -1,19 +1,38 @@
 <template>
     <el-dialog
         :model-value="modelValue"
-        :title="seasonAddOnly ? t('添加单集') : t('选择已有稿件')"
+        :title="seasonAddOnly ? t('添加单集') : t('稿件管理')"
         width="760px"
         style="max-width: calc(100vw - 32px)"
         append-to-body
+        :close-on-click-modal="!actionLoading"
+        :close-on-press-escape="!actionLoading"
+        :show-close="!actionLoading"
         @update:model-value="emit('update:modelValue', $event)"
     >
         <div class="picker-toolbar">
-            <span>{{ username }}</span>
-            <el-button :disabled="loading" @click="loadPage(page, true)">{{ t('刷新') }}</el-button>
+            <span v-if="seasonAddOnly">{{ username }}</span>
+            <el-select
+                v-else
+                :model-value="uid"
+                :placeholder="t('请选择用户')"
+                :disabled="actionLoading"
+                @update:model-value="emit('update:uid', $event)"
+            >
+                <el-option
+                    v-for="user in users"
+                    :key="user.uid"
+                    :label="user.username"
+                    :value="user.uid"
+                />
+            </el-select>
+            <el-button :disabled="loading || actionLoading || !uid" @click="loadPage(page, true)">{{
+                t('刷新')
+            }}</el-button>
         </div>
         <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
         <el-table
-            v-loading="loading"
+            v-loading="loading || actionLoading"
             :data="items"
             row-key="aid"
             :max-height="420"
@@ -54,11 +73,24 @@
                     <div class="video-id">{{ row.bvid || `av${row.aid}` }}</div>
                 </template>
             </el-table-column>
-            <el-table-column v-if="!seasonAddOnly" :label="t('操作')" width="80" align="center">
+            <el-table-column v-if="!seasonAddOnly" :label="t('操作')" width="170" align="center">
                 <template #default="{ row }">
-                    <el-button type="primary" link :disabled="loading" @click="selectVideo(row)">
-                        {{ t('选择') }}
+                    <el-button
+                        type="primary"
+                        link
+                        :disabled="loading || actionLoading"
+                        @click="selectVideo(row, 'edit')"
+                    >
+                        {{ t('编辑') }}
                     </el-button>
+                    <el-button
+                        type="primary"
+                        link
+                        :disabled="loading || actionLoading"
+                        @click="selectVideo(row, 'copy')"
+                        >{{ t('复制') }}</el-button
+                    >
+                    <el-button type="danger" link disabled>{{ t('删除') }}</el-button>
                 </template>
             </el-table-column>
         </el-table>
@@ -68,11 +100,13 @@
                     :current-page="page"
                     :page-size="pageSize"
                     :total="total"
-                    :disabled="loading"
+                    :disabled="loading || actionLoading"
                     layout="total, prev, pager, next"
                     @current-change="loadPage"
                 />
-                <el-button @click="emit('update:modelValue', false)">{{ t('取消') }}</el-button>
+                <el-button :disabled="actionLoading" @click="emit('update:modelValue', false)">{{
+                    seasonAddOnly ? t('取消') : t('关闭')
+                }}</el-button>
                 <el-button
                     v-if="seasonAddOnly"
                     type="primary"
@@ -96,15 +130,18 @@ const props = defineProps<{
     uid: number | null
     username: string
     seasonAddOnly?: boolean
+    users?: { uid: number; username: string }[]
+    manageVideo?: (uid: number, video: CreatorVideo, action: 'edit' | 'copy') => Promise<void>
 }>()
 const emit = defineEmits<{
     'update:modelValue': [value: boolean]
-    select: [videoId: string]
+    'update:uid': [uid: number]
     'select-many': [videoIds: string[]]
 }>()
 const utilsStore = useUtilsStore()
 const items = ref<CreatorVideo[]>([])
 const loading = ref(false)
+const actionLoading = ref(false)
 const error = ref('')
 const page = ref(1)
 const total = ref(0)
@@ -125,7 +162,7 @@ const releaseSnapshot = () => {
 
 const loadPage = async (nextPage: number, refresh = false) => {
     const uid = props.uid
-    if (!props.modelValue || !uid) return
+    if (!props.modelValue || !uid || actionLoading.value) return
     if (refresh) releaseSnapshot()
     const request = ++requestId
     const seasonAddOnly = props.seasonAddOnly
@@ -163,11 +200,31 @@ const loadPage = async (nextPage: number, refresh = false) => {
     }
 }
 
-const selectVideo = (video: CreatorVideo) => {
-    if (loading.value || !props.modelValue || !props.uid || !items.value.includes(video)) return
-    if (props.seasonAddOnly) return
-    emit('select', video.bvid || `av${video.aid}`)
-    emit('update:modelValue', false)
+const selectVideo = async (video: CreatorVideo, action: 'edit' | 'copy' = 'edit') => {
+    if (
+        loading.value ||
+        actionLoading.value ||
+        !props.modelValue ||
+        !props.uid ||
+        !items.value.includes(video)
+    )
+        return
+    if (props.seasonAddOnly || !props.manageVideo) return
+    const uid = props.uid
+    const request = requestId
+    actionLoading.value = true
+    error.value = ''
+    try {
+        await props.manageVideo(uid, video, action)
+        if (request === requestId && props.modelValue && props.uid === uid)
+            emit('update:modelValue', false)
+    } catch (cause) {
+        if (request === requestId && props.modelValue && props.uid === uid)
+            error.value = t('稿件操作失败: {0}', { 0: String(cause) })
+    } finally {
+        actionLoading.value = false
+        if (props.modelValue && props.uid !== uid) void loadPage(1)
+    }
 }
 
 const canSelectVideo = (video: CreatorVideo) => !loading.value && video.season_add_state === 0

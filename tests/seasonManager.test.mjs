@@ -576,7 +576,7 @@ test('稿件编辑复用已有模板，名称冲突时新建独立模板，加�
     const ast = ts.createSourceFile('MainView.ts', main, ts.ScriptTarget.Latest, true)
     const handler = ast.statements.find(statement =>
         ts.isVariableStatement(statement) && statement.declarationList.declarations.some(
-            declaration => declaration.name.getText(ast) === 'openSeasonArchiveEditor'
+            declaration => declaration.name.getText(ast) === 'openArchiveEditor'
         )
     ).getText(ast)
     const user = { uid: 1 }
@@ -594,9 +594,9 @@ test('稿件编辑复用已有模板，名称冲突时新建独立模板，加�
         },
         utilsStore: { getVideoSeason: async () => ({ season_id: 10, section_id: 11 }) },
         selectTemplate: async (...args) => { calls.push(['select', ...args]); return true },
-        t: key => key
+        t: (key, params) => key.replace(/\{(\w+)\}/g, (match, name) => params?.[name] ?? match)
     }
-    vm.runInNewContext(ts.transpile(handler) + '\nglobalThis.edit = openSeasonArchiveEditor', context)
+    vm.runInNewContext(ts.transpile(handler) + '\nglobalThis.edit = openArchiveEditor', context)
     await context.edit(1, { aid: 121 })
     assert.equal(templates.existing.season_id, 10)
     assert.equal(calls.length, 1)
@@ -605,6 +605,12 @@ test('稿件编辑复用已有模板，名称冲突时新建独立模板，加�
     assert.deepEqual(calls[1], ['create', 1, 'av122', 'av122 (2)', true])
     assert.equal(calls[2][2], 'av122 (2)')
     assert.equal(templates.av122.aid, 999)
+    await context.edit(1, { aid: 121, title: '测试稿件' }, 'copy')
+    assert.deepEqual(calls[3], ['create', 1, 'av121', '测试稿件的复制', false])
+    assert.equal(calls[4][2], '测试稿件的复制')
+    templates['测试稿件的复制'] = { aid: undefined }
+    await context.edit(1, { aid: 121, title: '测试稿件' }, 'copy')
+    assert.deepEqual(calls[5], ['create', 1, 'av121', '测试稿件的复制 (2)', false])
     context.selectTemplate = async () => false
     await assert.rejects(context.edit(1, { aid: 121 }), /切换模板失败/)
     context.templateLoading.value = true

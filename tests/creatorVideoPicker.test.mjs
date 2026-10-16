@@ -39,7 +39,8 @@ const settle = async () => {
 }
 
 function harness(initial = {}, options = {}) {
-    const props = reactive({ modelValue: true, uid: 1, username: '测试账号', ...initial })
+    const props = reactive({ modelValue: true, uid: 1, username: '测试账号',
+        manageVideo: async (uid, video, action) => events.push([action, uid, video.bvid || `av${video.aid}`]), ...initial })
     const requests = []
     const events = []
     const snapshots = []
@@ -76,7 +77,7 @@ function harness(initial = {}, options = {}) {
     }
     vm.runInNewContext(
         ts.transpile(source, { target: ts.ScriptTarget.ES2020 }) +
-            '\nglobalThis.picker = { items, page, total, loading, error, loadPage, selectVideo, selectedVideos, updateSelection, confirmSelection, canSelectVideo }',
+            '\nglobalThis.picker = { items, page, total, loading, actionLoading, error, loadPage, selectVideo, selectedVideos, updateSelection, confirmSelection, canSelectVideo }',
         context
     )
     return {
@@ -92,7 +93,7 @@ function harness(initial = {}, options = {}) {
     }
 }
 
-test('仅打开弹窗且选择账号后加载，按页请求并回填 BV/AV 号', async context => {
+test('仅打开弹窗且选择账号后加载，按页请求并支持编辑与复制', async context => {
     const h = harness({ modelValue: false })
     context.after(() => h.dispose())
     assert.equal(h.requests.length, 0)
@@ -101,9 +102,9 @@ test('仅打开弹窗且选择账号后加载，按页请求并回填 BV/AV 号'
     assert.deepEqual(h.requests[0].args, [1, 1, 10])
     h.requests[0].resolve({ items: [video(123, 'BVtest')], total: 25 })
     await settle()
-    h.picker.selectVideo(h.picker.items.value[0])
+    await h.picker.selectVideo(h.picker.items.value[0])
     assert.deepEqual(h.events, [
-        ['select', 'BVtest'],
+        ['edit', 1, 'BVtest'],
         ['update:modelValue', false]
     ])
     h.events.length = 0
@@ -114,11 +115,62 @@ test('仅打开弹窗且选择账号后加载，按页请求并回填 BV/AV 号'
     await loading
     assert.equal(h.picker.page.value, 2)
     assert.equal(h.picker.total.value, 25)
-    h.picker.selectVideo(h.picker.items.value[0])
+    await h.picker.selectVideo(h.picker.items.value[0], 'copy')
     assert.deepEqual(h.events, [
-        ['select', 'av456'],
+        ['copy', 1, 'av456'],
         ['update:modelValue', false]
     ])
+})
+
+test('稿件操作等待完成才关闭，重复点击被拦截，失败后保留列表可重试', async context => {
+    let finish, fail
+    const calls = []
+    const h = harness({ manageVideo: (...args) => {
+        calls.push(args)
+        return new Promise((resolve, reject) => { finish = resolve; fail = reject })
+    } })
+    context.after(() => h.dispose())
+    h.requests[0].resolve({ items: [video(123)], total: 1 })
+    await settle()
+    const row = h.picker.items.value[0]
+    const pending = h.picker.selectVideo(row, 'copy')
+    await h.picker.selectVideo(row, 'edit')
+    assert.equal(calls.length, 1)
+    assert.equal(calls[0][0], 1)
+    assert.equal(calls[0][2], 'copy')
+    assert.equal(h.picker.actionLoading.value, true)
+    assert.equal(h.events.length, 0)
+    fail(new Error('操作失败'))
+    await pending
+    assert.equal(h.picker.actionLoading.value, false)
+    assert.match(h.picker.error.value, /操作失败/)
+    assert.equal(h.events.length, 0)
+    assert.equal(h.picker.items.value.length, 1)
+    const retry = h.picker.selectVideo(row, 'edit')
+    finish()
+    await retry
+    assert.equal(h.picker.error.value, '')
+    assert.deepEqual(h.events, [['update:modelValue', false]])
+})
+
+test('操作期间账号失效后重新加载新账号，旧操作完成不会关闭新列表', async context => {
+    let finish
+    const h = harness({ manageVideo: () => new Promise(resolve => { finish = resolve }) })
+    context.after(() => h.dispose())
+    h.requests[0].resolve({ items: [video(123)], total: 1 })
+    await settle()
+    const pending = h.picker.selectVideo(h.picker.items.value[0], 'edit')
+    h.props.uid = 2
+    await settle()
+    assert.equal(h.requests.length, 1)
+    finish()
+    await pending
+    assert.equal(h.events.length, 0)
+    assert.deepEqual(h.requests[1].args, [2, 1, 10])
+    h.requests[1].resolve({ items: [video(456)], total: 1 })
+    await settle()
+    assert.equal(h.picker.items.value[0].aid, 456)
+    assert.equal(h.picker.actionLoading.value, false)
 })
 
 test('切换账号后丢弃旧结果，旧请求结束不影响新请求的加载状态', async context => {

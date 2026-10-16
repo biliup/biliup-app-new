@@ -58,7 +58,14 @@
                         {{ t('main.submitStats') }}
                     </el-button>
                     <el-button
-                        type="primary"
+                        type="warning"
+                        size="small"
+                        @click="archiveManagerVisible = true"
+                        :title="t('稿件管理')"
+                        >{{ t('稿件管理') }}</el-button
+                    >
+                    <el-button
+                        color="#8b5cf6"
                         size="small"
                         @click="seasonManagerVisible = true"
                         :title="t('合集管理')"
@@ -1047,10 +1054,17 @@
             @clear="clearSubmitStats"
         />
 
+        <CreatorVideoPicker
+            v-model="archiveManagerVisible"
+            v-model:uid="archiveManagerUid"
+            :users="loginUsers"
+            username=""
+            :manage-video="openArchiveEditor"
+        />
         <SeasonManager
             v-model="seasonManagerVisible"
             :initial-uid="selectedUser?.uid"
-            :open-archive-editor="openSeasonArchiveEditor"
+            :open-archive-editor="openArchiveEditor"
         />
 
         <SeparateCoverManager
@@ -1108,6 +1122,7 @@ import StaffView from '../components/StaffView.vue'
 import DescView from '../components/DescView.vue'
 import SubmitStatsPage from '../components/SubmitStatsPage.vue'
 import SeasonManager from '../components/SeasonManager.vue'
+import CreatorVideoPicker from '../components/CreatorVideoPicker.vue'
 import type { SeasonEpisode } from '../types/season'
 import SeparateCoverManager from '../components/SeparateCoverManager.vue'
 import { selectAndUploadCover } from '../utils/coverUpload'
@@ -1170,6 +1185,19 @@ const showLoginDialog = ref(false)
 const showGlobalConfigDialog = ref(false)
 const submitStatsDialogVisible = ref(false)
 const seasonManagerVisible = ref(false)
+const archiveManagerVisible = ref(false)
+const archiveManagerUid = ref<number | null>(null)
+watch(
+    () => [archiveManagerVisible.value, loginUsers.value.map(user => user.uid)] as const,
+    ([visible, uids], previous) => {
+        if (!visible) return
+        if (!previous?.[0] || !uids.includes(archiveManagerUid.value!)) {
+            archiveManagerUid.value = uids.includes(selectedUser.value?.uid ?? 0)
+                ? selectedUser.value!.uid
+                : (uids[0] ?? null)
+        }
+    }
+)
 const separateCoverManagerVisible = ref(false)
 const loginLoading = ref(false)
 const uploading = ref(false)
@@ -3513,26 +3541,37 @@ const handleTemplateCommand = async (command: string, user: any, template: any) 
     }
 }
 
-const openSeasonArchiveEditor = async (uid: number, episode: SeasonEpisode) => {
+const openArchiveEditor = async (
+    uid: number,
+    episode: Pick<SeasonEpisode, 'aid' | 'bvid'> & { title?: string },
+    action: 'edit' | 'copy' = 'edit'
+) => {
     if (templateLoading.value || submitting.value || getCurrentAutoSubmitting.value) {
         throw new Error(t('当前正在加载或提交，请稍后再编辑稿件'))
     }
     const user = loginUsers.value.find(user => user.uid === uid)
     if (!user) throw new Error(t('请选择用户'))
     const templates = userConfigStore.configRoot?.config[uid]?.templates || {}
-    let name = Object.keys(templates).find(name => templates[name].aid === episode.aid)
+    let name =
+        action === 'edit'
+            ? Object.keys(templates).find(name => templates[name].aid === episode.aid)
+            : undefined
     if (!name) {
         const videoId = episode.bvid || `av${episode.aid}`
-        name = videoId
+        const baseName =
+            action === 'copy' ? t('{0}的复制', { 0: episode.title || videoId }) : videoId
+        name = baseName
         let suffix = 2
-        while (templates[name]) name = `${videoId} (${suffix++})`
-        await userConfigStore.createTemplateFromVideo(uid, videoId, name, true)
+        while (templates[name]) name = `${baseName} (${suffix++})`
+        await userConfigStore.createTemplateFromVideo(uid, videoId, name, action === 'edit')
     }
     if (autoSubmittingRecord.value[getTemplateKey(uid, name)]) {
         throw new Error(t('当前正在加载或提交，请稍后再编辑稿件'))
     }
-    const season = await utilsStore.getVideoSeason(uid, episode.aid)
-    await userConfigStore.syncVideoSeason(uid, [episode.aid], season)
+    if (action === 'edit') {
+        const season = await utilsStore.getVideoSeason(uid, episode.aid)
+        await userConfigStore.syncVideoSeason(uid, [episode.aid], season)
+    }
     if (!(await selectTemplate(user, name))) {
         throw new Error(t('切换模板失败'))
     }
