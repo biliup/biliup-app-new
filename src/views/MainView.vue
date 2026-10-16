@@ -1590,14 +1590,32 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
     console.info(progressMessage)
 
     try {
-        userConfigStore.assertVideoSeasonReady(uid, templateAid)
+        const aid = Number(resp.aid)
+        const revision = userConfigStore.getSeasonRevision(uid, aid)
+        userConfigStore.assertVideoSeasonReady(uid, aid, revision)
         if (configuredSeasonId > 0) await utilsStore.getSeasonList(uid)
-        const changed = await utilsStore.switchSeason(
-            uid,
-            resp.aid,
-            templateSeasonId,
-            templateSectionId
-        )
+        // 等待列表期间可能已完成其他合集操作，旧快照不能覆盖新归属。
+        userConfigStore.assertVideoSeasonReady(uid, aid, revision)
+        const season = utilsStore
+            .getCachedSeasons(uid)
+            .find((s: any) => Number(s.season_id) === templateSeasonId)
+        const membership = {
+            season_id: templateSeasonId,
+            section_id:
+                templateSeasonId > 0
+                    ? templateSectionId ||
+                      Number(season?.sections?.[0]?.section_id || season?.section_id || 0)
+                    : 0
+        }
+        let changed = false
+        await userConfigStore.changeVideoSeason(uid, [aid], membership, async () => {
+            changed = await utilsStore.switchSeason(
+                uid,
+                aid,
+                membership.season_id,
+                membership.section_id
+            )
+        })
         if (!changed) return
 
         const seasonTitle =

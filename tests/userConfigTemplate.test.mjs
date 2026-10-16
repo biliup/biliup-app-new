@@ -2,6 +2,9 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { build } from 'esbuild'
 import { fileURLToPath } from 'node:url'
+import { readFileSync } from 'node:fs'
+import vm from 'node:vm'
+import { setupMethod } from './helpers/vueSetup.mjs'
 
 const bundle = await build({
     stdin: {
@@ -175,6 +178,106 @@ async function seasonHarness(templates = {}) {
     }
     return { store, persisted, calls, values, setQuery: fn => { query = fn } }
 }
+
+const syncAfterSubmit = setupMethod(
+    readFileSync(new URL('../src/views/MainView.vue', import.meta.url), 'utf8'),
+    'syncSeasonAfterSubmit'
+)
+function submissionSeasonHarness(store, overrides = {}) {
+    const messages = []
+    const utils = {
+        getSeasonList: async () => true,
+        getCachedSeasons: () => [{ season_id: 10, section_id: 11, sections: [{ section_id: 11 }] }],
+        switchSeason: async () => true,
+        showMessage: (...args) => messages.push(args),
+        ...overrides
+    }
+    const context = {
+        userConfigStore: store, utilsStore: utils, t: key => key,
+        console: { info() {}, log() {}, error() {} }
+    }
+    vm.runInNewContext(syncAfterSubmit + '\nglobalThis.sync = syncSeasonAfterSubmit', context)
+    return { sync: context.sync, messages }
+}
+
+test('投稿后等待合集列表时完成移出操作，旧投稿流程不再加回稿件', async () => {
+    const h = await seasonHarness({ edit: { aid: 123, season_id: 10, section_id: 11 } })
+    let releaseList
+    let writes = 0
+    const submission = submissionSeasonHarness(h.store, {
+        getSeasonList: () => new Promise(resolve => { releaseList = resolve }),
+        switchSeason: async () => { writes++; return true }
+    })
+    const pending = submission.sync(1, { aid: 123 }, { aid: 123, season_id: 10, section_id: 11 })
+    assert.equal(typeof releaseList, 'function')
+    await h.store.changeVideoSeason(1, [123], { season_id: 0, section_id: 0 }, async () => {})
+    releaseList(true)
+    await pending
+    assert.equal(writes, 0)
+    assert.equal(h.store.configRoot.config[1].templates.edit.season_id, 0)
+    assert.equal(h.persisted.config[1].templates.edit.season_id, 0)
+    assert.equal(submission.messages.at(-1)[1], 'error')
+})
+
+test('投稿后配置合集期间拒绝并发移出，完成后同步所有编辑模板并释放保护', async () => {
+    const h = await seasonHarness({ first: { aid: 123, season_id: 0 }, second: { aid: 123, title: '本地编辑' } })
+    let finishSwitch
+    const submission = submissionSeasonHarness(h.store, {
+        switchSeason: () => new Promise(resolve => { finishSwitch = resolve })
+    })
+    const pending = submission.sync(1, { aid: 123 }, { aid: 123, season_id: 10, section_id: 11 })
+    while (!finishSwitch) await Promise.resolve()
+    let removed = false
+    await assert.rejects(h.store.changeVideoSeason(1, [123], { season_id: 0, section_id: 0 }, async () => { removed = true }), /操作进行中/)
+    assert.equal(removed, false)
+    finishSwitch(true)
+    await pending
+    for (const template of Object.values(h.persisted.config[1].templates)) {
+        assert.equal(template.season_id, 10)
+        assert.equal(template.section_id, 11)
+    }
+    assert.equal(h.store.configRoot.config[1].templates.second.title, '本地编辑')
+    h.store.assertVideoSeasonReady(1, 123)
+    await h.store.changeVideoSeason(1, [123], { season_id: 0, section_id: 0 }, async () => {})
+    assert.equal(h.persisted.config[1].templates.first.season_id, 0)
+})
+
+test('投稿后合集请求响应丢失时按远端结果核对，核对失败保留待确认保护', async () => {
+    for (const queryFails of [false, true]) {
+        const h = await seasonHarness({ edit: { aid: 123, season_id: 10, section_id: 11 } })
+        h.setQuery(async () => {
+            if (queryFails) throw new Error('离线')
+            return { season_id: 0, section_id: 0 }
+        })
+        const submission = submissionSeasonHarness(h.store, {
+            switchSeason: async () => { throw new Error('响应丢失') }
+        })
+        await submission.sync(1, { aid: 123 }, { aid: 123, season_id: 10, section_id: 11 })
+        assert.equal(submission.messages.at(-1)[1], 'error')
+        if (queryFails) {
+            assert.throws(() => h.store.assertVideoSeasonReady(1, 123), /待确认/)
+            assert.deepEqual(JSON.parse(h.values.get(pendingStorageKey)), ['1:123'])
+        } else {
+            assert.equal(h.persisted.config[1].templates.edit.season_id, 0)
+            h.store.assertVideoSeasonReady(1, 123)
+        }
+    }
+})
+
+test('新稿使用返回的 aid 同步默认小节，无需切换时也保持本地归属一致', async () => {
+    const h = await seasonHarness({ edit: { aid: 456, season_id: 0 } })
+    const submission = submissionSeasonHarness(h.store, {
+        switchSeason: async (uid, aid, seasonId, sectionId) => {
+            assert.deepEqual([uid, aid, seasonId, sectionId], [1, 456, 10, 11])
+            return false
+        }
+    })
+    await submission.sync(1, { aid: 456 }, { season_id: 10 })
+    assert.equal(h.persisted.config[1].templates.edit.section_id, 11)
+    assert.equal(h.store.configRoot.config[1].templates.edit.season_id, 10)
+    h.store.assertVideoSeasonReady(1, 456)
+    assert.equal(submission.messages.some(([, type]) => type === 'success'), false)
+})
 
 test('移出响应丢失后核对真实归属，同时同步所有对应模板并保留本地编辑', async () => {
     const h = await seasonHarness({
