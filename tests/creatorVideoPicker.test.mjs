@@ -333,7 +333,7 @@ test('添加单集请求筛选后的分页与总数，翻页清空选择，普�
     assert.equal(h.events.length, 0)
     h.picker.updateSelection([h.picker.items.value[0]])
     h.picker.confirmSelection()
-    assert.equal(JSON.stringify(h.events), JSON.stringify([['select-many', ['av1']], ['update:modelValue', false]]))
+    assert.equal(JSON.stringify(h.events), JSON.stringify([['select-many', ['av1'], [1]], ['update:modelValue', false]]))
     h.events.length = 0
     const pending = h.picker.loadPage(2)
     await settle()
@@ -368,7 +368,7 @@ test('复选框多选按列表顺序统一确认，每页请求五条，刷新�
     assert.equal(h.events.length, 0)
     h.picker.confirmSelection()
     assert.equal(JSON.stringify(h.events), JSON.stringify([
-        ['select-many', ['BVone', 'av2']], ['update:modelValue', false]
+        ['select-many', ['BVone', 'av2'], [1, 2]], ['update:modelValue', false]
     ]))
     h.events.length = 0
     const refresh = h.picker.loadPage(1)

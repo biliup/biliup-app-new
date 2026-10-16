@@ -143,7 +143,7 @@ const props = defineProps<{
 const emit = defineEmits<{
     'update:modelValue': [value: boolean]
     'update:uid': [uid: number]
-    'select-many': [videoIds: string[]]
+    'select-many': [videoIds: string[], aids: number[]]
 }>()
 const utilsStore = useUtilsStore()
 const items = ref<CreatorVideo[]>([])
@@ -295,11 +295,13 @@ const updateSelection = (videos: CreatorVideo[]) => {
 const confirmSelection = () => {
     if (loading.value || !props.modelValue || !props.uid || !props.seasonAddOnly) return
     const selected = new Set(selectedVideos.value.map(video => video.aid))
-    const ids = items.value
-        .filter(video => selected.has(video.aid) && canSelectVideo(video))
-        .map(video => video.bvid || `av${video.aid}`)
-    if (!ids.length) return
-    emit('select-many', ids)
+    const videos = items.value.filter(video => selected.has(video.aid) && canSelectVideo(video))
+    if (!videos.length) return
+    emit(
+        'select-many',
+        videos.map(video => video.bvid || `av${video.aid}`),
+        videos.map(video => video.aid)
+    )
     emit('update:modelValue', false)
 }
 

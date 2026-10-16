@@ -96,3 +96,48 @@ test('同步合集归属保留本地编辑，并隔离账号与稿件', async ()
     assert.equal(other.season_id, 20)
     assert.equal(account.season_id, 30)
 })
+
+
+test('实际投稿入口核对失败时不提交，重试成功后使用核对后的合集归属', async () => {
+    const main = readFileSync(new URL('../src/views/MainView.vue', import.meta.url), 'utf8')
+        .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
+    const ast = ts.createSourceFile('MainView.ts', main, ts.ScriptTarget.Latest, true)
+    const handler = ast.statements.find(statement =>
+        ts.isVariableStatement(statement) && statement.declarationList.declarations.some(
+            declaration => declaration.name.getText(ast) === 'performTemplateSubmit'
+        )
+    ).getText(ast)
+    const submitted = [], synced = []
+    const context = {
+        loginUsers: { value: [{ uid: 1, username: '测试账号' }] },
+        submitting: { value: false }, selectedUser: { value: null }, currentTemplateName: { value: '' },
+        userConfigStore: {
+            ensureVideoSeason: async () => { throw new Error('归属核对失败') },
+            getSeasonRevision: () => 0
+        },
+        uploadStore: { submitTemplate: async (uid, form) => { submitted.push(form); return { aid: form.aid } } },
+        syncSeasonAfterSubmit: async (...args) => synced.push(args),
+        recordSubmitStats: () => {}, collectFailedVideoNames: () => [],
+        utilsStore: { showMessage: () => {} }, console: { error: () => {}, log: () => {} },
+        handleAutoEditAfterSubmit: async () => {}, setTimeout: callback => { callback() },
+        t: key => key
+    }
+    vm.runInNewContext(ts.transpile(handler) + '\nglobalThis.submit = performTemplateSubmit', context)
+    const template = { aid: 123, season_id: 10, section_id: 11, title: '本地编辑' }
+    await context.submit(1, '模板', template)
+    assert.equal(submitted.length, 0)
+    context.userConfigStore.ensureVideoSeason = async (uid, snapshot) => {
+        snapshot.season_id = 0
+        snapshot.section_id = 0
+    }
+    await context.submit(1, '模板', template)
+    assert.equal(submitted[0].season_id, 0)
+    assert.equal(synced[0][2].season_id, 0)
+    assert.equal(submitted[0].title, '本地编辑')
+    context.uploadStore.submitTemplate = async () => {
+        context.userConfigStore.getSeasonRevision = () => 1
+        return { aid: 123 }
+    }
+    await context.submit(1, '模板', template)
+    assert.equal(synced.length, 1)
+})

@@ -1590,6 +1590,7 @@ const syncSeasonAfterSubmit = async (uid: number, resp: any, template: any) => {
     console.info(progressMessage)
 
     try {
+        userConfigStore.assertVideoSeasonReady(uid, templateAid)
         if (configuredSeasonId > 0) await utilsStore.getSeasonList(uid)
         const changed = await utilsStore.switchSeason(
             uid,
@@ -1669,6 +1670,8 @@ const performTemplateSubmit = async (
     }
 
     try {
+        await userConfigStore.ensureVideoSeason(uid, snapshot)
+        const seasonRevision = userConfigStore.getSeasonRevision(uid, snapshot.aid)
         const resp = (await uploadStore.submitTemplate(uid, snapshot)) as any
         const bvid = resp?.bvid ? String(resp.bvid) : '-'
         recordSubmitStats({
@@ -1693,7 +1696,8 @@ const performTemplateSubmit = async (
             'success'
         )
 
-        await syncSeasonAfterSubmit(uid, resp, snapshot)
+        if (seasonRevision === userConfigStore.getSeasonRevision(uid, snapshot.aid))
+            await syncSeasonAfterSubmit(uid, resp, snapshot)
 
         await new Promise(resolve => setTimeout(resolve, 500))
 

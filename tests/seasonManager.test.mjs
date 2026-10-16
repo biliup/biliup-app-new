@@ -85,6 +85,7 @@ function harness(options = {}) {
         removeSeasonEpisode: async (...args) => {
             calls.push(['remove', ...args])
             remote.episodes = remote.episodes.filter(episode => episode.id !== args[3])
+            if (options.remove) await options.remove(...args)
         },
         reorderSeasonEpisodes:
             options.reorder ||
@@ -122,7 +123,14 @@ function harness(options = {}) {
                 events.push(args),
         useAuthStore: () => auth,
         useUtilsStore: () => utils,
-        useUserConfigStore: () => ({ syncVideoSeason: (...args) => calls.push(['sync', ...args]) }),
+        useUserConfigStore: () => ({
+            retryPendingVideoSeasons: async () => {},
+            changeVideoSeason: async (uid, aids, season, action) => {
+                calls.push(['change', uid, aids, season])
+                await action()
+                calls.push(['sync', uid, aids, season])
+            }
+        }),
         ElMessageBox: box,
         t: (key, params) => key.replace(/\{(\w+)\}/g, (match, name) => params?.[name] ?? match)
     }
@@ -267,7 +275,7 @@ test('添加、移出与排序使用正确账号、合集、小节及 episode ID
     await h.manager.addEpisode()
     assert.equal(h.manager.episodePickerVisible.value, true)
     assert.equal(h.calls.some(call => call[0] === 'add'), false)
-    await h.manager.selectEpisodes(['BVtest'])
+    await h.manager.selectEpisodes(['BVtest'], [123])
     assert.equal(JSON.stringify(h.calls.find(call => call[0] === 'add')),
         JSON.stringify(['add', 1, 10, 11, ['BVtest']]))
     assert.equal(h.manager.episodes.value.length, 3)
@@ -408,7 +416,7 @@ test('编辑序号移动稿件并保存完整顺序，非法序号不影响列�
     context.after(() => h.dispose())
     await h.manager.openSection(entry(), entry().sections.sections[0])
     await h.manager.addEpisode()
-    await h.manager.selectEpisodes(['BVtest'])
+    await h.manager.selectEpisodes(['BVtest'], [123])
     for (const invalid of [undefined, NaN, 0, 4, 1.5]) h.manager.setEpisodePosition(0, invalid)
     assert.deepEqual(Array.from(h.manager.episodes.value, row => row.id), [21, 22, 23])
     h.manager.setEpisodePosition(0, 3)
@@ -533,17 +541,17 @@ test('添加单集取消不提交，切换小节或账号后不能添加到旧�
     await h.manager.openSection(entry(), entry().sections.sections[0])
     await h.manager.addEpisode()
     h.manager.episodePickerVisible.value = false
-    await h.manager.selectEpisodes(['BVtest'])
+    await h.manager.selectEpisodes(['BVtest'], [123])
     assert.equal(h.calls.some(call => call[0] === 'add'), false)
     await h.manager.addEpisode()
     await h.manager.closeSection(() => {})
     assert.equal(h.manager.episodePickerVisible.value, false)
-    await h.manager.selectEpisodes(['BVtest'])
+    await h.manager.selectEpisodes(['BVtest'], [123])
     assert.equal(h.calls.some(call => call[0] === 'add'), false)
     await h.manager.openSection(entry(), entry().sections.sections[0])
     await h.manager.addEpisode()
     h.manager.uid.value = 2
-    await h.manager.selectEpisodes(['BVtest'])
+    await h.manager.selectEpisodes(['BVtest'], [123])
     await nextTick()
     assert.equal(h.manager.episodePickerVisible.value, false)
     assert.equal(h.calls.some(call => call[0] === 'add'), false)
@@ -556,13 +564,13 @@ test('多选稿件只发一次批量命令，失败后仍刷新远端结果', as
     context.after(() => h.dispose())
     await h.manager.openSection(entry(), entry().sections.sections[0])
     await h.manager.addEpisode()
-    await h.manager.selectEpisodes(['BVone', 'BVtwo', 'BVone'])
+    await h.manager.selectEpisodes(['BVone', 'BVtwo', 'BVone'], [121, 122])
     assert.equal(h.calls.filter(call => call[0] === 'add').length, 1)
     assert.equal(JSON.stringify(h.calls.find(call => call[0] === 'add')[4]), JSON.stringify(['BVone', 'BVtwo']))
     assert.equal(h.manager.episodes.value.length, 4)
     assert.equal(h.manager.episodePickerVisible.value, false)
     await h.manager.addEpisode()
-    await h.manager.selectEpisodes(['BVthree', 'BVfail', 'BVfour'])
+    await h.manager.selectEpisodes(['BVthree', 'BVfail', 'BVfour'], [121, 122])
     assert.equal(h.manager.episodes.value.length, 4)
     assert.equal(h.calls.filter(call => call[0] === 'add').length, 2)
     assert.equal(h.calls.at(-2)[0], 'section')
@@ -686,4 +694,15 @@ test('拖动手柄提交目标序号并先还原 DOM，加载和提交期间禁�
     }
     unmount()
     assert.equal(destroyed, true)
+})
+
+
+test('移出已在服务端执行但响应丢失时仍刷新列表，不自动重发操作', async context => {
+    const h = harness({ remove: async () => { throw new Error('响应丢失') } })
+    context.after(() => h.dispose())
+    await h.manager.openSection(entry(), entry().sections.sections[0])
+    await h.manager.removeEpisode(h.manager.episodes.value[0])
+    assert.deepEqual(Array.from(h.manager.episodes.value, row => row.aid), [122])
+    assert.equal(h.calls.filter(call => call[0] === 'remove').length, 1)
+    assert.equal(h.messages.at(-1)[1], 'error')
 })

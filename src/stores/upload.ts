@@ -2,6 +2,7 @@ import { t } from '../i18n'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { useUserConfigStore } from './user_config'
 
 interface UploadTask {
     id: string
@@ -39,6 +40,7 @@ export const useUploadStore = defineStore('upload', () => {
     const submitRequestQueue: Array<{
         uid: number
         upload: any
+        seasonRevision: number
         cancelKey?: string
         cancelled: boolean
         resolve: (value: any) => void
@@ -49,6 +51,7 @@ export const useUploadStore = defineStore('upload', () => {
     let activeSubmitRequest: {
         uid: number
         upload: any
+        seasonRevision: number
         cancelKey?: string
         cancelled: boolean
         resolve: (value: any) => void
@@ -121,6 +124,11 @@ export const useUploadStore = defineStore('upload', () => {
                 }
 
                 try {
+                    useUserConfigStore().assertVideoSeasonReady(
+                        uid,
+                        upload.aid,
+                        request.seasonRevision
+                    )
                     const result = await invoke('submit', { uid, form: upload })
                     resolve(result)
                 } catch (error) {
@@ -359,6 +367,7 @@ export const useUploadStore = defineStore('upload', () => {
             submitRequestQueue.push({
                 uid,
                 upload: snapshot,
+                seasonRevision: useUserConfigStore().getSeasonRevision(uid, snapshot.aid),
                 cancelKey: options?.cancelKey,
                 cancelled: false,
                 resolve,

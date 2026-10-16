@@ -200,13 +200,22 @@ const orderDirty = computed(() =>
     episodes.value.some((episode, index) => episode.id !== detail.value?.episodes[index]?.id)
 )
 
-const loadSeasons = async () => {
+const retryPendingSeasons = async (account: number) => {
+    try {
+        await userConfigStore.retryPendingVideoSeasons(account)
+    } catch (error) {
+        utilsStore.showMessage(String(error), 'error')
+    }
+}
+
+const loadSeasons = async (retryPending = false) => {
     const account = uid.value
     if (!props.modelValue || !account) return
     const request = ++listRequest
     loading.value = true
     listError.value = ''
     try {
+        if (retryPending) await retryPendingSeasons(account)
         const result = await utilsStore.listManagedSeasons(account)
         if (request === listRequest && props.modelValue && uid.value === account)
             seasons.value = result
@@ -229,6 +238,7 @@ const loadSection = async (refreshTitles = false) => {
     detail.value = null
     episodes.value = []
     try {
+        if (refreshTitles) await retryPendingSeasons(account)
         const result = await utilsStore.getManagedSection(
             account,
             context.seasonId,
@@ -379,7 +389,7 @@ const addEpisode = async () => {
     episodePickerVisible.value = true
 }
 
-const selectEpisodes = async (videoIds: string[]) => {
+const selectEpisodes = async (videoIds: string[], aids: number[]) => {
     const context = episodePickerContext.value
     if (
         !videoIds.length ||
@@ -398,16 +408,15 @@ const selectEpisodes = async (videoIds: string[]) => {
         return
     episodePickerVisible.value = false
     await runMutation(async () => {
-        const aids = await utilsStore.addSeasonEpisodes(
+        await userConfigStore.changeVideoSeason(
             context.uid,
-            context.seasonId,
-            context.sectionId,
-            [...new Set(videoIds)]
+            aids,
+            { season_id: context.seasonId, section_id: context.sectionId },
+            () =>
+                utilsStore.addSeasonEpisodes(context.uid, context.seasonId, context.sectionId, [
+                    ...new Set(videoIds)
+                ])
         )
-        await userConfigStore.syncVideoSeason(context.uid, aids, {
-            season_id: context.seasonId,
-            section_id: context.sectionId
-        })
     }, true)
 }
 
@@ -430,17 +439,19 @@ const removeEpisode = async (episode: SeasonEpisode) => {
     }
     if (uid.value !== account || target.value !== context || !sectionVisible.value) return
     await runMutation(async () => {
-        await utilsStore.removeSeasonEpisode(
+        await userConfigStore.changeVideoSeason(
             account,
-            context.seasonId,
-            context.sectionId,
-            episode.id
+            [episode.aid],
+            { season_id: 0, section_id: 0 },
+            () =>
+                utilsStore.removeSeasonEpisode(
+                    account,
+                    context.seasonId,
+                    context.sectionId,
+                    episode.id
+                )
         )
-        await userConfigStore.syncVideoSeason(account, [episode.aid], {
-            season_id: 0,
-            section_id: 0
-        })
-    })
+    }, true)
 }
 
 const saveOrder = async () => {
@@ -517,7 +528,7 @@ const refreshSeasons = async () => {
     await closeSection(() => {
         expandedSeasonId.value = null
         titleCache.clear()
-        void loadSeasons()
+        void loadSeasons(true)
     })
 }
 

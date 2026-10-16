@@ -7,6 +7,7 @@ const bundle = await build({
     stdin: {
         contents: [
             "export { useUserConfigStore } from './src/stores/user_config.ts'",
+            "export { useUploadStore } from './src/stores/upload.ts'",
             "export { useAuthStore } from './src/stores/auth.ts'",
             "export { createPinia, setActivePinia } from 'pinia'"
         ].join('\n'),
@@ -33,7 +34,7 @@ const bundle = await build({
         }
     ]
 })
-const { useUserConfigStore, useAuthStore, createPinia, setActivePinia } = await import(
+const { useUserConfigStore, useUploadStore, useAuthStore, createPinia, setActivePinia } = await import(
     'data:text/javascript;base64,' + Buffer.from(bundle.outputFiles[0].text).toString('base64')
 )
 
@@ -144,4 +145,170 @@ test('导入编辑模板保留自身的提交后自动编辑设置', async () =>
         })
         assert.equal(submitted[0].auto_edit_after_submit, autoEdit)
     }
+})
+
+const pendingStorageKey = 'pending-video-season-sync'
+async function seasonHarness(templates = {}) {
+    const values = new Map()
+    globalThis.localStorage = {
+        getItem: key => values.get(key) || null,
+        setItem: (key, value) => values.set(key, value)
+    }
+    const { store, persisted } = await freshStore({ templates })
+    const calls = []
+    let query = async () => ({ season_id: 0, section_id: 0 })
+    globalThis.__configInvoke = async (command, args) => {
+        calls.push([command, args])
+        if (command === 'get_video_season') return query(args)
+        if (command === 'sync_template_season') {
+            for (const template of Object.values(persisted.config[args.uid]?.templates || {})) {
+                if (args.aids.includes(template.aid)) {
+                    template.season_id = args.seasonId
+                    template.section_id = args.sectionId
+                }
+            }
+            return
+        }
+        if (command === 'load_config') return structuredClone(persisted)
+        if (command === 'submit') return { aid: args.form.aid }
+        throw new Error(command)
+    }
+    return { store, persisted, calls, values, setQuery: fn => { query = fn } }
+}
+
+test('移出响应丢失后核对真实归属，同时同步所有对应模板并保留本地编辑', async () => {
+    const h = await seasonHarness({
+        first: { aid: 123, title: '未保存标题', season_id: 10, section_id: 11, videos: [{ path: '/draft' }] },
+        second: { aid: 123, season_id: 10 },
+        other: { aid: 999, season_id: 20 }
+    })
+    h.store.configRoot.config[2] = { templates: { same: { aid: 123, season_id: 30 } } }
+    let writes = 0
+    await assert.rejects(h.store.changeVideoSeason(1, [123], { season_id: 0, section_id: 0 }, async () => {
+        writes++
+        throw new Error('响应丢失')
+    }), /响应丢失/)
+    const templates = h.store.configRoot.config[1].templates
+    assert.equal(templates.first.season_id, 0)
+    assert.equal(templates.second.season_id, 0)
+    assert.equal(templates.first.title, '未保存标题')
+    assert.equal(templates.first.videos[0].path, '/draft')
+    assert.equal(templates.other.season_id, 20)
+    assert.equal(h.store.configRoot.config[2].templates.same.season_id, 30)
+    assert.equal(h.persisted.config[1].templates.first.season_id, 0)
+    assert.equal(writes, 1)
+    assert.deepEqual(JSON.parse(h.values.get(pendingStorageKey)), [])
+    h.store.assertVideoSeasonReady(1, 123)
+})
+
+test('添加响应丢失按实际归属同步，操作未执行时保留原归属，批量部分失败独立处理', async () => {
+    const h = await seasonHarness({ first: { aid: 123 }, second: { aid: 124, season_id: 30, section_id: 31 } })
+    h.setQuery(async ({ aid }) => aid === 123 ? { season_id: 10, section_id: 11 } : { season_id: 30, section_id: 31 })
+    await assert.rejects(h.store.changeVideoSeason(1, [123, 124], { season_id: 10, section_id: 11 }, async () => {
+        throw new Error('添加响应丢失')
+    }), /添加响应丢失/)
+    assert.equal(h.store.configRoot.config[1].templates.first.season_id, 10)
+    assert.equal(h.store.configRoot.config[1].templates.second.season_id, 30)
+    assert.equal(h.calls.filter(([command]) => command === 'get_video_season').length, 2)
+})
+
+test('核对失败持久化待确认状态，重建 store 后仍拦截投稿，重试成功恢复并更新快照', async () => {
+    const h = await seasonHarness({ first: { aid: 123, season_id: 10, section_id: 11 } })
+    h.setQuery(async () => { throw new Error('查询失败') })
+    await assert.rejects(h.store.changeVideoSeason(1, [123], { season_id: 0, section_id: 0 }, async () => {
+        throw new Error('响应丢失')
+    }), /归属核对失败/)
+    assert.throws(() => h.store.assertVideoSeasonReady(1, 123), /待确认/)
+    h.store.assertVideoSeasonReady(2, 123)
+    assert.deepEqual(JSON.parse(h.values.get(pendingStorageKey)), ['1:123'])
+    setActivePinia(createPinia())
+    const restored = useUserConfigStore()
+    await restored.loadConfig()
+    assert.throws(() => restored.assertVideoSeasonReady(1, 123), /待确认/)
+    const upload = useUploadStore()
+    await assert.rejects(upload.submitTemplate(1, { aid: 123, season_id: 10 }), /待确认/)
+    assert.equal(h.calls.some(([command]) => command === 'submit'), false)
+    h.setQuery(async () => ({ season_id: 0, section_id: 0 }))
+    const snapshot = { aid: 123, season_id: 10, section_id: 11 }
+    await restored.ensureVideoSeason(1, snapshot)
+    assert.deepEqual(snapshot, { aid: 123, season_id: 0, section_id: 0 })
+    restored.assertVideoSeasonReady(1, 123)
+    assert.deepEqual(JSON.parse(h.values.get(pendingStorageKey)), [])
+})
+
+test('合集操作执行中阻止投稿，完成后拒绝操作前的排队快照，正常成功无需额外查询', async () => {
+    const h = await seasonHarness({ first: { aid: 123, season_id: 10 } })
+    let finish
+    const revision = h.store.getSeasonRevision(1, 123)
+    const pending = h.store.changeVideoSeason(1, [123], { season_id: 0, section_id: 0 }, () => new Promise(resolve => { finish = resolve }))
+    await assert.rejects(h.store.ensureVideoSeason(1, { aid: 123 }), /操作进行中/)
+    assert.throws(() => h.store.assertVideoSeasonReady(1, 123), /待确认/)
+    finish()
+    await pending
+    h.store.assertVideoSeasonReady(1, 123)
+    assert.throws(() => h.store.assertVideoSeasonReady(1, 123, revision), /已变化/)
+    assert.equal(h.calls.some(([command]) => command === 'get_video_season'), false)
+})
+
+test('刷新重试只解除核对成功稿件的保护，失败稿件和其他账号仍受保护', async () => {
+    const h = await seasonHarness({ first: { aid: 123 }, second: { aid: 124 } })
+    h.setQuery(async () => { throw new Error('离线') })
+    for (const [uid, aids] of [[1, [123, 124]], [2, [123]]]) {
+        await assert.rejects(h.store.changeVideoSeason(uid, aids, { season_id: 10, section_id: 11 }, async () => { throw new Error('离线') }))
+    }
+    h.setQuery(async ({ aid }) => {
+        if (aid === 124) throw new Error('仍离线')
+        return { season_id: 10, section_id: 11 }
+    })
+    await assert.rejects(h.store.retryPendingVideoSeasons(1), /归属核对失败/)
+    h.store.assertVideoSeasonReady(1, 123)
+    assert.throws(() => h.store.assertVideoSeasonReady(1, 124), /待确认/)
+    assert.throws(() => h.store.assertVideoSeasonReady(2, 123), /待确认/)
+})
+
+
+test('投稿队列拒绝合集变更前的旧快照，后续重新提交可使用新归属', async () => {
+    const h = await seasonHarness({ first: { aid: 123, season_id: 10 } })
+    const invoke = globalThis.__configInvoke
+    let finish
+    globalThis.__configInvoke = async (command, args) => {
+        if (command === 'submit' && !args.form.aid)
+            return new Promise(resolve => { finish = resolve })
+        return invoke(command, args)
+    }
+    const upload = useUploadStore()
+    const first = upload.submitTemplate(1, {})
+    const stale = assert.rejects(upload.submitTemplate(1, { aid: 123, season_id: 10 }), /已变化/)
+    await h.store.changeVideoSeason(1, [123], { season_id: 0, section_id: 0 }, async () => {})
+    finish({ aid: 456 })
+    await first
+    await stale
+    assert.equal(h.calls.some(([command]) => command === 'submit'), false)
+})
+
+
+test('旧核对请求晚于新合集操作完成时，不覆盖投稿快照或解除新操作的保护', async () => {
+    const h = await seasonHarness({ first: { aid: 123, season_id: 10 } })
+    h.setQuery(async () => { throw new Error('离线') })
+    await assert.rejects(h.store.changeVideoSeason(1, [123], { season_id: 0, section_id: 0 }, async () => { throw new Error('响应丢失') }))
+    h.setQuery(async () => ({ season_id: 0, section_id: 0 }))
+    const invoke = globalThis.__configInvoke
+    let finishOldSync
+    let hold = true
+    globalThis.__configInvoke = async (command, args) => {
+        if (command === 'sync_template_season' && hold) {
+            hold = false
+            return new Promise(resolve => { finishOldSync = resolve })
+        }
+        return invoke(command, args)
+    }
+    const snapshot = { aid: 123, season_id: 10 }
+    const checking = h.store.ensureVideoSeason(1, snapshot)
+    while (!finishOldSync) await Promise.resolve()
+    h.setQuery(async () => { throw new Error('新操作仍待核对') })
+    await assert.rejects(h.store.changeVideoSeason(1, [123], { season_id: 20, section_id: 21 }, async () => { throw new Error('新操作响应丢失') }))
+    finishOldSync()
+    await assert.rejects(checking, /操作进行中/)
+    assert.equal(snapshot.season_id, 10)
+    assert.throws(() => h.store.assertVideoSeasonReady(1, 123), /待确认/)
 })
