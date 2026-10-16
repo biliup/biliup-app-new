@@ -1,5 +1,10 @@
 # Biliup App
 
+![Version](https://img.shields.io/badge/version-1.4.2-blue)
+![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+![License-MIT](https://img.shields.io/badge/license-MIT-green)
+![License-Apache2.0](https://img.shields.io/badge/license-Apache2.0-green)
+
 基于 Tauri 2、Vue 3 和 Rust 的 B 站视频上传桌面应用，使用 [biliup](https://github.com/biliup/biliup) 作为上传核心库，支持多账号、批量上传、投稿模板、稿件管理和合集管理。
 
 [下载最新版本](https://github.com/biliup/biliup-app-new/releases/latest) · [更新日志](changelog.md) · [问题反馈](https://github.com/biliup/biliup-app-new/issues)
