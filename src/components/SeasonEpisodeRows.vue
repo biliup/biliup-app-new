@@ -52,7 +52,14 @@
                 ></template>
             </el-table-column>
             <el-table-column :label="t('稿件标题')" min-width="240" show-overflow-tooltip>
-                <template #default="{ row }">{{ row.archiveTitle || '—' }}</template>
+                <template #default="{ row }">{{
+                    row.archiveTitle ||
+                    (row.archiveTitleState === 'loading'
+                        ? t('加载中...')
+                        : row.archiveTitleState === 'error'
+                          ? t('标题加载失败')
+                          : '—')
+                }}</template>
             </el-table-column>
             <el-table-column :label="t('操作')" width="180" align="center">
                 <template #default="{ row }">

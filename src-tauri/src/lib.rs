@@ -344,6 +344,7 @@ pub async fn run() {
             get_season_list,
             list_managed_seasons,
             get_managed_section,
+            get_season_archive_title,
             add_season_episodes,
             remove_season_episode,
             reorder_season_episodes,

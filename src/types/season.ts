@@ -4,6 +4,7 @@ export interface SeasonEpisode {
     title: string
     bvid?: string
     archiveTitle?: string
+    archiveTitleState?: 'loading' | 'error'
 }
 
 export interface SeasonSection {

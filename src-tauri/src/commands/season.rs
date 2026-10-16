@@ -4,7 +4,6 @@ use biliup::{
     bilibili::Vid,
     uploader::season::{EpisodeAdd, EpisodeSort, SeasonApi, SeasonEntry, SectionDetail},
 };
-use futures::{StreamExt, stream};
 use serde_json::{Value, json};
 use tauri::Manager;
 
@@ -80,33 +79,22 @@ pub async fn get_managed_section(
     section_id: u64,
 ) -> Result<SectionDetail, AppError> {
     let bili = app.state::<AppData>().get_bilibili(uid).await?;
-    let api = bili.season_api();
-    let mut detail = checked_section(&api, season_id, section_id).await?;
-    detail.episodes = stream::iter(detail.episodes)
-        .map(|mut episode| {
-            let api = &api;
-            async move {
-                if episode
-                    .extra
-                    .get("archiveTitle")
-                    .and_then(Value::as_str)
-                    .is_none_or(str::is_empty)
-                {
-                    // 单集标题可独立修改，不能用它冒充稿件标题。
-                    if let Ok(view) = api.archive_view(episode.aid).await {
-                        episode
-                            .extra
-                            .insert("archiveTitle".into(), json!(view.title));
-                        episode.extra.insert("bvid".into(), json!(view.bvid));
-                    }
-                }
-                episode
-            }
-        })
-        .buffered(4)
-        .collect()
-        .await;
-    Ok(detail)
+    checked_section(&bili.season_api(), season_id, section_id).await
+}
+
+#[tauri::command]
+pub async fn get_season_archive_title(
+    app: tauri::AppHandle,
+    uid: u64,
+    aid: u64,
+) -> Result<Value, AppError> {
+    let bili = app.state::<AppData>().get_bilibili(uid).await?;
+    let view = bili
+        .season_api()
+        .archive_view(aid)
+        .await
+        .map_err(|error| AppError::Biliup(error.to_string()))?;
+    Ok(json!({ "archiveTitle": view.title, "bvid": view.bvid }))
 }
 
 fn episode_title_payload(

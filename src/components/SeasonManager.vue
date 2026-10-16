@@ -87,7 +87,7 @@
                             :dirty="orderDirty"
                             :ready="Boolean(detail)"
                             @add="addEpisode"
-                            @refresh="loadSection"
+                            @refresh="loadSection(true)"
                             @save="saveOrder"
                             @reset="resetOrder"
                             @position="setEpisodePosition"
@@ -156,6 +156,40 @@ const target = ref<{
 } | null>(null)
 let listRequest = 0
 let sectionRequest = 0
+const titleCache = new Map<string, Pick<SeasonEpisode, 'archiveTitle' | 'bvid'>>()
+let titleQueue: { account: number; request: number; episode: SeasonEpisode }[] = []
+let activeTitleRequests = 0
+
+const pumpArchiveTitles = () => {
+    while (activeTitleRequests < 4 && titleQueue.length) {
+        const { account, request, episode } = titleQueue.shift()!
+        if (request !== sectionRequest || !props.modelValue || uid.value !== account) continue
+        const key = `${account}:${episode.aid}`
+        const cached = titleCache.get(key)
+        if (cached) {
+            Object.assign(episode, cached)
+            episode.archiveTitleState = undefined
+            continue
+        }
+        activeTitleRequests += 1
+        void utilsStore
+            .getSeasonArchiveTitle(account, episode.aid)
+            .then(result => {
+                if (request !== sectionRequest || !props.modelValue || uid.value !== account) return
+                titleCache.set(key, result)
+                Object.assign(episode, result)
+                episode.archiveTitleState = undefined
+            })
+            .catch(() => {
+                if (request === sectionRequest && props.modelValue && uid.value === account)
+                    episode.archiveTitleState = 'error'
+            })
+            .finally(() => {
+                activeTitleRequests -= 1
+                pumpArchiveTitles()
+            })
+    }
+}
 
 const hasSections = (entry: ManagedSeason) =>
     entry.season.no_section === undefined
@@ -184,11 +218,12 @@ const loadSeasons = async () => {
     }
 }
 
-const loadSection = async () => {
+const loadSection = async (refreshTitles = false) => {
     const account = uid.value
     const context = target.value
     if (!props.modelValue || !sectionVisible.value || !account || !context) return
     const request = ++sectionRequest
+    titleQueue = []
     sectionLoading.value = true
     sectionError.value = ''
     detail.value = null
@@ -208,6 +243,21 @@ const loadSection = async () => {
             return
         detail.value = result
         episodes.value = [...result.episodes]
+        for (const episode of episodes.value) {
+            const key = `${account}:${episode.aid}`
+            if (refreshTitles) titleCache.delete(key)
+            if (episode.archiveTitle) {
+                titleCache.set(key, { archiveTitle: episode.archiveTitle, bvid: episode.bvid })
+                continue
+            }
+            const cached = titleCache.get(key)
+            if (cached) Object.assign(episode, cached)
+            else {
+                episode.archiveTitleState = 'loading'
+                titleQueue.push({ account, request, episode })
+            }
+        }
+        pumpArchiveTitles()
     } catch (error) {
         if (request === sectionRequest)
             sectionError.value = t('获取小节稿件失败: {0}', { 0: String(error) })
@@ -417,6 +467,7 @@ const closeSection = async (done: () => void) => {
         }
     }
     sectionRequest += 1
+    titleQueue = []
     episodePickerVisible.value = false
     episodePickerContext.value = null
     sectionVisible.value = false
@@ -465,6 +516,7 @@ const toggleSection = async (entry: ManagedSeason, section: SeasonSection) => {
 const refreshSeasons = async () => {
     await closeSection(() => {
         expandedSeasonId.value = null
+        titleCache.clear()
         void loadSeasons()
     })
 }
@@ -502,6 +554,7 @@ watch(
     ([visible, account]) => {
         listRequest += 1
         sectionRequest += 1
+        titleQueue = []
         episodePickerVisible.value = false
         episodePickerContext.value = null
         seasons.value = []
@@ -520,6 +573,7 @@ watch(
 onBeforeUnmount(() => {
     listRequest += 1
     sectionRequest += 1
+    titleQueue = []
 })
 </script>
 

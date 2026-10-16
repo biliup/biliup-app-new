@@ -6,7 +6,7 @@ import { ElMessage } from 'element-plus'
 import type { MentionUserGroup } from '../types/mention'
 import type { CreatorVideoPage } from '../types/creator_video'
 import type { TemplateConfig } from './user_config'
-import type { ManagedSeason, ManagedSection } from '../types/season'
+import type { ManagedSeason, ManagedSection, SeasonEpisode } from '../types/season'
 
 const originalConsoleError = console.error.bind(console)
 
@@ -167,6 +167,12 @@ export const useUtilsStore = defineStore('template', () => {
 
     const getManagedSection = (uid: number, seasonId: number, sectionId: number) =>
         invoke<ManagedSection>('get_managed_section', { uid, seasonId, sectionId })
+
+    const getSeasonArchiveTitle = (uid: number, aid: number) =>
+        invoke<Pick<SeasonEpisode, 'archiveTitle' | 'bvid'>>('get_season_archive_title', {
+            uid,
+            aid
+        })
 
     const addSeasonEpisodes = (
         uid: number,
@@ -338,6 +344,7 @@ export const useUtilsStore = defineStore('template', () => {
         getCachedSeasons,
         listManagedSeasons,
         getManagedSection,
+        getSeasonArchiveTitle,
         addSeasonEpisodes,
         removeSeasonEpisode,
         reorderSeasonEpisodes,

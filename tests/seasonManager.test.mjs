@@ -55,6 +55,7 @@ function harness(options = {}) {
     let remote = initialDetail(),
         unmount
     const utils = {
+        getSeasonArchiveTitle: options.archive || (async (_uid, aid) => ({ archiveTitle: `稿件 ${aid}` })),
         listManagedSeasons:
             options.list ||
             (async uid => {
@@ -144,6 +145,74 @@ function harness(options = {}) {
         }
     }
 }
+
+test('标题后台补全最多四并发，列表立即可操作，失败不阻塞其余稿件', async context => {
+    const requests = []
+    const h = harness({
+        section: async () => ({ section: { id: 11 }, episodes: Array.from({ length: 9 }, (_, i) => ({ id: i + 1, aid: i + 101, title: '单集' })) }),
+        archive: (uid, aid) => {
+            const response = deferred()
+            requests.push({ uid, aid, ...response })
+            return response.promise
+        }
+    })
+    context.after(() => h.dispose())
+    await h.manager.openSection(entry(), entry().sections.sections[0])
+    assert.equal(h.manager.sectionLoading.value, false)
+    assert.equal(h.manager.episodes.value.length, 9)
+    assert.equal(requests.length, 4)
+    assert.equal(h.manager.episodes.value[0].archiveTitleState, 'loading')
+    h.manager.setEpisodePosition(0, 2)
+    assert.equal(h.manager.episodes.value[1].aid, 101)
+    requests[0].resolve({ archiveTitle: '稿件一', bvid: 'BVone' })
+    requests[1].reject(new Error('单项失败'))
+    await settle()
+    await settle()
+    assert.equal(requests.length, 6)
+    assert.equal(h.manager.episodes.value[1].archiveTitle, '稿件一')
+    assert.equal(h.manager.episodes.value[0].archiveTitleState, 'error')
+    assert.equal(h.manager.sectionError.value, '')
+    await h.manager.closeSection(() => {})
+    const dispatched = requests.length
+    requests.slice(2).forEach(request => request.resolve({ archiveTitle: '旧标题' }))
+    await settle()
+    await settle()
+    assert.equal(requests.length, dispatched)
+    assert.equal(h.manager.episodes.value.length, 0)
+})
+
+test('标题缓存复用并按账号隔离，手动刷新重新查询，旧结果不覆盖新小节', async context => {
+    const requests = []
+    const h = harness({ archive: (uid, aid) => {
+        const response = deferred()
+        requests.push({ uid, aid, ...response })
+        return response.promise
+    } })
+    context.after(() => h.dispose())
+    await h.manager.openSection(entry(), entry().sections.sections[0])
+    requests.forEach(request => request.resolve({ archiveTitle: '缓存标题' }))
+    await settle()
+    await settle()
+    await h.manager.loadSection()
+    assert.equal(requests.length, 2)
+    assert.equal(h.manager.episodes.value[0].archiveTitle, '缓存标题')
+    await h.manager.loadSection(true)
+    assert.equal(requests.length, 4)
+    await h.manager.closeSection(() => {})
+    await h.manager.openSection(entry(20), { id: 21, title: '新小节' })
+    assert.equal(requests.length, 6)
+    requests.slice(2, 4).forEach(request => request.resolve({ archiveTitle: '过期标题' }))
+    requests.slice(4).forEach(request => request.resolve({ archiveTitle: '新标题' }))
+    await settle()
+    await settle()
+    assert.equal(h.manager.episodes.value[0].archiveTitle, '新标题')
+    h.manager.uid.value = 2
+    await settle()
+    await h.manager.openSection(entry(), entry().sections.sections[0])
+    assert.equal(requests.length, 8)
+    assert.equal(requests.at(-1).uid, 2)
+    assert.equal(h.manager.episodes.value[0].archiveTitleState, 'loading')
+})
 
 test('合集分组按 no_section 区分，默认小节不误显示为分组', context => {
     const h = harness({ props: { modelValue: false } })
