@@ -1,360 +1,338 @@
 <template>
     <el-dialog
-        v-model="dialogVisible"
-        :title="t('视频转码状态')"
-        width="600px"
+        :model-value="modelValue"
+        :title="t('稿件处理进度')"
+        width="900px"
+        style="max-width: calc(100vw - 32px)"
         :close-on-click-modal="false"
+        @update:model-value="emit('update:modelValue', $event)"
     >
-        <div class="video-status-container">
-            <div v-if="completedVideos.length === 0" class="empty-state">
-                <el-empty :description="t('暂无已完成上传的视频文件')" />
+        <template #header>
+            <div class="status-dialog-title">
+                <span>{{ t('稿件处理进度') }}</span>
+                <el-button
+                    link
+                    :icon="Refresh"
+                    :loading="loading || transcodeLoading"
+                    :disabled="!uid || !aid || loading || transcodeLoading"
+                    :title="t('刷新')"
+                    :aria-label="t('刷新')"
+                    @click="loadPage(page)"
+                />
             </div>
-            <div v-else>
-                <el-table
-                    :data="videoStatusList"
-                    stripe
-                    style="width: 100%"
-                    :row-key="(row: VideoStatusItem) => row.id"
-                    :expand-row-keys="Array.from(expandedErrorRows)"
-                    :row-class-name="getRowClassName"
-                    @row-click="handleRowClick"
-                >
-                    <!-- 展开列 -->
-                    <el-table-column type="expand" width="30">
-                        <template #default="{ row }">
-                            <div
-                                v-if="isFailedStatus(row.statusCode)"
-                                class="expanded-error-detail"
-                            >
-                                <div class="error-message-full">
-                                    <strong>{{ t('错误详情：') }}</strong
-                                    >{{ getErrorDetail(row.statusDesc) }}
+        </template>
+        <el-alert v-if="error" :title="error" type="error" :closable="false" show-icon />
+        <div v-loading="loading" class="processing-content">
+            <template v-if="processing">
+                <div class="section-heading">
+                    <strong>{{ t('分P稿件') }}（{{ processing.page.total }}）</strong>
+                    <el-pagination
+                        :current-page="page"
+                        :page-size="20"
+                        :total="processing.page.total"
+                        :disabled="loading"
+                        layout="prev, pager, next"
+                        @current-change="loadPage"
+                    />
+                </div>
+                <div class="part-list">
+                    <el-button
+                        v-for="video in processing.videos"
+                        :key="video.cid"
+                        :type="selectedCid === video.cid ? 'primary' : 'default'"
+                        :plain="selectedCid !== video.cid"
+                        :disabled="loading"
+                        :title="xcodeText(video.xcode_state)"
+                        @click="loadTranscode(video)"
+                        >P{{ video.index }}</el-button
+                    >
+                </div>
+                <el-empty v-if="!processing.videos.length" :description="t('暂无稿件')" />
+                <template v-if="selectedCid">
+                    <section>
+                        <div class="section-heading">
+                            <strong>{{ t('稿件上传') }}</strong>
+                            <el-tag type="success">{{ t('上传完成') }}</el-tag>
+                        </div>
+                        <el-progress :percentage="100" :show-text="false" />
+                    </section>
+                    <section v-loading="transcodeLoading">
+                        <div class="section-heading">
+                            <strong>{{ t('稿件转码') }}</strong>
+                            <el-tag v-if="transcode">{{ xcodeText(transcode.xcode_state) }}</el-tag>
+                        </div>
+                        <el-alert
+                            v-if="transcodeError"
+                            :title="transcodeError"
+                            type="error"
+                            :closable="false"
+                        />
+                        <template v-if="transcode">
+                            <p v-if="transcode.xcode_tip">{{ transcode.xcode_tip }}</p>
+                            <el-alert
+                                v-if="transcode.fail_tip"
+                                :title="transcode.fail_tip"
+                                type="error"
+                                :closable="false"
+                            />
+                            <div class="resolution-list">
+                                <div
+                                    v-for="resolution in transcode.transcode_list || []"
+                                    :key="resolution.resolution"
+                                >
+                                    <div class="resolution-heading">
+                                        <span>{{ t(resolution.resolution) }}</span>
+                                        <span>{{ resolutionText(resolution) }}</span>
+                                    </div>
+                                    <el-progress
+                                        :percentage="resolutionProgress(resolution)"
+                                        :status="
+                                            resolution.status === 'failed' ? 'exception' : undefined
+                                        "
+                                        :show-text="false"
+                                    />
                                 </div>
                             </div>
                         </template>
-                    </el-table-column>
-
-                    <el-table-column prop="filename" :label="t('文件名')" min-width="250">
-                        <template #default="{ row }">
-                            <div class="filename-cell">
-                                <el-icon class="file-icon"><video-play /></el-icon>
-                                <span class="filename" :title="row.filename">{{
-                                    row.filename
-                                }}</span>
-                            </div>
-                        </template>
-                    </el-table-column>
-                    <el-table-column
-                        prop="status"
-                        :label="t('转码状态')"
-                        width="180"
-                        align="center"
-                    >
-                        <template #default="{ row }">
-                            <div class="status-content">
-                                <el-tag
-                                    :type="getStatusType(row.statusCode)"
-                                    effect="light"
-                                    size="small"
-                                >
-                                    <el-icon class="status-icon">
-                                        <check v-if="row.statusCode === ENCODING_STATUS.SUCCESS" />
-                                        <loading
-                                            v-else-if="
-                                                row.statusCode === ENCODING_STATUS.PROCESSING
-                                            "
-                                        />
-                                        <warning v-else />
-                                    </el-icon>
-                                    {{ row.statusText }}
-                                </el-tag>
-
-                                <!-- 点击提示图标 -->
-                                <el-icon
-                                    v-if="isFailedStatus(row.statusCode)"
-                                    class="click-hint-icon"
-                                >
-                                    <arrow-down v-if="!expandedErrorRows.has(row.id)" />
-                                    <arrow-up v-else />
-                                </el-icon>
-                            </div>
-                        </template>
-                    </el-table-column>
-                </el-table>
-            </div>
+                    </section>
+                </template>
+                <section>
+                    <div class="section-heading">
+                        <strong>{{ t('稿件审核') }}</strong>
+                        <el-tag>{{ auditText(processing.audit.aegis_state) }}</el-tag>
+                    </div>
+                    <div v-if="processing.audit.audit_process" class="audit-steps">
+                        <span
+                            >{{ t('内容审核') }}：{{
+                                stepText(processing.audit.audit_process.archive_audit)
+                            }}</span
+                        >
+                        <span
+                            >{{ t('业务审核') }}：{{
+                                stepText(processing.audit.audit_process.business_audit)
+                            }}</span
+                        >
+                    </div>
+                </section>
+            </template>
         </div>
-
         <template #footer>
-            <div class="dialog-footer">
-                <el-button @click="dialogVisible = false">{{ t('关闭') }}</el-button>
-                <el-button type="primary" @click="refreshAllStatus" :loading="refreshingAll">
-                    {{ t('刷新全部') }}
-                </el-button>
-            </div>
+            <el-button @click="emit('update:modelValue', false)">{{ t('关闭') }}</el-button>
+            <el-button
+                type="primary"
+                :loading="loading || transcodeLoading"
+                @click="loadPage(page)"
+                >{{ t('刷新') }}</el-button
+            >
         </template>
     </el-dialog>
 </template>
 
 <script setup lang="ts">
+import { ref, watch, onBeforeUnmount } from 'vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { t } from '../i18n'
-import { ref, computed } from 'vue'
-import { Check, Loading, Warning, VideoPlay, ArrowDown, ArrowUp } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { useUtilsStore } from '../stores/utils'
+import type {
+    ArchiveProcessing,
+    ProcessingVideo,
+    TranscodeDetail,
+    TranscodeResolution
+} from '../types/video_status'
 
-// 转码状态常量
-const ENCODING_STATUS = {
-    SUCCESS: 0,
-    PROCESSING: -30
-} as const
+const props = defineProps<{ modelValue: boolean; uid?: number; aid?: number }>()
+const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>()
+const utilsStore = useUtilsStore()
+const processing = ref<ArchiveProcessing | null>(null)
+const transcode = ref<TranscodeDetail | null>(null)
+const loading = ref(false)
+const transcodeLoading = ref(false)
+const error = ref('')
+const transcodeError = ref('')
+const selectedCid = ref<number | null>(null)
+const page = ref(1)
+let listRequest = 0
+let transcodeRequest = 0
 
-interface VideoFile {
-    id: string
-    path: string
-    title?: string
-    filename?: string
-    complete?: boolean
-    status?: number
-    status_desc?: string
-    [key: string]: any
-}
-
-interface VideoStatusItem {
-    id: string
-    filename: string
-    statusCode: number | null
-    statusText: string
-    statusDesc?: string
-}
-
-const props = defineProps<{
-    modelValue: boolean
-    videos: VideoFile[]
-    user?: any
-    templateAid?: number
-    reloadStatus: () => Promise<boolean>
-}>()
-
-const emit = defineEmits<{
-    'update:modelValue': [value: boolean]
-}>()
-
-const dialogVisible = computed({
-    get: () => props.modelValue,
-    set: value => emit('update:modelValue', value)
-})
-
-const refreshingAll = ref(false)
-const expandedErrorRows = ref<Set<string>>(new Set())
-
-// 获取已完成上传的视频
-const completedVideos = computed(() => {
-    return props.videos.filter(video => video.complete)
-})
-
-// 获取文件名
-const getFilename = (video: VideoFile): string => {
-    if (video.title) return video.title
-    if (video.filename) return video.filename
-    if (video.path) {
-        return video.path.split(/[/\\]/).pop() || video.path
-    }
-    return t('视频文件 {0}', { 0: String(video.id) })
-}
-
-// 获取状态文本
-const getStatusText = (statusCode: number | null): string => {
-    switch (statusCode) {
-        case null:
-            return t('状态未知')
-        case ENCODING_STATUS.SUCCESS:
-            return t('转码成功')
-        case ENCODING_STATUS.PROCESSING:
-            return t('转码中')
-        default:
-            return t('转码失败')
-    }
-}
-
-// 计算视频状态列表
-const videoStatusList = computed<VideoStatusItem[]>(() => {
-    return completedVideos.value.map(video => ({
-        id: video.id,
-        filename: getFilename(video),
-        statusCode: video.encoding_status ?? null,
-        statusText: getStatusText(video.encoding_status ?? null),
-        statusDesc: video.status_desc
-    }))
-})
-
-// 获取状态标签类型
-const getStatusType = (statusCode: number | null): string => {
-    switch (statusCode) {
-        case null:
-            return 'info'
-        case ENCODING_STATUS.SUCCESS:
-            return 'success'
-        case ENCODING_STATUS.PROCESSING:
-            return 'warning'
-        default:
-            return 'danger'
-    }
-}
-
-// 切换错误详情展开状态
-const toggleErrorDetail = (videoId: string) => {
-    if (expandedErrorRows.value.has(videoId)) {
-        expandedErrorRows.value.delete(videoId)
-    } else {
-        expandedErrorRows.value.add(videoId)
-    }
-}
-
-// 处理行点击事件
-const handleRowClick = (row: VideoStatusItem) => {
-    if (isFailedStatus(row.statusCode)) {
-        toggleErrorDetail(row.id)
-    }
-}
-
-// 获取行类名
-const getRowClassName = ({ row }: { row: VideoStatusItem }): string => {
-    return isFailedStatus(row.statusCode) ? 'clickable-row' : ''
-}
-
-// 获取错误详情
-const getErrorDetail = (statusDesc?: string): string => {
-    return statusDesc || t('未知错误')
-}
-
-// 检查是否为失败状态
-const isFailedStatus = (statusCode: number | null): boolean => {
-    return (
-        statusCode !== null &&
-        statusCode !== ENCODING_STATUS.SUCCESS &&
-        statusCode !== ENCODING_STATUS.PROCESSING
+const xcodeText = (state: number) =>
+    t(
+        ({ 0: '未开始', 1: '转码中', 2: '转码完成', 3: '转码失败' } as Record<number, string>)[
+            state
+        ] || '状态未知'
     )
+const auditText = (state: number) =>
+    t(
+        (
+            {
+                0: '未开始',
+                1: '审核中',
+                2: '已完成',
+                3: '已退回',
+                4: '已锁定',
+                5: '受限'
+            } as Record<number, string>
+        )[state] || '状态未知'
+    )
+const stepText = (state: number) =>
+    t(({ 0: '未开始', 1: '进行中', 2: '已完成' } as Record<number, string>)[state] || '状态未知')
+
+// 与官网一致，处理中按服务端时间估算，成功前最多显示 99%。
+const resolutionProgress = (item: TranscodeResolution) => {
+    if (item.status === 'success') return 100
+    if (item.status !== 'processing') return 0
+    const duration = item.estimated_time - item.start_time
+    const estimate =
+        item.estimated_time > 0 && duration > 0
+            ? Math.round(((item.time_now - item.start_time) * 100) / duration)
+            : 0
+    return Math.min(99, Math.max(0, estimate, item.progress || 0))
+}
+const resolutionText = (item: TranscodeResolution) => {
+    if (item.status === 'success') return t('已完成')
+    if (item.status === 'failed') return item.failure_reason || t('转码失败')
+    if (item.status === 'processing')
+        return item.estimated_time > 0
+            ? t('预计 {0}%', { 0: resolutionProgress(item) })
+            : t('未开始')
+    return t('状态未知')
 }
 
-// 刷新全部状态
-const refreshAllStatus = async () => {
-    refreshingAll.value = true
+const loadTranscode = async (video: ProcessingVideo) => {
+    const uid = props.uid
+    const bvid = processing.value?.bvid
+    if (
+        !props.modelValue ||
+        !uid ||
+        !bvid ||
+        !processing.value?.videos.some(item => item.cid === video.cid)
+    )
+        return
+    const request = ++transcodeRequest
+    selectedCid.value = video.cid
+    transcode.value = null
+    transcodeError.value = ''
+    transcodeLoading.value = true
     try {
-        const refreshed = await props.reloadStatus()
-        if (refreshed) ElMessage.success(t('视频状态已刷新'))
-        else ElMessage.info(t('当前无法刷新，请等待模板加载完成后重试'))
-    } catch (error) {
-        ElMessage.error(t('刷新状态失败'))
+        const result = await utilsStore.getVideoTranscode(uid, bvid, video.cid)
+        if (request !== transcodeRequest || !props.modelValue || props.uid !== uid) return
+        transcode.value = result
+        video.xcode_state = result.xcode_state
+    } catch (cause) {
+        if (request === transcodeRequest)
+            transcodeError.value = t('获取转码进度失败: {0}', { 0: String(cause) })
     } finally {
-        refreshingAll.value = false
+        if (request === transcodeRequest) transcodeLoading.value = false
     }
 }
+
+const loadPage = async (nextPage: number) => {
+    const uid = props.uid
+    const aid = props.aid
+    if (!props.modelValue || !uid || !aid) return
+    const request = ++listRequest
+    transcodeRequest += 1
+    const previousCid = selectedCid.value
+    processing.value = null
+    transcode.value = null
+    selectedCid.value = null
+    error.value = ''
+    transcodeError.value = ''
+    transcodeLoading.value = false
+    loading.value = true
+    page.value = nextPage
+    try {
+        const result = await utilsStore.getArchiveProcessing(uid, aid, nextPage)
+        if (request !== listRequest || !props.modelValue || props.uid !== uid || props.aid !== aid)
+            return
+        processing.value = result
+        const video =
+            result.videos.find(item => item.cid === previousCid) ||
+            result.videos.find(item => item.xcode_state === 1) ||
+            result.videos[0]
+        if (video) void loadTranscode(video)
+    } catch (cause) {
+        if (request === listRequest)
+            error.value = t('获取稿件处理进度失败: {0}', { 0: String(cause) })
+    } finally {
+        if (request === listRequest) loading.value = false
+    }
+}
+
+watch(
+    () => [props.modelValue, props.uid, props.aid] as const,
+    ([visible, uid, aid]) => {
+        listRequest += 1
+        transcodeRequest += 1
+        processing.value = null
+        transcode.value = null
+        selectedCid.value = null
+        loading.value = false
+        transcodeLoading.value = false
+        error.value = ''
+        transcodeError.value = ''
+        page.value = 1
+        if (visible && uid && aid) void loadPage(1)
+    },
+    { immediate: true }
+)
+onBeforeUnmount(() => {
+    listRequest += 1
+    transcodeRequest += 1
+})
 </script>
 
 <style scoped>
-.video-status-container {
-    min-height: 200px;
-}
-
-.empty-state {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 200px;
-}
-
-.filename-cell {
+.status-dialog-title {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
+    font-size: var(--el-dialog-title-font-size);
+    color: var(--el-text-color-primary);
 }
-
-.file-icon {
-    color: #409eff;
-    font-size: 16px;
-    flex-shrink: 0;
+.processing-content {
+    min-height: 180px;
 }
-
-.filename {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.status-icon {
-    margin-right: 4px;
-}
-
-.status-content {
+.section-heading,
+.resolution-heading,
+.audit-steps {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 12px;
 }
-
-.click-hint-icon {
-    color: #909399;
-    font-size: 14px;
-    transition: transform 0.2s ease;
+.section-heading {
+    margin-bottom: 16px;
 }
-
-.expanded-error-detail {
-    padding: 12px 20px;
-    background-color: #fafafa;
-    border-radius: 4px;
-    margin: 0 -20px;
+.section-heading .el-pagination {
+    margin-left: auto;
 }
-
-.error-message-full {
-    color: #909399;
-    font-size: 12px;
-    line-height: 1.4;
+.resolution-heading {
+    justify-content: space-between;
+    margin-bottom: 10px;
 }
-
-.dialog-footer {
-    display: flex;
-    justify-content: flex-end;
+.part-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(65px, 1fr));
     gap: 10px;
 }
-
-/* 表格样式优化 */
-:deep(.el-table) {
-    border-radius: 6px;
-    overflow: hidden;
+.part-list .el-button {
+    margin: 0;
+    height: 48px;
 }
-
-:deep(.el-table th) {
-    background-color: #f5f7fa;
-    color: #303133;
-    font-weight: 600;
+.resolution-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px 32px;
 }
-
-:deep(.el-table td) {
-    padding: 12px 0;
+section {
+    margin-top: 28px;
 }
-
-:deep(.el-table .el-table__row:hover > td) {
-    background-color: #f0f9ff;
-}
-
-/* 失败状态行可点击样式 */
-:deep(.el-table .el-table__row) {
-    transition: background-color 0.2s ease;
-}
-
-:deep(.el-table .el-table__row.clickable-row) {
-    cursor: pointer;
-}
-
-:deep(.el-table .el-table__row.clickable-row:hover > td) {
-    background-color: #f0f9ff;
-}
-
-/* 状态标签样式 */
-:deep(.el-tag) {
-    border-radius: 4px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 80px;
+@media (max-width: 600px) {
+    .resolution-list {
+        grid-template-columns: 1fr;
+    }
+    .section-heading,
+    .audit-steps {
+        flex-wrap: wrap;
+    }
 }
 </style>

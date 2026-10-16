@@ -5,6 +5,7 @@ import { invoke } from '@tauri-apps/api/core'
 import { ElMessage } from 'element-plus'
 import type { MentionUserGroup } from '../types/mention'
 import type { CreatorVideoPage } from '../types/creator_video'
+import type { ArchiveProcessing, TranscodeDetail } from '../types/video_status'
 import type { TemplateConfig } from './user_config'
 import type { ManagedSeason, ManagedSection, SeasonEpisode } from '../types/season'
 
@@ -237,6 +238,12 @@ export const useUtilsStore = defineStore('template', () => {
             snapshotId
         })
 
+    const getArchiveProcessing = (uid: number, aid: number, page: number) =>
+        invoke<ArchiveProcessing>('get_archive_processing', { uid, aid, page })
+
+    const getVideoTranscode = (uid: number, bvid: string, cid: number) =>
+        invoke<TranscodeDetail>('get_video_transcode', { uid, bvid, cid })
+
     const getVideoDetail = async (uid: number, videoId: string) => {
         try {
             const detail = await invoke('get_video_detail', { uid, videoId })
@@ -360,6 +367,8 @@ export const useUtilsStore = defineStore('template', () => {
         searchTopics,
         searchMention,
         getVideoDetail,
+        getArchiveProcessing,
+        getVideoTranscode,
         getVideoTemplate,
         getVideoList,
         openVideoListSnapshot,

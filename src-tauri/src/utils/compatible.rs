@@ -149,10 +149,8 @@ impl CompatibilityConverter {
                             filename: v.filename,
                             desc: v.desc,
                             cover: String::new(),
-                            path: String::new(),   // 旧版配置没有path字段，留空
-                            finished_at: 0,        // 旧版配置没有finished_at字段，默认0
-                            encoding_status: None, // 旧版配置没有转码状态
-                            status_desc: String::new(), // 旧版配置没有status_desc字段，留空
+                            path: String::new(), // 旧版配置没有path字段，留空
+                            finished_at: 0,      // 旧版配置没有finished_at字段，默认0
                         });
                     }
                     vids

@@ -1042,10 +1042,8 @@
         <!-- 视频状态对话框 -->
         <VideoStatus
             v-model="showVideoStatusDialog"
-            :videos="currentForm?.videos || []"
-            :user="selectedUser"
-            :template-aid="currentTemplate?.aid"
-            :reload-status="refreshVideoEncodingStatus"
+            :uid="selectedUser?.uid"
+            :aid="currentTemplate?.aid"
         />
 
         <SubmitStatsPage
@@ -4212,36 +4210,9 @@ const exportLogs = async () => {
     }
 }
 
-const refreshVideoEncodingStatus = async () => {
-    const uid = selectedUser.value?.uid
-    const aid = currentTemplate.value?.aid
-    if (!uid || !aid) return false
-    return reloadTemplateFromAV(uid, aid)
-}
-
 // 检查视频转码状态
-const checkVideoStatus = async () => {
-    if (!selectedUser.value || !currentTemplate.value?.aid) return
-
-    try {
-        // 先刷新模板数据
-        await ElMessageBox.confirm(
-            t('此操作会重新拉取模板数据，此操作会丢失未保存的更改，是否继续？'),
-            '',
-            {
-                confirmButtonText: t('刷新并继续'),
-                cancelButtonText: t('不刷新，仅显示当前'),
-                type: 'info'
-            }
-        )
-        await reloadTemplateFromAV(selectedUser.value.uid, currentTemplate.value.aid)
-        // 然后显示状态对话框
-        showVideoStatusDialog.value = true
-    } catch (error) {
-        console.error(t('刷新模板数据失败:'), error)
-        // 即使刷新失败也显示对话框
-        showVideoStatusDialog.value = true
-    }
+const checkVideoStatus = () => {
+    if (selectedUser.value && currentTemplate.value?.aid) showVideoStatusDialog.value = true
 }
 
 // 检查更新

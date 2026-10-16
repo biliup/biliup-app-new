@@ -68,10 +68,6 @@ pub struct VideoInfo {
     pub path: String,
     #[serde(default)]
     pub finished_at: u64,
-    #[serde(default)]
-    pub encoding_status: Option<i64>,
-    #[serde(default)]
-    pub status_desc: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -741,7 +737,7 @@ mod persistence_tests {
     use super::*;
 
     #[test]
-    fn legacy_video_cid_is_ignored_when_loading_and_saving_config() {
+    fn obsolete_video_fields_are_ignored_when_loading_and_saving_config() {
         let nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -766,7 +762,10 @@ mod persistence_tests {
                         }
                     },
                     "templates": {
-                        "旧模板": {"videos": [{"filename": "test-video", "cid": 12345}]}
+                        "旧模板": {"videos": [{
+                            "filename": "test-video", "cid": 12345,
+                            "encoding_status": -30, "status_desc": "转码中"
+                        }]}
                     }
                 }
             }
@@ -782,7 +781,26 @@ mod persistence_tests {
         let video = &saved["config"]["1"]["templates"]["旧模板"]["videos"][0];
         assert_eq!(video["filename"], "test-video");
         assert!(video.get("cid").is_none());
+        assert!(video.get("encoding_status").is_none());
+        assert!(video.get("status_desc").is_none());
         fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn creator_video_status_is_not_imported_into_templates() {
+        let template = TemplateConfig::from_bilibili_res(serde_json::json!({
+            "archive": {"aid": 123, "title": "测试稿件"},
+            "videos": [{"filename": "remote-file", "title": "分P标题", "status": -30,
+                "status_desc": "转码中", "encoding_status": 0}]
+        }))
+        .unwrap();
+        assert_eq!(template.aid, Some(123));
+        assert_eq!(template.videos[0].filename, "remote-file");
+        assert_eq!(template.videos[0].title, "分P标题");
+        let saved = serde_json::to_value(&template.videos[0]).unwrap();
+        for key in ["status", "encoding_status", "status_desc"] {
+            assert!(saved.get(key).is_none());
+        }
     }
 
     #[test]

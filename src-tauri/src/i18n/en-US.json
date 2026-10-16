@@ -193,5 +193,6 @@
     "season.manager.title_empty": "Episode title cannot be empty",
     "season.manager.csrf_missing": "Missing CSRF token; please log in again",
     "season.manager.no_selection": "Select submissions to add",
-    "video.list_snapshot_expired": "The submission list has expired; reopen it"
+    "video.list_snapshot_expired": "The submission list has expired; reopen it",
+    "video.processing_invalid_response": "Invalid submission processing response"
 }

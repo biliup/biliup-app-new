@@ -90,22 +90,7 @@ impl TemplateConfig {
         let videos = value["videos"].clone();
         trace!("{}", serde_json::to_string(&videos)?);
 
-        template_config.videos = videos
-            .as_array()
-            .ok_or_else(|| anyhow::anyhow!("videos should be an array"))?
-            .iter()
-            .map(|v| {
-                let mut v = v.clone();
-                let status = v.get("status").cloned();
-                if let Some(status) = status {
-                    if let Some(obj) = v.as_object_mut() {
-                        obj.insert("encoding_status".to_string(), status);
-                        obj.remove("status");
-                    }
-                }
-                Ok(serde_json::from_value(v)?)
-            })
-            .collect::<Result<Vec<_>>>()?;
+        template_config.videos = serde_json::from_value(videos)?;
         Ok(template_config)
     }
 

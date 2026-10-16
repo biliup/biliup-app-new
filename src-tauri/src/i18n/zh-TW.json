@@ -193,5 +193,6 @@
     "season.manager.title_empty": "單集標題不能為空",
     "season.manager.csrf_missing": "登入資訊缺少 CSRF，請重新登入",
     "season.manager.no_selection": "請選擇要加入的稿件",
-    "video.list_snapshot_expired": "稿件清單已過期，請重新開啟"
+    "video.list_snapshot_expired": "稿件清單已過期，請重新開啟",
+    "video.processing_invalid_response": "稿件處理進度回應格式錯誤"
 }
