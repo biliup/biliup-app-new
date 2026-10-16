@@ -2,13 +2,11 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import vm from 'node:vm'
-import ts from 'typescript'
+import { compileSetup, setupMethod } from './helpers/vueSetup.mjs'
 import { ref, reactive, watch, nextTick } from 'vue'
 
 const component = readFileSync(new URL('../src/components/VideoStatus.vue', import.meta.url), 'utf8')
-const script = component.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
-const ast = ts.createSourceFile('VideoStatus.ts', script, ts.ScriptTarget.Latest, true)
-const source = ast.statements.filter(node => !ts.isImportDeclaration(node)).map(node => node.getText(ast)).join('\n')
+const setup = compileSetup(component)
 const settle = async () => { await Promise.resolve(); await nextTick(); await Promise.resolve() }
 const list = (bvid = 'BVtest', videos = [{ cid: 101, index: 1, xcode_state: 2 }, { cid: 102, index: 2, xcode_state: 1 }]) => ({
     bvid, page: { total: 21, pn: 1, ps: 20 }, videos,
@@ -30,7 +28,7 @@ function harness(initial = {}) {
         }),
         t: (key, params) => key.replace(/\{(\w+)\}/g, (match, name) => params?.[name] ?? match)
     }
-    vm.runInNewContext(ts.transpile(source, { target: ts.ScriptTarget.ES2020 }) +
+    vm.runInNewContext(setup +
         '\nglobalThis.status = { processing, transcode, selectedCid, page, loading, transcodeLoading, error, transcodeError, loadPage, loadTranscode, resolutionProgress, resolutionText, xcodeText, auditText, stepText }', context)
     return { props, lists, details, status: context.status, dispose: () => { unmount(); stops.forEach(stop => stop()) } }
 }
@@ -131,12 +129,10 @@ test('进度界面及状态文案有翻译，打开弹窗不刷新或覆盖模�
         const catalog = JSON.parse(readFileSync(new URL(`../src/i18n/${lang}.json`, import.meta.url), 'utf8'))
         for (const key of keys) assert.ok(catalog[key], `${lang}: ${key}`)
     }
-    const main = readFileSync(new URL('../src/views/MainView.vue', import.meta.url), 'utf8').match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
-    const ast = ts.createSourceFile('Main.ts', main, ts.ScriptTarget.Latest, true)
-    const handler = ast.statements.find(node => ts.isVariableStatement(node) && node.declarationList.declarations.some(d => d.name.getText(ast) === 'checkVideoStatus'))
+    const handler = setupMethod(readFileSync(new URL('../src/views/MainView.vue', import.meta.url), 'utf8'), 'checkVideoStatus')
     const draft = { aid: 123, title: '本地修改' }
     const context = { selectedUser: ref({ uid: 1 }), currentTemplate: ref(draft), showVideoStatusDialog: ref(false) }
-    vm.runInNewContext(ts.transpile(handler.getText(ast)) + '\nglobalThis.open = checkVideoStatus', context)
+    vm.runInNewContext(handler + '\nglobalThis.open = checkVideoStatus', context)
     context.open()
     assert.equal(context.showVideoStatusDialog.value, true)
     assert.equal(draft.title, '本地修改')

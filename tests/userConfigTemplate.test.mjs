@@ -312,3 +312,30 @@ test('旧核对请求晚于新合集操作完成时，不覆盖投稿快照或�
     assert.equal(snapshot.season_id, 10)
     assert.throws(() => h.store.assertVideoSeasonReady(1, 123), /待确认/)
 })
+
+
+test('待确认状态损坏不影响配置加载，编辑模板在核对前保持保护', async () => {
+    for (const raw of ['', '{', '{}', 'null', '[null]', '["bad"]', '["0:123"]', '["1:9007199254740992"]']) {
+        const values = new Map([[pendingStorageKey, raw]])
+        globalThis.localStorage = { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value) }
+        const { store } = await freshStore({ templates: { edit: { aid: 123, season_id: 10 }, draft: {} } })
+        assert.equal(store.configRoot.config[1].templates.edit.season_id, 10)
+        assert.throws(() => store.assertVideoSeasonReady(1, 123), /待确认/)
+        store.assertVideoSeasonReady(1)
+        globalThis.__configInvoke = async command => {
+            if (command === 'get_video_season') return { season_id: 0, section_id: 0 }
+            assert.equal(command, 'sync_template_season')
+        }
+        await store.ensureVideoSeason(1, store.configRoot.config[1].templates.edit)
+        store.assertVideoSeasonReady(1, 123)
+        assert.deepEqual(JSON.parse(values.get(pendingStorageKey)), [])
+    }
+})
+
+test('本地存储读取异常时仍可加载配置，并保护编辑模板', async () => {
+    globalThis.localStorage = { getItem: () => { throw new Error('读取失败') }, setItem: () => {} }
+    const { store } = await freshStore({ templates: { edit: { aid: 123 }, draft: {} } })
+    assert.ok(store.configRoot)
+    assert.throws(() => store.assertVideoSeasonReady(1, 123), /待确认/)
+    store.assertVideoSeasonReady(2, 123)
+})

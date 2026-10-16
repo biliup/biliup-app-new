@@ -2,19 +2,14 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import vm from 'node:vm'
-import ts from 'typescript'
+import { compileSetup, setupMethod } from './helpers/vueSetup.mjs'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 
 const component = readFileSync(
     new URL('../src/components/SeasonManager.vue', import.meta.url),
     'utf8'
 )
-const script = component.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
-const ast = ts.createSourceFile('SeasonManager.ts', script, ts.ScriptTarget.Latest, true)
-const source = ast.statements
-    .filter(statement => !ts.isImportDeclaration(statement))
-    .map(statement => statement.getText(ast))
-    .join('\n')
+const setup = compileSetup(component)
 const entry = (id = 10, noSection = 1) => ({
     season: { id, title: `合集 ${id}`, no_section: noSection, ep_num: 2 },
     sections: { sections: [{ id: 11, title: '正片' }] }
@@ -91,7 +86,7 @@ function harness(options = {}) {
             options.reorder ||
             (async (...args) => {
                 calls.push(['reorder', ...args])
-                remote.episodes = args[3].map(id =>
+                remote.episodes = Array.from(args[3], id =>
                     remote.episodes.find(episode => episode.id === id)
                 )
             }),
@@ -135,7 +130,7 @@ function harness(options = {}) {
         t: (key, params) => key.replace(/\{(\w+)\}/g, (match, name) => params?.[name] ?? match)
     }
     vm.runInNewContext(
-        ts.transpile(source, { target: ts.ScriptTarget.ES2020 }) +
+        setup +
             '\nglobalThis.manager = { uid, seasons, loading, listError, expandedSeasonId, seasonScrollbar, sectionVisible, sectionLoading, sectionError, busy, detail, episodes, target, orderDirty, hasSections, loadSeasons, openSection, loadSection, addEpisode, selectEpisodes, episodePickerVisible, episodePickerContext, removeEpisode, setEpisodePosition, editEpisodeTitle, editArchive, resetOrder, saveOrder, closeSection, closeManager, toggleSeason, toggleSection, refreshSeasons }',
         context
     )
@@ -579,15 +574,9 @@ test('多选稿件只发一次批量命令，失败后仍刷新远端结果', as
 })
 
 test('稿件编辑复用已有模板，名称冲突时新建独立模板，加载失败不报告成功', async () => {
-    const main = readFileSync(new URL('../src/views/MainView.vue', import.meta.url), 'utf8')
-        .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
-    const ast = ts.createSourceFile('MainView.ts', main, ts.ScriptTarget.Latest, true)
-    const handler = ast.statements.find(statement =>
-        ts.isVariableStatement(statement) && statement.declarationList.declarations.some(
-            declaration => declaration.name.getText(ast) === 'openArchiveEditor'
-        )
-    ).getText(ast)
+    const handler = setupMethod(readFileSync(new URL('../src/views/MainView.vue', import.meta.url), 'utf8'), 'openArchiveEditor')
     const user = { uid: 1 }
+    let queries = 0
     const templates = { existing: { aid: 121 }, av122: { aid: 999 } }
     const calls = []
     const context = {
@@ -600,18 +589,20 @@ test('稿件编辑复用已有模板，名称冲突时新建独立模板，加�
             createTemplateFromVideo: async (...args) => calls.push(['create', ...args]),
             syncVideoSeason: (...args) => { Object.assign(templates.existing, args[2]) }
         },
-        utilsStore: { getVideoSeason: async () => ({ season_id: 10, section_id: 11 }) },
+        utilsStore: { getVideoSeason: async () => { queries++; return { season_id: 10, section_id: 11 } } },
         selectTemplate: async (...args) => { calls.push(['select', ...args]); return true },
         t: (key, params) => key.replace(/\{(\w+)\}/g, (match, name) => params?.[name] ?? match)
     }
-    vm.runInNewContext(ts.transpile(handler) + '\nglobalThis.edit = openArchiveEditor', context)
+    vm.runInNewContext(handler + '\nglobalThis.edit = openArchiveEditor', context)
     await context.edit(1, { aid: 121 })
     assert.equal(templates.existing.season_id, 10)
     assert.equal(calls.length, 1)
-    assert.deepEqual(calls[0], ['select', context.loginUsers.value[0], 'existing'])
+    assert.deepEqual(calls[0], ['select', context.loginUsers.value[0], 'existing', true])
     await context.edit(1, { aid: 122 })
     assert.deepEqual(calls[1], ['create', 1, 'av122', 'av122 (2)', true])
     assert.equal(calls[2][2], 'av122 (2)')
+    assert.equal(calls[2][3], false)
+    assert.equal(queries, 1)
     assert.equal(templates.av122.aid, 999)
     await context.edit(1, { aid: 121, title: '测试稿件' }, 'copy')
     assert.deepEqual(calls[3], ['create', 1, 'av121', '测试稿件的复制', false])
@@ -641,11 +632,7 @@ test('拖动手柄提交目标序号并先还原 DOM，加载和提交期间禁�
             this.children.splice(index, 0, item)
         }
     }
-    const script = readFileSync(new URL('../src/components/SeasonEpisodeRows.vue', import.meta.url), 'utf8')
-        .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
-    const ast = ts.createSourceFile('Rows.ts', script, ts.ScriptTarget.Latest, true)
-    const source = ast.statements.filter(statement => !ts.isImportDeclaration(statement))
-        .map(statement => statement.getText(ast)).join('\n')
+    const setup = compileSetup(readFileSync(new URL('../src/components/SeasonEpisodeRows.vue', import.meta.url), 'utf8'))
     const props = reactive({ busy: false, loading: false, ready: true, episodes: [{ id: 1 }, { id: 2 }, { id: 3 }] })
     const events = [], options = []
     let mounted, unmount, settings, destroyed = false
@@ -661,7 +648,7 @@ test('拖动手柄提交目标序号并先还原 DOM，加载和提交期间禁�
             return { option: (...args) => options.push(args), destroy: () => { destroyed = true } }
         } }
     }
-    vm.runInNewContext(ts.transpile(source) + '\nglobalThis.element = root', sandbox)
+    vm.runInNewContext(setup + '\nglobalThis.element = root', sandbox)
     sandbox.element.value = { querySelector: () => body }
     await mounted()
     assert.equal(settings.handle, '.episode-drag-handle')
@@ -705,4 +692,45 @@ test('移出已在服务端执行但响应丢失时仍刷新列表，不自动�
     assert.deepEqual(Array.from(h.manager.episodes.value, row => row.aid), [122])
     assert.equal(h.calls.filter(call => call[0] === 'remove').length, 1)
     assert.equal(h.messages.at(-1)[1], 'error')
+})
+
+
+test('排序和改标题只刷新当前小节，添加和移出同步刷新合集列表', async context => {
+    const h = harness({ prompt: async () => ({ value: '新标题' }) })
+    context.after(() => h.dispose())
+    await settle()
+    await h.manager.openSection(entry(), entry().sections.sections[0])
+    h.calls.length = 0
+    await h.manager.editEpisodeTitle(h.manager.episodes.value[0])
+    assert.equal(h.calls.filter(([name]) => name === 'list').length, 0)
+    assert.equal(h.calls.filter(([name]) => name === 'section').length, 1)
+    h.calls.length = 0
+    h.manager.setEpisodePosition(0, 2)
+    await h.manager.saveOrder()
+    assert.equal(h.calls.filter(([name]) => name === 'list').length, 0)
+    assert.equal(h.calls.filter(([name]) => name === 'section').length, 1)
+    h.calls.length = 0
+    await h.manager.addEpisode()
+    await h.manager.selectEpisodes(['BVnew'], [123])
+    assert.equal(h.calls.filter(([name]) => name === 'list').length, 1)
+    h.calls.length = 0
+    await h.manager.removeEpisode(h.manager.episodes.value[0])
+    assert.equal(h.calls.filter(([name]) => name === 'list').length, 1)
+})
+
+test('新建模板选择时跳过重复远端检查，已有模板继续安排检查', async () => {
+    const handler = setupMethod(readFileSync(new URL('../src/views/MainView.vue', import.meta.url), 'utf8'), 'selectTemplate')
+    const timers = []
+    const context = {
+        templateLoading: ref(false), selectedUser: ref(null), currentTemplateName: ref(''),
+        currentTemplate: ref({ aid: 123 }), lastSubmit: ref(''),
+        utilsStore: { initArchievePre: async () => {}, initTopicList: async () => {} },
+        nextTick: () => {}, loadTemplate: async () => {}, saveTemplateSelection: () => {},
+        setTimeout: callback => timers.push(callback), console: { log: () => {}, error: () => {} }, t: key => key
+    }
+    vm.runInNewContext(handler + '\nglobalThis.select = selectTemplate', context)
+    assert.equal(await context.select({ uid: 1 }, '新模板', false), true)
+    assert.equal(timers.length, 0)
+    assert.equal(await context.select({ uid: 1 }, '已有模板'), true)
+    assert.equal(timers.length, 1)
 })

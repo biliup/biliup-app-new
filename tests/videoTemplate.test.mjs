@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import vm from 'node:vm'
 import ts from 'typescript'
+import { setupMethod } from './helpers/vueSetup.mjs'
 
 // 执行 store 中真实的业务方法，验证创建和刷新共用的模板转换。
 function storeMethod(file, name) {
@@ -99,14 +100,7 @@ test('同步合集归属保留本地编辑，并隔离账号与稿件', async ()
 
 
 test('实际投稿入口核对失败时不提交，重试成功后使用核对后的合集归属', async () => {
-    const main = readFileSync(new URL('../src/views/MainView.vue', import.meta.url), 'utf8')
-        .match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
-    const ast = ts.createSourceFile('MainView.ts', main, ts.ScriptTarget.Latest, true)
-    const handler = ast.statements.find(statement =>
-        ts.isVariableStatement(statement) && statement.declarationList.declarations.some(
-            declaration => declaration.name.getText(ast) === 'performTemplateSubmit'
-        )
-    ).getText(ast)
+    const handler = setupMethod(readFileSync(new URL('../src/views/MainView.vue', import.meta.url), 'utf8'), 'performTemplateSubmit')
     const submitted = [], synced = []
     const context = {
         loginUsers: { value: [{ uid: 1, username: '测试账号' }] },
@@ -122,7 +116,7 @@ test('实际投稿入口核对失败时不提交，重试成功后使用核对�
         handleAutoEditAfterSubmit: async () => {}, setTimeout: callback => { callback() },
         t: key => key
     }
-    vm.runInNewContext(ts.transpile(handler) + '\nglobalThis.submit = performTemplateSubmit', context)
+    vm.runInNewContext(handler + '\nglobalThis.submit = performTemplateSubmit', context)
     const template = { aid: 123, season_id: 10, section_id: 11, title: '本地编辑' }
     await context.submit(1, '模板', template)
     assert.equal(submitted.length, 0)

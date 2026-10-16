@@ -358,17 +358,17 @@ const editArchive = async (episode: SeasonEpisode) => {
     }
 }
 
-const runMutation = async (action: () => Promise<void>, refreshOnError = false) => {
+const runMutation = async (action: () => Promise<void>, membershipChanged = false) => {
     if (busy.value) return
     busy.value = true
     try {
         await action()
         utilsStore.showMessage(t('合集操作成功'), 'success')
         await loadSection()
-        await loadSeasons()
+        if (membershipChanged) await loadSeasons()
     } catch (error) {
         utilsStore.showMessage(t('合集操作失败: {0}', { 0: String(error) }), 'error')
-        if (refreshOnError) {
+        if (membershipChanged) {
             await loadSection()
             await loadSeasons()
         }

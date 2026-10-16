@@ -109,13 +109,32 @@ export const useUserConfigStore = defineStore('userConfig', () => {
     const error = ref<string | null>(null)
 
     const seasonSyncStorageKey = 'pending-video-season-sync'
-    const pendingVideoSeasons = new Set<string>(
-        JSON.parse(
-            (typeof localStorage === 'undefined'
-                ? null
-                : localStorage.getItem(seasonSyncStorageKey)) || '[]'
-        )
-    )
+    let recoverPendingSeasons = false
+    const readPendingSeasons = (): string[] => {
+        try {
+            const raw =
+                typeof localStorage === 'undefined'
+                    ? null
+                    : localStorage.getItem(seasonSyncStorageKey)
+            const keys: unknown = JSON.parse(raw ?? '[]')
+            if (
+                !Array.isArray(keys) ||
+                !keys.every(
+                    key =>
+                        typeof key === 'string' &&
+                        /^[1-9]\d*:[1-9]\d*$/.test(key) &&
+                        key.split(':').every(id => Number.isSafeInteger(Number(id)))
+                )
+            )
+                throw new Error('合集待确认状态格式错误')
+            return keys
+        } catch {
+            // 状态损坏时保守地重新核对所有编辑模板，不影响配置加载。
+            recoverPendingSeasons = true
+            return []
+        }
+    }
+    const pendingVideoSeasons = new Set(readPendingSeasons())
     const activeSeasonChanges = new Set<string>()
     const seasonRevisions = new Map<string, number>()
     const seasonKey = (uid: number, aid: number) => `${uid}:${aid}`
@@ -321,6 +340,15 @@ export const useUserConfigStore = defineStore('userConfig', () => {
             const configData: ConfigRoot = await invoke('load_config')
             normalizeConfigRoot(configData)
             configRoot.value = configData
+            if (recoverPendingSeasons) {
+                for (const [uid, user] of Object.entries(configData.config)) {
+                    for (const template of Object.values(user.templates)) {
+                        if (template.aid)
+                            pendingVideoSeasons.add(seasonKey(Number(uid), template.aid))
+                    }
+                }
+                recoverPendingSeasons = false
+            }
             configBase.value = JSON.parse(JSON.stringify(configData))
             setLanguage(configData.language)
             return configData
@@ -539,18 +567,23 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         })
     }
 
+    const reconcileVideoSeason = async (uid: number, aid: number) => {
+        const revision = getSeasonRevision(uid, aid)
+        const checkRevision = () => {
+            if (revision !== getSeasonRevision(uid, aid))
+                throw new Error(t('合集操作进行中，请稍后重试'))
+        }
+        const season = await useUtilsStore().getVideoSeason(uid, aid)
+        checkRevision()
+        await syncVideoSeason(uid, [aid], season)
+        checkRevision()
+        clearPendingSeasons([seasonKey(uid, aid)])
+        return { season, revision }
+    }
+
     const reconcileVideoSeasons = async (uid: number, aids: number[]) => {
         const results = await Promise.allSettled(
-            [...new Set(aids)].map(async aid => {
-                const revision = getSeasonRevision(uid, aid)
-                const season = await useUtilsStore().getVideoSeason(uid, aid)
-                if (revision !== getSeasonRevision(uid, aid))
-                    throw new Error(t('合集操作进行中，请稍后重试'))
-                await syncVideoSeason(uid, [aid], season)
-                if (revision !== getSeasonRevision(uid, aid))
-                    throw new Error(t('合集操作进行中，请稍后重试'))
-                clearPendingSeasons([seasonKey(uid, aid)])
-            })
+            [...new Set(aids)].map(aid => reconcileVideoSeason(uid, aid))
         )
         const failed = results.find(result => result.status === 'rejected')
         if (failed?.status === 'rejected')
@@ -602,15 +635,9 @@ export const useUserConfigStore = defineStore('userConfig', () => {
         const key = seasonKey(uid, template.aid)
         if (activeSeasonChanges.has(key)) throw new Error(t('合集操作进行中，请稍后重试'))
         if (!pendingVideoSeasons.has(key)) return
-        const revision = getSeasonRevision(uid, template.aid)
-        const season = await useUtilsStore().getVideoSeason(uid, template.aid)
-        if (activeSeasonChanges.has(key) || revision !== getSeasonRevision(uid, template.aid))
-            throw new Error(t('合集操作进行中，请稍后重试'))
-        await syncVideoSeason(uid, [template.aid], season)
-        if (activeSeasonChanges.has(key) || revision !== getSeasonRevision(uid, template.aid))
-            throw new Error(t('合集操作进行中，请稍后重试'))
+        const { season, revision } = await reconcileVideoSeason(uid, template.aid)
+        assertVideoSeasonReady(uid, template.aid, revision)
         Object.assign(template, season)
-        clearPendingSeasons([key])
     }
 
     const retryPendingVideoSeasons = async (uid: number) => {

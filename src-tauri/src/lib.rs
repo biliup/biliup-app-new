@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test_support;
+
 mod commands;
 pub(crate) mod error;
 mod i18n;

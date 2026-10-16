@@ -193,10 +193,7 @@ pub async fn delete_creator_video(
 mod tests {
     use super::*;
     use serde_json::json;
-    use tokio::{
-        io::{AsyncReadExt, AsyncWriteExt},
-        net::TcpListener,
-    };
+    use tokio::{io::AsyncWriteExt, net::TcpListener};
 
     fn proof(sms: Option<&str>) -> String {
         json!({"geetest_challenge":"challenge&+", "geetest_validate":"validate&+",
@@ -214,17 +211,8 @@ mod tests {
         }
     }
 
-    async fn header(socket: &mut tokio::net::TcpStream) -> String {
-        let mut header = Vec::new();
-        while !header.ends_with(b"\r\n\r\n") {
-            header.push(socket.read_u8().await.unwrap());
-        }
-        String::from_utf8(header).unwrap()
-    }
-
     async fn respond(socket: &mut tokio::net::TcpStream, value: Value) {
-        let body = value.to_string();
-        socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+        crate::test_support::respond(socket, "200 OK", &value.to_string()).await;
     }
 
     #[test]
@@ -260,7 +248,7 @@ mod tests {
                 json!({"code":0,"data":null}),
             ] {
                 let (mut socket, _) = listener.accept().await.unwrap();
-                let request = header(&mut socket).await;
+                let request = crate::test_support::read_headers(&mut socket).await;
                 assert!(request.starts_with("GET /x/vupre/web/archive/view?aid=123 "));
                 respond(
                     &mut socket,
@@ -268,7 +256,7 @@ mod tests {
                 )
                 .await;
                 let (mut socket, _) = listener.accept().await.unwrap();
-                let request = header(&mut socket).await;
+                let request = crate::test_support::read_headers(&mut socket).await;
                 assert!(request.starts_with("GET /x/risk/archive/del?platform=web&bvid=BVtest "));
                 respond(&mut socket, response).await;
             }
@@ -297,25 +285,14 @@ mod tests {
         let server = tokio::spawn(async move {
             for (sms, code) in [(false, 0), (true, -400)] {
                 let (mut socket, _) = listener.accept().await.unwrap();
-                let request = header(&mut socket).await;
+                let request = crate::test_support::read_headers(&mut socket).await;
                 assert!(request.starts_with("POST /x/web/archive/delete "));
                 assert!(
                     request
                         .to_lowercase()
                         .contains("content-type: application/x-www-form-urlencoded")
                 );
-                let length: usize = request
-                    .lines()
-                    .find_map(|line| {
-                        line.to_lowercase()
-                            .strip_prefix("content-length: ")
-                            .map(str::to_owned)
-                    })
-                    .unwrap()
-                    .parse()
-                    .unwrap();
-                let mut body = vec![0; length];
-                socket.read_exact(&mut body).await.unwrap();
+                let body = crate::test_support::read_body(&mut socket, &request).await;
                 let form: std::collections::HashMap<_, _> =
                     url::form_urlencoded::parse(&body).into_owned().collect();
                 assert_eq!(form["aid"], "123");
@@ -364,7 +341,11 @@ mod tests {
         );
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
-            assert!(header(&mut socket).await.starts_with("POST "));
+            assert!(
+                crate::test_support::read_headers(&mut socket)
+                    .await
+                    .starts_with("POST ")
+            );
             socket.shutdown().await.unwrap();
             drop(socket);
             assert!(

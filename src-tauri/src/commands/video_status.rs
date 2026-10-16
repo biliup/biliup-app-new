@@ -202,10 +202,7 @@ async fn load_video_transcode(
 mod tests {
     use super::*;
     use serde_json::json;
-    use tokio::{
-        io::{AsyncReadExt, AsyncWriteExt},
-        net::TcpListener,
-    };
+    use tokio::net::TcpListener;
 
     #[tokio::test]
     async fn processing_reads_creator_parts_audit_and_resolution_progress() {
@@ -214,11 +211,7 @@ mod tests {
         let server = tokio::spawn(async move {
             for _ in 0..5 {
                 let (mut socket, _) = listener.accept().await.unwrap();
-                let mut header = Vec::new();
-                while !header.ends_with(b"\r\n\r\n") {
-                    header.push(socket.read_u8().await.unwrap());
-                }
-                let header = String::from_utf8(header).unwrap();
+                let header = crate::test_support::read_headers(&mut socket).await;
                 let url = reqwest::Url::parse(&format!(
                     "http://test{}",
                     header.split_whitespace().nth(1).unwrap()
@@ -257,7 +250,7 @@ mod tests {
                     assert_eq!(params["web_location"], "0.0");
                 }
                 let body = json!({"code": 0, "data": data}).to_string();
-                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+                crate::test_support::respond(&mut socket, "200 OK", &body).await;
             }
         });
         let client = reqwest::Client::builder().no_proxy().build().unwrap();
@@ -293,11 +286,8 @@ mod tests {
                 ("429 Too Many Requests", "<html>429</html>"),
             ] {
                 let (mut socket, _) = listener.accept().await.unwrap();
-                let mut header = Vec::new();
-                while !header.ends_with(b"\r\n\r\n") {
-                    header.push(socket.read_u8().await.unwrap());
-                }
-                socket.write_all(format!("HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+                crate::test_support::read_headers(&mut socket).await;
+                crate::test_support::respond(&mut socket, status, &body).await;
             }
         });
         let client = reqwest::Client::builder().no_proxy().build().unwrap();

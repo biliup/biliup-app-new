@@ -301,10 +301,7 @@ mod tests {
     #[tokio::test]
     async fn batch_add_validates_all_videos_before_one_write_and_reports_api_failure() {
         use biliup::bilibili::BiliBili;
-        use tokio::{
-            io::{AsyncReadExt, AsyncWriteExt},
-            net::TcpListener,
-        };
+        use tokio::net::TcpListener;
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let host = format!("http://{}", listener.local_addr().unwrap());
         let (stop, mut stopped) = tokio::sync::oneshot::channel::<()>();
@@ -316,26 +313,11 @@ mod tests {
                     result = listener.accept() => result.unwrap(),
                     _ = &mut stopped => break,
                 };
-                let mut header = Vec::new();
-                while !header.ends_with(b"\r\n\r\n") {
-                    header.push(socket.read_u8().await.unwrap());
-                }
-                let header = String::from_utf8(header).unwrap();
+                let header = crate::test_support::read_headers(&mut socket).await;
                 let path = header.split_whitespace().nth(1).unwrap();
                 let url = reqwest::Url::parse(&format!("http://test{path}")).unwrap();
                 let data = if header.starts_with("POST ") {
-                    let length: usize = header
-                        .lines()
-                        .find_map(|line| {
-                            line.to_lowercase()
-                                .strip_prefix("content-length: ")
-                                .map(str::to_owned)
-                        })
-                        .unwrap()
-                        .parse()
-                        .unwrap();
-                    let mut body = vec![0; length];
-                    socket.read_exact(&mut body).await.unwrap();
+                    let body = crate::test_support::read_body(&mut socket, &header).await;
                     let body: Value = serde_json::from_slice(&body).unwrap();
                     assert!(url.path().ends_with("/episodes/add"));
                     assert_eq!(body["sectionId"], 11);
@@ -366,7 +348,7 @@ mod tests {
                     json!({"code": 0, "data": data})
                 };
                 let body = response.to_string();
-                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+                crate::test_support::respond(&mut socket, "200 OK", &body).await;
             }
             (reads, writes.len())
         });
@@ -424,10 +406,7 @@ mod tests {
     #[tokio::test]
     async fn title_edit_posts_json_with_csrf_and_checks_response_code() {
         use biliup::bilibili::BiliBili;
-        use tokio::{
-            io::{AsyncReadExt, AsyncWriteExt},
-            net::TcpListener,
-        };
+        use tokio::net::TcpListener;
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let url = format!("http://{}/episode/edit", listener.local_addr().unwrap());
         let payload = json!({"id": 21, "title": "新单集标题"});
@@ -439,32 +418,17 @@ mod tests {
                 json!({"data": null}),
             ] {
                 let (mut socket, _) = listener.accept().await.unwrap();
-                let mut header = Vec::new();
-                while !header.ends_with(b"\r\n\r\n") {
-                    header.push(socket.read_u8().await.unwrap());
-                }
-                let header = String::from_utf8(header).unwrap();
+                let header = crate::test_support::read_headers(&mut socket).await;
                 assert!(header.starts_with("POST /episode/edit?csrf=test-csrf "));
                 assert!(
                     header
                         .to_lowercase()
                         .contains("content-type: application/json")
                 );
-                let length: usize = header
-                    .lines()
-                    .find_map(|line| {
-                        line.to_lowercase()
-                            .strip_prefix("content-length: ")
-                            .map(str::to_owned)
-                    })
-                    .unwrap()
-                    .parse()
-                    .unwrap();
-                let mut body = vec![0; length];
-                socket.read_exact(&mut body).await.unwrap();
+                let body = crate::test_support::read_body(&mut socket, &header).await;
                 assert_eq!(serde_json::from_slice::<Value>(&body).unwrap(), expected);
                 let body = response.to_string();
-                socket.write_all(format!("HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).as_bytes()).await.unwrap();
+                crate::test_support::respond(&mut socket, "200 OK", &body).await;
             }
         });
         let mut bili = BiliBili {
@@ -487,10 +451,7 @@ mod tests {
     #[tokio::test]
     async fn section_query_preserves_default_order_without_desc_sort() {
         use biliup::bilibili::BiliBili;
-        use tokio::{
-            io::{AsyncReadExt, AsyncWriteExt},
-            net::TcpListener,
-        };
+        use tokio::net::TcpListener;
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let host = format!("http://{}", listener.local_addr().unwrap());
@@ -500,17 +461,11 @@ mod tests {
                 json!({"section": {"id": 11, "seasonId": 1, "title": "正片"}, "episodes": [{"id": 22, "aid": 122, "order": 1}, {"id": 21, "aid": 121, "order": 2}]}),
             ] {
                 let (mut socket, _) = listener.accept().await.unwrap();
-                let mut request = Vec::new();
-                while !request.ends_with(b"\r\n\r\n") {
-                    request.push(socket.read_u8().await.unwrap());
-                }
-                let request = String::from_utf8(request).unwrap();
+                let request = crate::test_support::read_headers(&mut socket).await;
                 let request_line = request.lines().next().unwrap();
                 assert!(!request_line.contains("sort="));
                 let body = json!({"code": 0, "data": data}).to_string();
-                socket.write_all(format!(
-                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()
-                ).as_bytes()).await.unwrap();
+                crate::test_support::respond(&mut socket, "200 OK", &body).await;
             }
         });
         let bili = BiliBili {

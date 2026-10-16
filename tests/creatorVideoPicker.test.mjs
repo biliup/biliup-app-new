@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { test } from 'node:test'
 import vm from 'node:vm'
-import ts from 'typescript'
+import { compileSetup } from './helpers/vueSetup.mjs'
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 
 // 运行组件的真实 setup 逻辑，用可控 IPC 验证异步请求与选择事件。
@@ -10,12 +10,7 @@ const component = readFileSync(
     new URL('../src/components/CreatorVideoPicker.vue', import.meta.url),
     'utf8'
 )
-const script = component.match(/<script setup lang="ts">([\s\S]*?)<\/script>/)[1]
-const ast = ts.createSourceFile('Picker.ts', script, ts.ScriptTarget.Latest, true)
-const source = ast.statements
-    .filter(statement => !ts.isImportDeclaration(statement))
-    .map(statement => statement.getText(ast))
-    .join('\n')
+const setup = compileSetup(component)
 
 test('稿件选择界面文案均有翻译', () => {
     const parent = readFileSync(
@@ -85,7 +80,7 @@ function harness(initial = {}, options = {}) {
         t: (key, values) => (values ? key.replace('{0}', values[0]) : key)
     }
     vm.runInNewContext(
-        ts.transpile(source, { target: ts.ScriptTarget.ES2020 }) +
+        setup +
             '\nglobalThis.picker = { items, page, total, loading, actionLoading, error, loadPage, selectVideo, deleteVideo, selectedVideos, updateSelection, confirmSelection, canSelectVideo }',
         context
     )

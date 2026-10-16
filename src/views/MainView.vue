@@ -3226,7 +3226,7 @@ const refreshSeasonList = async () => {
 }
 
 // 选择模板
-const selectTemplate = async (user: any, templateName: string) => {
+const selectTemplate = async (user: any, templateName: string, checkRemote = true) => {
     // 如果正在加载模板，禁止切换
     if (templateLoading.value) {
         return false
@@ -3261,9 +3261,9 @@ const selectTemplate = async (user: any, templateName: string) => {
         saveTemplateSelection(user.uid, templateName)
 
         // 如果模板有 aid，主动刷新模板数据
-        const aid = currentTemplate.value?.aid
-        setTimeout(async () => {
-            if (aid) {
+        const aid = checkRemote ? currentTemplate.value?.aid : undefined
+        if (aid)
+            setTimeout(async () => {
                 try {
                     if (
                         selectedUser.value?.uid === user.uid &&
@@ -3296,8 +3296,7 @@ const selectTemplate = async (user: any, templateName: string) => {
                 } catch (error) {
                     console.error(t('自动刷新模板数据失败:'), error)
                 }
-            }
-        }, 666)
+            }, 666)
         console.log(
             t('已切换到模板: {0} - {1}', { 0: String(user.username), 1: String(templateName) })
         )
@@ -3558,6 +3557,7 @@ const openArchiveEditor = async (
         action === 'edit'
             ? Object.keys(templates).find(name => templates[name].aid === episode.aid)
             : undefined
+    const created = !name
     if (!name) {
         const videoId = episode.bvid || `av${episode.aid}`
         const baseName =
@@ -3570,11 +3570,11 @@ const openArchiveEditor = async (
     if (autoSubmittingRecord.value[getTemplateKey(uid, name)]) {
         throw new Error(t('当前正在加载或提交，请稍后再编辑稿件'))
     }
-    if (action === 'edit') {
+    if (action === 'edit' && !created) {
         const season = await utilsStore.getVideoSeason(uid, episode.aid)
         await userConfigStore.syncVideoSeason(uid, [episode.aid], season)
     }
-    if (!(await selectTemplate(user, name))) {
+    if (!(await selectTemplate(user, name, !created))) {
         throw new Error(t('切换模板失败'))
     }
 }

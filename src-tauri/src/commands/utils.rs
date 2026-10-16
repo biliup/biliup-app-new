@@ -767,20 +767,6 @@ async fn fetch_video_list_page(
     parse_video_list(response)
 }
 
-async fn load_creator_video_page(
-    client: &reqwest::Client,
-    member: &str,
-    page: u32,
-    page_size: u32,
-    season_add_only: bool,
-) -> Result<CreatorVideoPage, AppError> {
-    if !season_add_only {
-        return fetch_video_list_page(client, member, page, page_size).await;
-    }
-    let eligible = load_season_candidates(client, member).await?;
-    Ok(candidate_page(&eligible, page, page_size))
-}
-
 async fn load_season_candidates(
     client: &reqwest::Client,
     member: &str,
@@ -841,7 +827,10 @@ pub async fn get_video_list(
         ));
     }
     let bilibili = app.state::<AppData>().get_bilibili(uid).await?;
-    let mut page = if let Some(id) = snapshot_id.filter(|_| season_add_only.unwrap_or(false)) {
+    let mut page = if season_add_only.unwrap_or(false) {
+        let id = snapshot_id.ok_or_else(|| {
+            AppError::Custom(crate::i18n::text("video.list_snapshot_expired").into())
+        })?;
         app.state::<CreatorVideoSnapshots>()
             .page(
                 &bilibili.client,
@@ -853,12 +842,11 @@ pub async fn get_video_list(
             )
             .await?
     } else {
-        load_creator_video_page(
+        fetch_video_list_page(
             &bilibili.client,
             "https://member.bilibili.com",
             page,
             page_size,
-            season_add_only.unwrap_or(false),
         )
         .await?
     };
@@ -1472,9 +1460,8 @@ mod video_list_tests {
             (5, (1221..=1233).step_by(3).collect()),
             (6, vec![]),
         ] {
-            let result = load_creator_video_page(&client, &member, page, 10, true)
-                .await
-                .unwrap();
+            let eligible = load_season_candidates(&client, &member).await.unwrap();
+            let result = candidate_page(&eligible, page, 10);
             assert_eq!(result.total, 45);
             assert_eq!(
                 result
@@ -1491,7 +1478,7 @@ mod video_list_tests {
                     .all(|video| video.season_add_state == Some(0))
             );
         }
-        let ordinary = load_creator_video_page(&client, &member, 2, 10, false)
+        let ordinary = fetch_video_list_page(&client, &member, 2, 10)
             .await
             .unwrap();
         assert_eq!(ordinary.total, 1235);
@@ -1504,15 +1491,17 @@ mod video_list_tests {
             (11..=20).collect::<Vec<_>>()
         );
         for path in ["none", "empty"] {
-            let result = load_creator_video_page(&client, &format!("{member}/{path}"), 1, 10, true)
+            let eligible = load_season_candidates(&client, &format!("{member}/{path}"))
                 .await
                 .unwrap();
+            let result = candidate_page(&eligible, 1, 10);
             assert!(result.items.is_empty());
             assert_eq!(result.total, 0);
         }
-        let capped = load_creator_video_page(&client, &format!("{member}/capped"), 1, 5, true)
+        let eligible = load_season_candidates(&client, &format!("{member}/capped"))
             .await
             .unwrap();
+        let capped = candidate_page(&eligible, 1, 5);
         assert_eq!(capped.total, 45);
         assert_eq!(
             capped
