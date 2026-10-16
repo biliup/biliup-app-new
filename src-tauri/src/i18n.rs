@@ -154,6 +154,34 @@ mod tests {
     }
 
     #[test]
+    fn season_errors_translate_without_changing_external_details() {
+        let raw = "B站返回：{message} $&";
+        for (language, prefix) in [
+            (0, "查询稿件合集失败"),
+            (1, "Failed to query submission season"),
+            (2, "投稿の合集を取得できません"),
+            (3, "查詢稿件合集失敗"),
+        ] {
+            let message = super::render(
+                super::lookup(language, "season.membership_api_failed"),
+                &[("code", "-101".into()), ("message", raw.into())],
+            );
+            assert!(message.starts_with(prefix));
+            assert!(message.contains("-101"));
+            assert!(message.ends_with(raw));
+            let restore = super::render(
+                super::lookup(language, "season.restore_failed"),
+                &[
+                    ("error", raw.into()),
+                    ("restore_error", "原始恢复错误".into()),
+                ],
+            );
+            assert!(restore.contains(raw));
+            assert!(restore.ends_with("原始恢复错误"));
+        }
+    }
+
+    #[test]
     fn language_switch_preserves_external_error_details() {
         let raw = r#"{"code":-1,"message":"B站原始错误，中文内容保留"}"#;
         super::set_language("en-US");

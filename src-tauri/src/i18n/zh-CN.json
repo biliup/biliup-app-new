@@ -211,5 +211,16 @@
     "delete.script.captcha": "请完成下方验证以删除稿件",
     "delete.script.failed": "验证请求失败，请重试或关闭窗口",
     "delete.script.cancel": "取消删除",
-    "delete.script.language": "zh-cn"
+    "delete.script.language": "zh-cn",
+    "season.membership_api_failed": "查询稿件合集失败：code {code}，{message}",
+    "season.membership_code_missing": "稿件合集响应缺少有效的 code",
+    "season.membership_id_missing": "稿件合集响应缺少有效的合集 ID",
+    "season.membership_data_missing": "稿件合集响应缺少 data",
+    "season.membership_season_missing": "稿件所属合集不在合集列表中，请刷新后重试",
+    "season.membership_episode_missing": "未在所属合集的小节中找到稿件，请刷新后重试",
+    "season.target_missing": "目标合集不存在",
+    "season.target_section_missing": "目标合集的小节不存在",
+    "season.archive_title_missing": "无法获取稿件标题",
+    "season.archive_info_missing": "无法获取稿件信息",
+    "season.restore_failed": "加入目标合集失败：{error}；恢复原合集也失败：{restore_error}"
 }

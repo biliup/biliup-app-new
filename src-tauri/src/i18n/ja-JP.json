@@ -211,5 +211,16 @@
     "delete.script.captcha": "投稿を削除するには、以下の認証を完了してください",
     "delete.script.failed": "認証に失敗しました。再試行するかウィンドウを閉じてください",
     "delete.script.cancel": "削除をキャンセル",
-    "delete.script.language": "ja"
+    "delete.script.language": "ja",
+    "season.membership_api_failed": "投稿の合集を取得できません：code {code}、{message}",
+    "season.membership_code_missing": "投稿の合集レスポンスに有効な code がありません",
+    "season.membership_id_missing": "投稿の合集レスポンスに有効な合集 ID がありません",
+    "season.membership_data_missing": "投稿の合集レスポンスに data がありません",
+    "season.membership_season_missing": "投稿が所属する合集が一覧にありません。更新して再試行してください",
+    "season.membership_episode_missing": "所属する合集のセクションに投稿が見つかりません。更新して再試行してください",
+    "season.target_missing": "移動先の合集が存在しません",
+    "season.target_section_missing": "移動先の合集のセクションが存在しません",
+    "season.archive_title_missing": "投稿のタイトルを取得できません",
+    "season.archive_info_missing": "投稿情報を取得できません",
+    "season.restore_failed": "移動先の合集への追加に失敗：{error}；元の合集への復元にも失敗：{restore_error}"
 }

@@ -1,9 +1,12 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { resolve } from 'node:path'
 import { build } from 'esbuild'
+import ts from 'typescript'
+import { parse } from '@vue/compiler-sfc'
+import { baseParse } from '@vue/compiler-dom'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
 const result = await build({
@@ -78,6 +81,98 @@ const freshStore = async (config = initialConfig()) => {
     await store.loadConfig()
     return store
 }
+
+const sourceFiles = directory =>
+    readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
+        const path = resolve(directory, entry.name)
+        return entry.isDirectory() ? sourceFiles(path) : [path]
+    })
+
+test('全部前端组件和工具中的静态翻译调用均有词条', () => {
+    const keys = new Map()
+    const index = ts.createSourceFile(
+        'i18n.ts',
+        readFileSync(resolve(root, 'src/i18n/index.ts'), 'utf8'),
+        ts.ScriptTarget.Latest,
+        true
+    )
+    const inlineKeys = new Map()
+    for (const statement of index.statements) {
+        if (!ts.isVariableStatement(statement)) continue
+        for (const declaration of statement.declarationList.declarations) {
+            if (declaration.name.getText(index) !== 'messages') continue
+            for (const locale of declaration.initializer.properties) {
+                if (!ts.isObjectLiteralExpression(locale.initializer)) continue
+                inlineKeys.set(
+                    locale.name.text,
+                    new Set(
+                        locale.initializer.properties
+                            .filter(ts.isPropertyAssignment)
+                            .map(property => property.name.text)
+                    )
+                )
+            }
+        }
+    }
+    const collect = (source, file) => {
+        const ast = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
+        const visit = node => {
+            if (
+                ts.isCallExpression(node) &&
+                node.expression.getText(ast) === 't' &&
+                node.arguments[0] &&
+                ts.isStringLiteralLike(node.arguments[0])
+            )
+                keys.set(node.arguments[0].text, file)
+            ts.forEachChild(node, visit)
+        }
+        visit(ast)
+    }
+    for (const file of sourceFiles(resolve(root, 'src'))) {
+        const source = readFileSync(file, 'utf8')
+        if (file.endsWith('.ts')) collect(source, file)
+        if (!file.endsWith('.vue')) continue
+        const { descriptor } = parse(source)
+        collect(descriptor.scriptSetup?.content || descriptor.script?.content || '', file)
+        const visit = node => {
+            if (node.type === 2) assert.doesNotMatch(node.content, /\p{Script=Han}/u, file)
+            if (node.type === 4) collect(node.content, file)
+            if (node.content && typeof node.content === 'object') visit(node.content)
+            for (const child of node.children || []) visit(child)
+            for (const prop of node.props || []) {
+                if (prop.type === 6 && prop.value)
+                    assert.doesNotMatch(prop.value.content, /\p{Script=Han}/u, file)
+                if (prop.type === 7 && prop.exp) visit(prop.exp)
+            }
+        }
+        if (descriptor.template) visit(baseParse(descriptor.template.content))
+    }
+    for (const locale of ['en-US', 'ja-JP', 'zh-TW']) {
+        const catalog = JSON.parse(readFileSync(resolve(root, `src/i18n/${locale}.json`), 'utf8'))
+        for (const [key, file] of keys) {
+            assert.ok(
+                Object.hasOwn(catalog, key) || inlineKeys.get(locale)?.has(key),
+                `${locale}: ${key} (${file})`
+            )
+        }
+    }
+})
+
+test('后端静态翻译调用均在四种语言的词典中登记', () => {
+    const catalogs = ['zh-CN', 'en-US', 'ja-JP', 'zh-TW'].map(locale => [
+        locale,
+        JSON.parse(readFileSync(resolve(root, `src-tauri/src/i18n/${locale}.json`), 'utf8'))
+    ])
+    for (const file of sourceFiles(resolve(root, 'src-tauri/src')).filter(file =>
+        file.endsWith('.rs')
+    )) {
+        const source = readFileSync(file, 'utf8').split('#[cfg(test)]')[0]
+        for (const match of source.matchAll(/(?:i18n::text\(|\btr!\()\s*"([^"]+)"/g)) {
+            for (const [locale, catalog] of catalogs)
+                assert.ok(catalog[match[1]], `${locale}: ${match[1]} (${file})`)
+        }
+    }
+})
 
 test('界面文本和 Element Plus 语言随切换刷新', () => {
     setLanguage('zh-CN')
@@ -164,7 +259,9 @@ for (const selectedLanguage of ['en-US', 'ja-JP', 'zh-TW']) {
             await store.updateGlobalConfig({ language: selectedLanguage, max_curr: 4 })
             assert.equal(
                 t('视频标题'),
-                { 'en-US': 'Video title', 'ja-JP': '動画タイトル', 'zh-TW': '影片標題' }[selectedLanguage]
+                { 'en-US': 'Video title', 'ja-JP': '動画タイトル', 'zh-TW': '影片標題' }[
+                    selectedLanguage
+                ]
             )
             assert.equal(store.configRoot.language, selectedLanguage)
             assert.equal(store.configRoot.config[1].templates['中文模板'].title, '未保存的修改')
@@ -173,7 +270,9 @@ for (const selectedLanguage of ['en-US', 'ja-JP', 'zh-TW']) {
             const restarted = await freshStore(persisted)
             assert.equal(
                 t('视频标题'),
-                { 'en-US': 'Video title', 'ja-JP': '動画タイトル', 'zh-TW': '影片標題' }[selectedLanguage]
+                { 'en-US': 'Video title', 'ja-JP': '動画タイトル', 'zh-TW': '影片標題' }[
+                    selectedLanguage
+                ]
             )
             assert.equal(restarted.configRoot.language, selectedLanguage)
             assert.deepEqual(restarted.configRoot.config, persisted.config)
@@ -220,7 +319,8 @@ for (const selectedLanguage of ['ja-JP', 'zh-TW']) {
             readFileSync(resolve(root, 'src/i18n/' + selectedLanguage + '.json'), 'utf8')
         )
         const source = readFileSync(resolve(root, 'src/i18n/index.ts'), 'utf8')
-        const placeholders = value => [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort()
+        const placeholders = value =>
+            [...value.matchAll(/\{(\w+)\}/g)].map(match => match[1]).sort()
         for (const match of source.matchAll(/'([a-zA-Z]\w*(?:\.\w+)+)':\s*'([^']*)'/g)) {
             assert.ok(catalog[match[1]], match[1])
             assert.deepEqual(placeholders(catalog[match[1]]), placeholders(match[2]), match[1])

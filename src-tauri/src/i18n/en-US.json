@@ -211,5 +211,16 @@
     "delete.script.captcha": "Complete the verification below to delete the submission",
     "delete.script.failed": "Verification failed. Retry or close this window",
     "delete.script.cancel": "Cancel deletion",
-    "delete.script.language": "en"
+    "delete.script.language": "en",
+    "season.membership_api_failed": "Failed to query submission season: code {code}, {message}",
+    "season.membership_code_missing": "Submission season response is missing a valid code",
+    "season.membership_id_missing": "Submission season response is missing a valid season ID",
+    "season.membership_data_missing": "Submission season response is missing data",
+    "season.membership_season_missing": "The submission's season is missing from the season list. Refresh and try again.",
+    "season.membership_episode_missing": "The submission was not found in its season's sections. Refresh and try again.",
+    "season.target_missing": "The target season does not exist",
+    "season.target_section_missing": "The target season's section does not exist",
+    "season.archive_title_missing": "Unable to retrieve the submission title",
+    "season.archive_info_missing": "Unable to retrieve submission information",
+    "season.restore_failed": "Failed to add to the target season: {error}; restoring the original season also failed: {restore_error}"
 }

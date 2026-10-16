@@ -541,19 +541,26 @@ async fn video_season_id(bilibili: &BiliBili, member: &str, aid: u64) -> Result<
         Some(0) => {}
         Some(-404) => return Ok(0),
         Some(code) => {
-            return Err(AppError::Biliup(format!(
-                "查询稿件合集失败：code {code}，{}",
-                response["message"].as_str().unwrap_or_default()
+            return Err(AppError::Biliup(crate::tr!(
+                "season.membership_api_failed",
+                code = code,
+                message = response["message"].as_str().unwrap_or_default()
             )));
         }
-        None => return Err(AppError::Custom("稿件合集响应缺少有效的 code".to_string())),
+        None => {
+            return Err(AppError::Custom(
+                crate::i18n::text("season.membership_code_missing").into(),
+            ));
+        }
     }
     match response.get("data") {
         Some(Value::Null) => Ok(0),
-        Some(data) => data["id"]
-            .as_u64()
-            .ok_or_else(|| AppError::Custom("稿件合集响应缺少有效的合集 ID".to_string())),
-        None => Err(AppError::Custom("稿件合集响应缺少 data".to_string())),
+        Some(data) => data["id"].as_u64().ok_or_else(|| {
+            AppError::Custom(crate::i18n::text("season.membership_id_missing").into())
+        }),
+        None => Err(AppError::Custom(
+            crate::i18n::text("season.membership_data_missing").into(),
+        )),
     }
 }
 
@@ -569,7 +576,9 @@ async fn find_video_season(
     let entry = seasons
         .iter()
         .find(|entry| entry.season.id == season_id)
-        .ok_or_else(|| AppError::Custom("稿件所属合集不在合集列表中，请刷新后重试".to_string()))?;
+        .ok_or_else(|| {
+            AppError::Custom(crate::i18n::text("season.membership_season_missing").into())
+        })?;
     for section in &entry.sections.sections {
         let detail = api
             .season_section(section.id, Some("desc"))
@@ -584,7 +593,7 @@ async fn find_video_season(
         }
     }
     Err(AppError::Custom(
-        "未在所属合集的小节中找到稿件，请刷新后重试".to_string(),
+        crate::i18n::text("season.membership_episode_missing").into(),
     ))
 }
 
@@ -1052,14 +1061,16 @@ pub async fn switch_season(
         let entry = seasons
             .iter()
             .find(|entry| entry.season.id == season_id)
-            .ok_or_else(|| AppError::Custom("目标合集不存在".to_string()))?;
+            .ok_or_else(|| AppError::Custom(crate::i18n::text("season.target_missing").into()))?;
         let section = entry
             .sections
             .sections
             .iter()
             .find(|section| section_id == 0 || section.id == section_id)
             .filter(|section| section.id > 0)
-            .ok_or_else(|| AppError::Custom("目标合集的小节不存在".to_string()))?;
+            .ok_or_else(|| {
+                AppError::Custom(crate::i18n::text("season.target_section_missing").into())
+            })?;
         Some(section.id)
     };
     let current = find_video_season(&api, &seasons, aid, current_season_id).await?;
@@ -1103,10 +1114,10 @@ fn creator_season_episode(aid: u64, data: &Value) -> Result<EpisodeAdd, AppError
     let cid = data["videos"][0]["cid"]
         .as_u64()
         .filter(|cid| *cid > 0)
-        .ok_or_else(|| AppError::Custom("无法获取稿件首个分 P 的 CID".to_string()))?;
-    let title = data["archive"]["title"]
-        .as_str()
-        .ok_or_else(|| AppError::Custom("无法获取稿件标题".to_string()))?;
+        .ok_or_else(|| AppError::Custom(crate::i18n::text("season.manager.cid_missing").into()))?;
+    let title = data["archive"]["title"].as_str().ok_or_else(|| {
+        AppError::Custom(crate::i18n::text("season.archive_title_missing").into())
+    })?;
     Ok(EpisodeAdd {
         aid,
         cid,
@@ -1122,7 +1133,9 @@ async fn change_season(
     episode: Option<EpisodeAdd>,
 ) -> Result<bool, AppError> {
     if target_section.is_some() && episode.is_none() {
-        return Err(AppError::Custom("无法获取稿件信息".to_string()));
+        return Err(AppError::Custom(
+            crate::i18n::text("season.archive_info_missing").into(),
+        ));
     }
     if let Some((_, _, old_episode)) = &current {
         api.remove_from_season(old_episode.id)
@@ -1130,7 +1143,9 @@ async fn change_season(
             .map_err(|e| AppError::Biliup(e.to_string()))?;
     }
     if let Some(section_id) = target_section {
-        let episode = episode.ok_or_else(|| AppError::Custom("无法获取稿件信息".to_string()))?;
+        let episode = episode.ok_or_else(|| {
+            AppError::Custom(crate::i18n::text("season.archive_info_missing").into())
+        })?;
         if let Err(error) = api
             .add_to_season(section_id, std::slice::from_ref(&episode))
             .await
@@ -1152,8 +1167,10 @@ async fn change_season(
                         as u8,
                 };
                 if let Err(restore_error) = api.add_to_season(old_section, &[restore]).await {
-                    return Err(AppError::Biliup(format!(
-                        "加入目标合集失败：{error}；恢复原合集也失败：{restore_error}"
+                    return Err(AppError::Biliup(crate::tr!(
+                        "season.restore_failed",
+                        error = error,
+                        restore_error = restore_error
                     )));
                 }
             }
