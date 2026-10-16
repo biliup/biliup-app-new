@@ -1009,5 +1009,7 @@
     "稿件已删除，本地模板已保留": "Submission deleted; local templates kept",
     "合集归属待确认或已变化，请重试投稿以核对最新归属": "Season membership is unconfirmed or has changed. Retry submission to verify it.",
     "合集归属核对失败，相关模板暂不能投稿，请刷新合集或重试投稿：{0}": "Could not verify season membership. Affected templates cannot be submitted yet. Refresh the season or retry submission: {0}",
-    "合集操作进行中，请稍后重试": "A season operation is in progress. Please try again shortly."
+    "合集操作进行中，请稍后重试": "A season operation is in progress. Please try again shortly.",
+    "拖动右侧手柄或修改序号调整顺序": "Drag the handle on the right or change the position to reorder",
+    "排序有未保存的更改": "Unsaved order changes"
 }

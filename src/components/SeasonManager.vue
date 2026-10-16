@@ -2,7 +2,7 @@
     <el-dialog
         :model-value="modelValue"
         :title="t('合集管理')"
-        width="1000px"
+        width="760px"
         style="max-width: calc(100vw - 32px)"
         :before-close="closeManager"
         :close-on-click-modal="false"
@@ -19,14 +19,14 @@
                 />
             </el-select>
             <el-button :disabled="!uid || loading || busy || orderDirty" @click="refreshSeasons">{{
-                t('刷新合集列表')
+                t('刷新')
             }}</el-button>
         </div>
         <el-alert v-if="listError" :title="listError" type="error" :closable="false" show-icon />
         <el-scrollbar
             ref="seasonScrollbar"
             v-loading="loading"
-            max-height="60vh"
+            max-height="420px"
             class="season-list"
         >
             <el-empty
@@ -38,6 +38,7 @@
                 :key="entry.season.id"
                 :data-season-id="entry.season.id"
                 class="season-group"
+                :class="{ 'is-expanded': expandedSeasonId === entry.season.id }"
             >
                 <button
                     type="button"
@@ -46,13 +47,16 @@
                     :disabled="busy"
                     @click="toggleSeason(entry)"
                 >
+                    <span class="season-label">
+                        <span class="season-title">{{ entry.season.title }}</span>
+                        <span class="season-id">ID {{ entry.season.id }}</span>
+                    </span>
                     <span
                         class="expand-arrow"
                         :class="{ expanded: expandedSeasonId === entry.season.id }"
                         aria-hidden="true"
                         >▸</span
                     >
-                    <strong>{{ entry.season.title }}</strong>
                 </button>
                 <div v-if="expandedSeasonId === entry.season.id" class="season-content">
                     <div
@@ -64,6 +68,9 @@
                             v-if="hasSections(entry)"
                             type="button"
                             class="section-heading"
+                            :class="{
+                                'is-active': sectionVisible && target?.sectionId === section.id
+                            }"
                             :aria-expanded="sectionVisible && target?.sectionId === section.id"
                             :disabled="busy"
                             @click="toggleSection(entry, section)"
@@ -77,6 +84,9 @@
                                 >▸</span
                             >
                             <span>{{ section.title }}</span>
+                            <span v-if="section.epCount !== undefined" class="section-count">{{
+                                section.epCount
+                            }}</span>
                         </button>
                         <SeasonEpisodeRows
                             v-if="sectionVisible && target?.sectionId === section.id"
@@ -592,18 +602,28 @@ onBeforeUnmount(() => {
 .manager-toolbar {
     display: flex;
     align-items: center;
-    gap: 16px;
-    flex-wrap: wrap;
-    margin-bottom: 16px;
-}
-.manager-toolbar .el-select {
-    width: 220px;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
 }
 .season-list {
     min-height: 180px;
 }
+.season-list :deep(.el-scrollbar__view) {
+    padding: 1px 8px 1px 1px;
+}
 .season-group {
-    border-bottom: 1px solid var(--el-border-color-lighter);
+    margin-bottom: 12px;
+    border: 1px solid var(--el-border-color-lighter);
+    border-radius: 12px;
+    overflow: hidden;
+    transition:
+        border-color 0.2s,
+        box-shadow 0.2s;
+}
+.season-group.is-expanded {
+    border-color: #d8c8fa;
+    box-shadow: 0 3px 12px rgb(139 92 246 / 6%);
 }
 .season-heading,
 .section-heading {
@@ -611,7 +631,7 @@ onBeforeUnmount(() => {
     align-items: center;
     gap: 10px;
     width: 100%;
-    padding: 16px 8px;
+    padding: 16px;
     border: 0;
     background: transparent;
     color: var(--el-text-color-primary);
@@ -624,24 +644,67 @@ onBeforeUnmount(() => {
 .section-heading:hover {
     background: var(--el-fill-color-light);
 }
+.season-heading:focus-visible,
+.section-heading:focus-visible {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: -3px;
+}
+.season-heading[aria-expanded='true'] {
+    background: #faf8ff;
+}
+.season-label {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    flex: 1;
+    min-width: 0;
+}
+.season-id {
+    color: var(--el-text-color-secondary);
+    font-size: 12px;
+    font-variant-numeric: tabular-nums;
+}
 .season-heading:disabled,
 .section-heading:disabled {
     cursor: not-allowed;
 }
-.season-heading strong {
-    font-size: 16px;
+.season-title {
+    font-size: 14px;
+    font-weight: 400;
 }
 .season-content {
-    padding: 0 8px 16px 26px;
+    padding: 0 16px 16px;
+    border-top: 1px solid var(--el-border-color-extra-light);
 }
 .section-heading {
-    padding: 12px 0;
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+}
+.section-heading.is-active {
+    color: #7c3aed;
+    background: #f3efff;
+}
+.section-count {
+    margin-left: auto;
+    padding: 2px 8px;
+    background: var(--el-bg-color);
+    border-radius: 6px;
+    font-size: 12px;
 }
 .expand-arrow {
     flex-shrink: 0;
+    color: var(--el-text-color-secondary);
     transition: transform 0.2s;
 }
 .expand-arrow.expanded {
     transform: rotate(90deg);
+}
+@media (max-width: 600px) {
+    .season-content {
+        padding: 0 8px 8px;
+    }
 }
 </style>
