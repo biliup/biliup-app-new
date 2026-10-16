@@ -1,5 +1,21 @@
 # 更新日志
 
+## [1.4.2](https://github.com/biliup/biliup-app-new/releases/tag/app-v1.4.2) - 2026-10-16
+
+**Full Changelog**: [app-v1.4.1...app-v1.4.2](https://github.com/biliup/biliup-app-new/compare/app-v1.4.1...app-v1.4.2)
+
+### 修复
+
+- 无
+
+### 新增
+
+- 新增稿件管理，支持浏览已有稿件，并快速创建编辑或复制模板。
+
+- 新增合集管理，支持查看合集及小节、批量添加单集、移出稿件、修改单集标题和拖动排序。
+
+- 新增稿件处理进度，支持查看分 P 上传、转码及审核状态，以及各清晰度的转码进度。
+
 ## [1.4.1](https://github.com/biliup/biliup-app-new/releases/tag/app-v1.4.1) - 2026-10-15
 
 **Full Changelog**: [app-v1.4.0...app-v1.4.1](https://github.com/biliup/biliup-app-new/compare/app-v1.4.0...app-v1.4.1)
